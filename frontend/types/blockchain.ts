@@ -1,0 +1,126 @@
+/**
+ * SONAR Protocol TypeScript Type Definitions
+ * These types match the Move contract structures
+ */
+
+// Media types supported by the platform
+export type MediaType = 'audio' | 'video';
+
+// Audio/video format types
+export type Format = 'mp3' | 'wav' | 'm4a' | 'ogg' | 'mp4' | 'webm';
+
+// Dataset object (client-facing, NO blob IDs exposed)
+export interface Dataset {
+  id: string;
+  creator: string;
+  quality_score: number;
+  price: bigint;
+  listed: boolean;
+  duration_seconds: number;
+  languages: string[];
+  formats: Format[];
+  media_type: MediaType;
+  created_at: number;
+  title: string;
+  description: string;
+  total_purchases?: number;
+}
+
+// Server-side only type (includes blob IDs for backend API routes)
+export interface DatasetWithBlobs extends Dataset {
+  preview_blob_id: string;
+  blob_id: string;
+}
+
+// Protocol statistics (economic tier data)
+export interface ProtocolStats {
+  circulating_supply: bigint;
+  current_tier: 1 | 2 | 3 | 4;
+  burn_rate: number;
+  liquidity_rate: number;
+  uploader_rate: number;
+}
+
+// Tier configuration (matches contract tiers)
+export interface TierConfig {
+  name: string;
+  burn: number;
+  liquidity: number;
+  uploader: number;
+  threshold: bigint;
+}
+
+// Purchase breakdown for UI display
+export interface PurchaseBreakdown {
+  total_price: bigint;
+  burn_amount: bigint;
+  liquidity_amount: bigint;
+  uploader_amount: bigint;
+  treasury_amount: bigint;
+}
+
+// Events emitted by the contract
+export interface DatasetPurchasedEvent {
+  dataset_id: string;
+  buyer: string;
+  price: string;
+  tier: number;
+}
+
+export interface DatasetSubmittedEvent {
+  dataset_id: string;
+  creator: string;
+  quality_score: number;
+}
+
+export interface DatasetListedEvent {
+  dataset_id: string;
+  price: string;
+}
+
+// Access grant response from backend API
+export interface AccessGrant {
+  seal_policy: string;
+  download_url: string;
+  expires_at: number;
+}
+
+// Filter options for marketplace
+export interface DatasetFilter {
+  media_type?: MediaType;
+  languages?: string[];
+  formats?: Format[];
+  min_quality?: number;
+  max_price?: bigint;
+  creator?: string;
+}
+
+// Pagination response
+export interface PaginatedResponse<T> {
+  data: T[];
+  cursor?: string;
+  hasMore: boolean;
+}
+
+// Transaction result
+export interface TransactionResult {
+  digest: string;
+  success: boolean;
+  error?: string;
+}
+
+// User balance info
+export interface UserBalance {
+  total: bigint;
+  coins: Array<{
+    id: string;
+    balance: bigint;
+  }>;
+}
+
+// Vesting schedule (for future implementation)
+export interface VestingSchedule {
+  total_amount: bigint;
+  vested_amount: bigint;
+  release_time: number;
+}
