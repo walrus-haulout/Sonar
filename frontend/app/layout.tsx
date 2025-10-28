@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { Navbar } from '@/components/layout/Navbar';
 
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
@@ -45,7 +46,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${ibmPlexMono.variable} ${inter.variable}`}>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <Navbar />
+          <div className="pt-18">{children}</div>
+        </Providers>
       </body>
     </html>
   );

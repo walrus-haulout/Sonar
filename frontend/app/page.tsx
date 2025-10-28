@@ -3,7 +3,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { SignalBadge } from '@/components/ui/SignalBadge';
 import { SonarBackground } from '@/components/animations/SonarBackground';
-import { SonarScanner } from '@/components/animations/SonarScanner';
+import { ProtocolStatsSection } from '@/components/sections/ProtocolStatsSection';
 
 export default function HomePage() {
   return (
@@ -83,65 +83,8 @@ export default function HomePage() {
           </GlassCard>
         </div>
 
-        {/* Stats Preview with Sonar Scanner */}
-        <div className="mt-20 max-w-5xl mx-auto">
-          <GlassCard glow>
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row items-center gap-8">
-                {/* Sonar Scanner Widget */}
-                <div className="flex-shrink-0">
-                  <SonarScanner
-                    size={250}
-                    intensity={0.8}
-                    pulseFrequency={2.5}
-                    showBorder={true}
-                  />
-                </div>
-
-                {/* Stats Grid */}
-                <div className="flex-1 w-full">
-                  <h2 className="text-2xl font-mono text-sonar-highlight mb-6 text-center md:text-left">
-                    Current Protocol Status
-                  </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div>
-                  <div className="text-3xl font-mono text-sonar-signal">
-                    Tier 1
-                  </div>
-                  <div className="text-sm text-sonar-highlight-bright/60 uppercase tracking-wide mt-2">
-                    Current Tier
-                  </div>
-                </div>
-                <div>
-                  <div className="text-3xl font-mono text-sonar-signal">
-                    60%
-                  </div>
-                  <div className="text-sm text-sonar-highlight-bright/60 uppercase tracking-wide mt-2">
-                    Burn Rate
-                  </div>
-                </div>
-                <div>
-                  <div className="text-3xl font-mono text-sonar-signal">
-                    70M
-                  </div>
-                  <div className="text-sm text-sonar-highlight-bright/60 uppercase tracking-wide mt-2">
-                    Circulating
-                  </div>
-                </div>
-                <div>
-                  <div className="text-3xl font-mono text-sonar-signal">
-                    15
-                  </div>
-                  <div className="text-sm text-sonar-highlight-bright/60 uppercase tracking-wide mt-2">
-                    Datasets
-                  </div>
-                </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
+        {/* Stats Preview with Real-Time Data */}
+        <ProtocolStatsSection />
 
         {/* Footer */}
         <div className="mt-20 text-center text-sonar-highlight-bright/50 text-sm space-y-2">
