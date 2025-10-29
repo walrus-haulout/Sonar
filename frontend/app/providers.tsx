@@ -24,7 +24,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 10_000, // 10 seconds for real-time data
-            cacheTime: 300_000, // 5 minutes for cached data
+            gcTime: 300_000, // 5 minutes for cached data
             refetchOnWindowFocus: false,
             retry: 2,
           },
