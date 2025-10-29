@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
@@ -34,7 +34,11 @@ export const metadata: Metadata = {
     title: 'SONAR Protocol',
     description: 'Decentralized marketplace for high-quality conversational audio data',
   },
-  viewport: 'width=device-width, initial-scale=1',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
   themeColor: '#0A172A',
 };
 

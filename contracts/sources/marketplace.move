@@ -318,7 +318,530 @@ module sonar::marketplace {
         current_epoch < auto_disable_epoch
     }
 
-    // ========== Placeholder for Additional Functions ==========
-    // To be implemented: submit_audio, finalize_submission, purchase_dataset,
-    // vesting functions, admin operations, view functions
+    // ========== Submission Functions ==========
+
+    /// Submit audio with Walrus metadata
+    /// Burns submission fee (0.001% of circulating supply)
+    /// Creates AudioSubmission object owned by uploader
+    public entry fun submit_audio(
+        marketplace: &mut QualityMarketplace,
+        burn_fee: Coin<SONAR_TOKEN>,
+        seal_policy_id: String,
+        preview_blob_hash: vector<u8>,
+        duration_seconds: u64,
+        ctx: &mut TxContext
+    ) {
+        // Circuit breaker check
+        assert!(
+            !is_circuit_breaker_active(&marketplace.circuit_breaker, ctx),
+            E_CIRCUIT_BREAKER_ACTIVE
+        );
+
+        // Calculate required burn fee based on circulating supply
+        let circulating = get_circulating_supply(marketplace);
+        let required_fee = economics::calculate_burn_fee(circulating);
+        let paid_fee = coin::value(&burn_fee);
+
+        assert!(paid_fee >= required_fee, E_INVALID_BURN_FEE);
+
+        // Burn the submission fee
+        let burn_balance = coin::into_balance(burn_fee);
+        balance::decrease_supply(
+            coin::supply_mut(&mut marketplace.treasury_cap),
+            burn_balance
+        );
+        marketplace.total_burned = marketplace.total_burned + paid_fee;
+
+        // Check reward pool can cover minimum reward (30+ quality score)
+        let min_reward = economics::calculate_reward(circulating, 30);
+        let pool_balance = balance::value(&marketplace.reward_pool);
+        assert!(pool_balance >= min_reward, E_REWARD_POOL_DEPLETED);
+
+        // Create submission object
+        let submission_id = object::new(ctx);
+        let submission_id_copy = object::uid_to_inner(&submission_id);
+        let uploader = tx_context::sender(ctx);
+
+        let submission = AudioSubmission {
+            id: submission_id,
+            uploader,
+            seal_policy_id: seal_policy_id,
+            preview_blob_hash,
+            duration_seconds,
+            quality_score: 0,  // Set by validator
+            status: 0,         // 0 = pending
+            vested_balance: VestedBalance {
+                total_amount: 0,
+                unlock_start_epoch: 0,
+                unlock_duration_epochs: 90,
+                claimed_amount: 0
+            },
+            unlocked_balance: 0,
+            dataset_price: 0,
+            listed_for_sale: false,
+            purchase_count: 0,
+            submitted_at_epoch: tx_context::epoch(ctx)
+        };
+
+        marketplace.total_submissions = marketplace.total_submissions + 1;
+
+        // Emit event (NO walrus_blob_id!)
+        event::emit(SubmissionCreated {
+            submission_id: submission_id_copy,
+            uploader,
+            seal_policy_id: submission.seal_policy_id,
+            duration_seconds,
+            burn_fee_paid: paid_fee,
+            submitted_at_epoch: tx_context::epoch(ctx)
+        });
+
+        // Transfer submission to uploader
+        transfer::transfer(submission, uploader);
+    }
+
+    /// Finalize submission with quality score (ValidatorCap required)
+    /// Calculates reward based on quality and vests over 90 epochs
+    public entry fun finalize_submission(
+        _cap: &ValidatorCap,
+        marketplace: &mut QualityMarketplace,
+        submission: &mut AudioSubmission,
+        quality_score: u8,
+        ctx: &mut TxContext
+    ) {
+        // Validation checks
+        assert!(submission.status == 0, E_ALREADY_FINALIZED);
+        assert!(quality_score <= 100, E_INVALID_QUALITY_SCORE);
+
+        // Calculate reward based on quality score
+        let circulating = get_circulating_supply(marketplace);
+        let reward_amount = economics::calculate_reward(circulating, quality_score);
+
+        // Determine status (approved if score >= 30)
+        let status = if (quality_score >= 30) { 1 } else { 2 };
+
+        // Debit reward pool if approved
+        if (status == 1) {
+            let pool_balance = balance::value(&marketplace.reward_pool);
+            assert!(pool_balance >= reward_amount, E_INSUFFICIENT_REWARDS);
+
+            // Initialize vesting schedule
+            let current_epoch = tx_context::epoch(ctx);
+            submission.vested_balance = VestedBalance {
+                total_amount: reward_amount,
+                unlock_start_epoch: current_epoch,
+                unlock_duration_epochs: 90,
+                claimed_amount: 0
+            };
+
+            // Emit finalization event
+            event::emit(SubmissionFinalized {
+                submission_id: object::uid_to_inner(&submission.id),
+                uploader: submission.uploader,
+                quality_score,
+                status,
+                reward_amount,
+                vesting_start_epoch: current_epoch,
+                vesting_duration_epochs: 90
+            });
+        } else {
+            // Rejected submission
+            event::emit(SubmissionFinalized {
+                submission_id: object::uid_to_inner(&submission.id),
+                uploader: submission.uploader,
+                quality_score,
+                status,
+                reward_amount: 0,
+                vesting_start_epoch: 0,
+                vesting_duration_epochs: 0
+            });
+        };
+
+        // Update submission
+        submission.quality_score = quality_score;
+        submission.status = status;
+    }
+
+    // ========== Vesting Functions ==========
+
+    /// Calculate unlocked amount based on linear vesting
+    /// Returns amount currently unlocked (not yet claimed)
+    public fun calculate_unlocked_amount(
+        vested: &VestedBalance,
+        current_epoch: u64
+    ): u64 {
+        if (vested.total_amount == 0) {
+            return 0
+        };
+
+        let elapsed = if (current_epoch > vested.unlock_start_epoch) {
+            current_epoch - vested.unlock_start_epoch
+        } else {
+            0
+        };
+
+        // Linear vesting over duration_epochs
+        let unlocked_total = if (elapsed >= vested.unlock_duration_epochs) {
+            vested.total_amount  // Fully vested
+        } else {
+            (vested.total_amount * elapsed) / vested.unlock_duration_epochs
+        };
+
+        // Return amount not yet claimed
+        if (unlocked_total > vested.claimed_amount) {
+            unlocked_total - vested.claimed_amount
+        } else {
+            0
+        }
+    }
+
+    /// Claim vested tokens
+    /// Transfers unlocked tokens from reward pool to uploader
+    public entry fun claim_vested_tokens(
+        marketplace: &mut QualityMarketplace,
+        submission: &mut AudioSubmission,
+        ctx: &mut TxContext
+    ) {
+        // Only uploader can claim
+        assert!(tx_context::sender(ctx) == submission.uploader, E_UNAUTHORIZED);
+
+        // Calculate unlocked amount
+        let current_epoch = tx_context::epoch(ctx);
+        let claimable = calculate_unlocked_amount(&submission.vested_balance, current_epoch);
+
+        assert!(claimable > 0, E_NOTHING_TO_CLAIM);
+
+        // Debit from reward pool
+        let reward_coins = coin::take(
+            &mut marketplace.reward_pool,
+            claimable,
+            ctx
+        );
+
+        // Update claimed amount
+        submission.vested_balance.claimed_amount =
+            submission.vested_balance.claimed_amount + claimable;
+
+        // Emit event
+        event::emit(VestedTokensClaimed {
+            submission_id: object::uid_to_inner(&submission.id),
+            uploader: submission.uploader,
+            amount_claimed: claimable,
+            remaining_vested: submission.vested_balance.total_amount -
+                             submission.vested_balance.claimed_amount
+        });
+
+        // Transfer to uploader
+        transfer::public_transfer(reward_coins, submission.uploader);
+    }
+
+    // ========== Purchase Functions ==========
+
+    /// Purchase dataset with dynamic tier-based economics
+    /// Splits payment across burn/liquidity/uploader/treasury based on circulating supply tier
+    public entry fun purchase_dataset(
+        marketplace: &mut QualityMarketplace,
+        submission: &mut AudioSubmission,
+        mut payment: Coin<SONAR_TOKEN>,
+        ctx: &mut TxContext
+    ) {
+        // Circuit breaker check
+        assert!(
+            !is_circuit_breaker_active(&marketplace.circuit_breaker, ctx),
+            E_CIRCUIT_BREAKER_ACTIVE
+        );
+
+        // Validation: submission must be approved and listed
+        assert!(submission.status == 1, E_NOT_APPROVED);
+        assert!(submission.listed_for_sale, E_NOT_LISTED);
+
+        // Validate payment amount
+        let price = submission.dataset_price;
+        let paid = coin::value(&payment);
+        assert!(paid >= price, E_INVALID_PAYMENT);
+
+        // Calculate circulating supply and tier
+        let circulating = get_circulating_supply(marketplace);
+        let tier = economics::get_tier(circulating, &marketplace.economic_config);
+
+        // Calculate dynamic splits based on current tier
+        let (burn_amount, liquidity_amount, uploader_amount, treasury_amount) =
+            economics::calculate_purchase_splits(
+                price,
+                circulating,
+                &marketplace.economic_config
+            );
+
+        // Get rates for event
+        let burn_rate = economics::burn_bps(circulating, &marketplace.economic_config);
+        let liquidity_rate = economics::liquidity_bps(circulating, &marketplace.economic_config);
+        let uploader_rate = economics::uploader_bps(circulating, &marketplace.economic_config);
+
+        // 1. Burn portion
+        if (burn_amount > 0) {
+            let burn_coin = coin::split(&mut payment, burn_amount, ctx);
+            let burn_balance = coin::into_balance(burn_coin);
+            balance::decrease_supply(
+                coin::supply_mut(&mut marketplace.treasury_cap),
+                burn_balance
+            );
+            marketplace.total_burned = marketplace.total_burned + burn_amount;
+        };
+
+        // 2. Liquidity vault portion
+        if (liquidity_amount > 0) {
+            let liquidity_coin = coin::split(&mut payment, liquidity_amount, ctx);
+            balance::join(
+                &mut marketplace.liquidity_vault,
+                coin::into_balance(liquidity_coin)
+            );
+        };
+
+        // 3. Treasury portion
+        if (treasury_amount > 0) {
+            let treasury_coin = coin::split(&mut payment, treasury_amount, ctx);
+            transfer::public_transfer(treasury_coin, marketplace.treasury_address);
+        };
+
+        // 4. Uploader portion (remaining balance)
+        if (uploader_amount > 0) {
+            let uploader_coin = coin::split(&mut payment, uploader_amount, ctx);
+            transfer::public_transfer(uploader_coin, submission.uploader);
+        };
+
+        // Return any excess payment to buyer
+        if (coin::value(&payment) > 0) {
+            transfer::public_transfer(payment, tx_context::sender(ctx));
+        } else {
+            coin::destroy_zero(payment);
+        };
+
+        // Update statistics
+        submission.purchase_count = submission.purchase_count + 1;
+        marketplace.total_purchases = marketplace.total_purchases + 1;
+
+        // Emit purchase event (NO walrus_blob_id!)
+        event::emit(DatasetPurchased {
+            submission_id: object::uid_to_inner(&submission.id),
+            buyer: tx_context::sender(ctx),
+            price,
+            burned: burn_amount,
+            burn_rate_bps: burn_rate,
+            liquidity_allocated: liquidity_amount,
+            liquidity_rate_bps: liquidity_rate,
+            uploader_paid: uploader_amount,
+            uploader_rate_bps: uploader_rate,
+            treasury_paid: treasury_amount,
+            circulating_supply: circulating,
+            economic_tier: tier,
+            seal_policy_id: submission.seal_policy_id,
+            purchase_timestamp: tx_context::epoch(ctx)
+        });
+    }
+
+    // ========== Submission Management Functions ==========
+
+    /// List submission for sale (uploader only)
+    public entry fun list_for_sale(
+        submission: &mut AudioSubmission,
+        dataset_price: u64,
+        ctx: &mut TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == submission.uploader, E_UNAUTHORIZED);
+        assert!(submission.status == 1, E_NOT_APPROVED);  // Must be approved
+
+        submission.listed_for_sale = true;
+        submission.dataset_price = dataset_price;
+    }
+
+    /// Unlist submission from sale (uploader only)
+    public entry fun unlist_from_sale(
+        submission: &mut AudioSubmission,
+        ctx: &mut TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == submission.uploader, E_UNAUTHORIZED);
+
+        submission.listed_for_sale = false;
+    }
+
+    /// Update dataset price (uploader only)
+    public entry fun update_price(
+        submission: &mut AudioSubmission,
+        new_price: u64,
+        ctx: &mut TxContext
+    ) {
+        assert!(tx_context::sender(ctx) == submission.uploader, E_UNAUTHORIZED);
+
+        submission.dataset_price = new_price;
+    }
+
+    // ========== Circuit Breaker Functions ==========
+
+    /// Activate circuit breaker for emergency protection
+    /// Only AdminCap holder can activate
+    public entry fun activate_circuit_breaker(
+        _cap: &AdminCap,
+        marketplace: &mut QualityMarketplace,
+        reason: String,
+        ctx: &mut TxContext
+    ) {
+        let current_epoch = tx_context::epoch(ctx);
+
+        marketplace.circuit_breaker.enabled = true;
+        marketplace.circuit_breaker.triggered_at_epoch = current_epoch;
+        marketplace.circuit_breaker.trigger_reason = reason;
+
+        event::emit(CircuitBreakerActivated {
+            reason: marketplace.circuit_breaker.trigger_reason,
+            triggered_at_epoch: current_epoch,
+            cooldown_epochs: marketplace.circuit_breaker.cooldown_epochs
+        });
+    }
+
+    /// Deactivate circuit breaker manually
+    /// Only AdminCap holder can deactivate
+    /// Auto-deactivation happens after cooldown period via is_circuit_breaker_active check
+    public entry fun deactivate_circuit_breaker(
+        _cap: &AdminCap,
+        marketplace: &mut QualityMarketplace,
+        ctx: &mut TxContext
+    ) {
+        marketplace.circuit_breaker.enabled = false;
+
+        event::emit(CircuitBreakerDeactivated {
+            deactivated_at_epoch: tx_context::epoch(ctx)
+        });
+    }
+
+    // ========== Admin Operations ==========
+
+    /// Update economic configuration
+    /// CRITICAL: New config must pass validation (all tiers sum to 100%)
+    /// Note: Not entry - call via PTB with constructed EconomicConfig
+    public fun update_economic_config(
+        _cap: &AdminCap,
+        marketplace: &mut QualityMarketplace,
+        new_config: EconomicConfig
+    ) {
+        // Validate new config
+        assert!(economics::validate_config(&new_config), E_UNAUTHORIZED);
+
+        marketplace.economic_config = new_config;
+    }
+
+    /// Withdraw from liquidity vault
+    /// Subject to withdrawal limits (10% per epoch, 7 epoch minimum between)
+    public entry fun withdraw_liquidity_vault(
+        _cap: &AdminCap,
+        marketplace: &mut QualityMarketplace,
+        amount: u64,
+        recipient: address,
+        reason: String,
+        ctx: &mut TxContext
+    ) {
+        let current_epoch = tx_context::epoch(ctx);
+        let vault_balance = balance::value(&marketplace.liquidity_vault);
+
+        // Check withdrawal limits
+        let limits = &mut marketplace.withdrawal_limits;
+
+        // Reset epoch counter if new epoch
+        if (current_epoch > limits.last_withdrawal_epoch) {
+            limits.total_withdrawn_this_epoch = 0;
+            limits.last_withdrawal_epoch = current_epoch;
+        };
+
+        // Check minimum epochs between withdrawals
+        assert!(
+            current_epoch >= limits.last_withdrawal_epoch + limits.min_epochs_between ||
+            limits.total_withdrawn_this_epoch == 0,  // First withdrawal of epoch
+            E_WITHDRAWAL_TOO_FREQUENT
+        );
+
+        // Check max per epoch limit (10% of vault)
+        let max_withdrawal = (vault_balance * limits.max_per_epoch_bps) / 10_000;
+        assert!(
+            limits.total_withdrawn_this_epoch + amount <= max_withdrawal,
+            E_WITHDRAWAL_EXCEEDS_LIMIT
+        );
+
+        // Execute withdrawal
+        let withdrawal_coins = coin::take(&mut marketplace.liquidity_vault, amount, ctx);
+        transfer::public_transfer(withdrawal_coins, recipient);
+
+        // Update limits
+        limits.total_withdrawn_this_epoch = limits.total_withdrawn_this_epoch + amount;
+        limits.last_withdrawal_epoch = current_epoch;
+
+        // Emit event
+        event::emit(LiquidityVaultWithdrawal {
+            amount,
+            recipient,
+            reason,
+            remaining_balance: balance::value(&marketplace.liquidity_vault),
+            withdrawn_by: tx_context::sender(ctx),
+            timestamp_epoch: current_epoch
+        });
+    }
+
+    // ========== View Functions ==========
+
+    /// Get marketplace statistics
+    public fun get_marketplace_stats(marketplace: &QualityMarketplace): (u64, u64, u64, u64, u64) {
+        (
+            marketplace.total_submissions,
+            marketplace.total_purchases,
+            marketplace.total_burned,
+            balance::value(&marketplace.reward_pool),
+            balance::value(&marketplace.liquidity_vault)
+        )
+    }
+
+    /// Get current economic tier
+    public fun get_current_tier(marketplace: &QualityMarketplace): u8 {
+        let circulating = get_circulating_supply(marketplace);
+        economics::get_tier(circulating, &marketplace.economic_config)
+    }
+
+    /// Get current burn rate
+    public fun get_current_burn_rate(marketplace: &QualityMarketplace): u64 {
+        let circulating = get_circulating_supply(marketplace);
+        economics::burn_bps(circulating, &marketplace.economic_config)
+    }
+
+    /// Get submission details
+    public fun get_submission_info(submission: &AudioSubmission): (
+        address,  // uploader
+        u8,       // quality_score
+        u8,       // status
+        u64,      // dataset_price
+        bool,     // listed_for_sale
+        u64       // purchase_count
+    ) {
+        (
+            submission.uploader,
+            submission.quality_score,
+            submission.status,
+            submission.dataset_price,
+            submission.listed_for_sale,
+            submission.purchase_count
+        )
+    }
+
+    /// Get vesting info
+    public fun get_vesting_info(submission: &AudioSubmission, ctx: &TxContext): (
+        u64,  // total_amount
+        u64,  // claimed_amount
+        u64   // claimable_now
+    ) {
+        let claimable = calculate_unlocked_amount(
+            &submission.vested_balance,
+            tx_context::epoch(ctx)
+        );
+
+        (
+            submission.vested_balance.total_amount,
+            submission.vested_balance.claimed_amount,
+            claimable
+        )
+    }
 }
