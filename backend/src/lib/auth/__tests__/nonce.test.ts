@@ -103,13 +103,14 @@ describe('Nonce Management', () => {
   });
 
   describe('verifyNonce', () => {
-    it('should return true and mark nonce as used', () => {
+    it('should return true for valid nonce (use consumeNonce to make unusable)', () => {
       storeNonce(testNonce, testMessage, 5 * 60 * 1000);
 
       const isValid = verifyNonce(testNonce);
       expect(isValid).toBe(true);
 
-      // Should fail on second call (already used)
+      // After consumeNonce, verifyNonce should fail
+      consumeNonce(testNonce);
       const isValidSecond = verifyNonce(testNonce);
       expect(isValidSecond).toBe(false);
     });
