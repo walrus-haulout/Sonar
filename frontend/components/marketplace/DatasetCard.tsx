@@ -8,6 +8,7 @@ import { SignalBadge } from '@/components/ui/SignalBadge';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { formatNumber, seededRandom } from '@/lib/utils';
 import { useWaveform } from '@/hooks/useWaveform';
+import { getPreviewUrl } from '@/lib/api/client';
 
 /**
  * DatasetCard Component
@@ -32,13 +33,12 @@ export function DatasetCard({ dataset, onPurchase }: DatasetCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Generate mock preview URL
-  // In production, this would use dataset.preview_blob_id from Walrus
-  const mockAudioUrl = `/audio/preview-${dataset.id}.mp3`;
+  // Get preview URL from backend (public endpoint, no auth required)
+  const previewUrl = getPreviewUrl(dataset.id);
 
   // Initialize waveform hook for audio preview
   const waveform = useWaveform({
-    src: mockAudioUrl,
+    src: previewUrl,
     sliceCount: 40, // Match current bar count
     autoplay: false,
     preload: false, // Don't preload immediately
