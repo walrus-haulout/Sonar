@@ -67,7 +67,10 @@ export function useWaveform(options: UseWaveformOptions): UseWaveformResult {
 
           if (rawPeaks && rawPeaks[0]) {
             // Downsample and cache peaks
-            const downsampled = getCachedPeaks(src, rawPeaks[0], sliceCount);
+            const peaksData = rawPeaks[0] instanceof Float32Array
+              ? rawPeaks[0]
+              : new Float32Array(rawPeaks[0]);
+            const downsampled = getCachedPeaks(src, peaksData, sliceCount);
             setPeaks(downsampled);
           }
 

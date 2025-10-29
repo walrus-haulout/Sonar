@@ -5,6 +5,7 @@
  * Shows animated bars to indicate audio streaming
  */
 
+import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface StreamingIndicatorProps {
@@ -28,7 +29,7 @@ export function StreamingIndicator({
   message = 'Streaming audio...',
   barCount = 5,
   inline = false,
-}: StreamingIndicatorProps): JSX.Element {
+}: StreamingIndicatorProps): React.ReactElement {
   if (inline) {
     return (
       <div className="flex items-center gap-2">

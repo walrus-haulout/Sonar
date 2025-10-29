@@ -119,10 +119,6 @@ export function usePurchase(): UsePurchaseReturn {
       // Sign and execute transaction
       const result = await signAndExecuteTransaction({
         transaction: tx,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
       });
 
       console.log('Transaction result:', result);

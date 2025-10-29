@@ -5,7 +5,7 @@
  * Displays download progress with speed and ETA
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Download } from 'lucide-react';
 
 interface DownloadProgressProps {
@@ -59,7 +59,7 @@ export function DownloadProgress({
   onCancel,
   filename,
   showDetails = true,
-}: DownloadProgressProps): JSX.Element {
+}: DownloadProgressProps): React.ReactElement {
   const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {

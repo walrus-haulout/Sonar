@@ -45,7 +45,7 @@ export function toastPromise<T>(
     loading: messages.loading,
     success: messages.success,
     error: messages.error,
-  });
+  }) as unknown as Promise<T>;
 }
 
 /**

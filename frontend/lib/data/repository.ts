@@ -48,6 +48,10 @@ export function parseDataset(raw: any): Dataset {
     title: raw.title || 'Untitled',
     description: raw.description || '',
     total_purchases: raw.total_purchases ? Number(raw.total_purchases) : 0,
+    sample_count: raw.sample_count ? Number(raw.sample_count) : 0,
+    storage_size: raw.storage_size ? Number(raw.storage_size) : 0,
+    verified: Boolean(raw.verified),
+    updated_at: raw.updated_at ? Number(raw.updated_at) : Number(raw.created_at),
   };
 }
 
@@ -58,5 +62,11 @@ export function parseProtocolStats(raw: any): ProtocolStats {
     burn_rate: Number(raw.burn_rate),
     liquidity_rate: Number(raw.liquidity_rate),
     uploader_rate: Number(raw.uploader_rate),
+    initial_supply: raw.initial_supply ? BigInt(raw.initial_supply) : BigInt(0),
+    total_burned: raw.total_burned ? BigInt(raw.total_burned) : BigInt(0),
+    total_datasets: raw.total_datasets ? Number(raw.total_datasets) : 0,
+    total_purchases: raw.total_purchases ? Number(raw.total_purchases) : 0,
+    active_creators: raw.active_creators ? Number(raw.active_creators) : 0,
+    total_volume: raw.total_volume ? BigInt(raw.total_volume) : BigInt(0),
   };
 }

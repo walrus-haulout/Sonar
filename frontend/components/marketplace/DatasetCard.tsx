@@ -146,7 +146,7 @@ export function DatasetCard({ dataset, onPurchase }: DatasetCardProps) {
                     ? 'success'
                     : dataset.quality_score >= 6
                       ? 'warning'
-                      : 'error'
+                      : 'danger'
                 }
               >
                 Q{dataset.quality_score}
@@ -211,8 +211,8 @@ export function DatasetCard({ dataset, onPurchase }: DatasetCardProps) {
           {dataset.listed ? (
             <SonarButton
               variant="primary"
-              onClick={(e) => {
-                e.preventDefault();
+              onClick={(e?: React.MouseEvent<HTMLButtonElement>) => {
+                e?.preventDefault();
                 onPurchase?.(dataset.id);
               }}
               className="text-sm"

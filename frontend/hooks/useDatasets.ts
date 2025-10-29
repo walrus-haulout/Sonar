@@ -122,7 +122,7 @@ export function useFeaturedDatasets(limit: number = 10) {
   return useQuery<Dataset[], Error>({
     queryKey: ['datasets-featured', limit],
     queryFn: async () => {
-      const datasets = await repository.getDatasets({ listed: true });
+      const datasets = await repository.getDatasets({});
 
       // Sort by quality score (descending) and take top N
       return datasets
