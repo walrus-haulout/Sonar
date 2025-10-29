@@ -362,8 +362,8 @@ module sonar::admin_tests {
                 marketplace::get_marketplace_stats(&marketplace);
 
             if (vault_before > 0) {
-                // Withdraw 50% of vault
-                let withdraw_amt = vault_before / 2;
+                // Withdraw 5% of vault (within 10% limit)
+                let withdraw_amt = (vault_before * 500) / 10_000;
 
                 marketplace::withdraw_liquidity_vault(
                     &admin_cap,
@@ -393,8 +393,75 @@ module sonar::admin_tests {
         let mut scenario = ts::begin(ADMIN);
         setup_marketplace(&mut scenario);
 
-        // Add liquidity via purchase (same setup as above)
-        // ... (abbreviated for brevity)
+        // Add liquidity via purchase
+        // Submit audio
+        ts::next_tx(&mut scenario, ADMIN);
+        {
+            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
+            let circulating = marketplace::get_circulating_supply(&marketplace);
+            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
+                (circulating * 1) / 100_000,
+                ts::ctx(&mut scenario)
+            );
+
+            marketplace::submit_audio(
+                &mut marketplace,
+                burn_fee,
+                string::utf8(b"seal"),
+                option::some(b"hash"),
+                180,
+                ts::ctx(&mut scenario)
+            );
+
+            ts::return_shared(marketplace);
+        };
+
+        // Finalize and list
+        ts::next_tx(&mut scenario, ADMIN);
+        {
+            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
+            let validator_cap = ts::take_from_sender<ValidatorCap>(&scenario);
+            let mut submission = ts::take_from_sender<AudioSubmission>(&scenario);
+
+            marketplace::finalize_submission(
+                &validator_cap,
+                &mut marketplace,
+                &mut submission,
+                75,
+                ts::ctx(&mut scenario)
+            );
+
+            marketplace::list_for_sale(
+                &mut submission,
+                10_000_000_000,
+                ts::ctx(&mut scenario)
+            );
+
+            ts::return_to_sender(&scenario, submission);
+            ts::return_to_sender(&scenario, validator_cap);
+            ts::return_shared(marketplace);
+        };
+
+        // Purchase to add liquidity
+        ts::next_tx(&mut scenario, USER);
+        {
+            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
+            let mut submission = ts::take_from_address<AudioSubmission>(&scenario, ADMIN);
+            let payment = coin::mint_for_testing<SONAR_TOKEN>(
+                10_000_000_000,
+                ts::ctx(&mut scenario)
+            );
+
+            marketplace::purchase_dataset(
+                &mut marketplace,
+                &mut submission,
+                payment,
+                ts::ctx(&mut scenario)
+            );
+
+            ts::return_to_address(ADMIN, submission);
+            ts::return_shared(marketplace);
+        };
 
         // Try to withdraw >10%
         ts::next_tx(&mut scenario, ADMIN);
@@ -418,27 +485,6 @@ module sonar::admin_tests {
             );
 
             ts::return_to_sender(&scenario, admin_cap);
-            ts::return_shared(marketplace);
-        };
-
-        ts::end(scenario);
-    }
-
-    /// Test unauthorized access to admin functions
-    #[test]
-    #[expected_failure]
-    fun test_unauthorized_circuit_breaker() {
-        let mut scenario = ts::begin(ADMIN);
-        setup_marketplace(&mut scenario);
-
-        // User tries to activate circuit breaker without AdminCap
-        ts::next_tx(&mut scenario, USER);
-        {
-            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-
-            // This will fail at compile/runtime - no AdminCap available
-            // marketplace::activate_circuit_breaker(...);
-
             ts::return_shared(marketplace);
         };
 

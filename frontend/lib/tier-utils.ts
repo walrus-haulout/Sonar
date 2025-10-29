@@ -148,7 +148,11 @@ export function getTierInfo(circulatingSupply: number | bigint): TierInfo {
  * Format SONAR amount with appropriate suffix (M, K, etc.)
  * Accepts both number and bigint for flexibility
  */
-export function formatSonarAmount(amount: number | bigint): string {
+export function formatSonarAmount(amount: number | bigint | undefined | null): string {
+  if (amount === undefined || amount === null) {
+    return '0';
+  }
+
   const value = typeof amount === 'bigint' ? Number(amount) : amount;
 
   if (value >= 1_000_000) {

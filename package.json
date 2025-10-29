@@ -1,0 +1,25 @@
+{
+  "name": "sonar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SONAR Protocol - Decentralized Audio Data Marketplace",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter frontend dev & bun run --filter backend dev",
+    "dev:frontend": "bun run --filter frontend dev",
+    "dev:backend": "bun run --filter backend dev",
+    "build": "bun run --filter frontend build && bun run --filter backend build",
+    "lint": "bun run --filter '*' lint",
+    "type-check": "bun run --filter '*' type-check",
+    "test": "bun run --filter '*' test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "download-audio": "bun scripts/download-audio-samples.ts"
+  },
+  "devDependencies": {
+    "prettier": "^3.1.1"
+  }
+}

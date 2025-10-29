@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 import { SignalBadge } from '@/components/ui/SignalBadge';
@@ -28,14 +29,17 @@ export function Navbar() {
         <div className="flex items-center justify-between h-18">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="relative">
-              {/* Sonar ping effect on logo */}
-              <div className="absolute inset-0 bg-sonar-signal/20 rounded-full animate-ping" />
-              <div className="relative w-10 h-10 bg-gradient-to-br from-sonar-signal to-sonar-highlight rounded-full flex items-center justify-center">
-                <span className="text-xl font-mono font-bold text-sonar-abyss">
-                  S
-                </span>
-              </div>
+            <div className="relative w-12 h-12">
+              {/* Subtle background glow */}
+              <div className="absolute inset-0 bg-sonar-signal/10 blur-sm group-hover:bg-sonar-signal/20 transition-all" />
+              <Image
+                src="/images/walrus-icon.png"
+                alt="SONAR Protocol"
+                width={48}
+                height={48}
+                className="relative z-10 opacity-90 group-hover:opacity-100 transition-all drop-shadow-lg"
+                priority
+              />
             </div>
             <div>
               <h1 className="text-xl font-mono font-bold text-sonar-highlight group-hover:text-sonar-highlight-bright transition-colors">

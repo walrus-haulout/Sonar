@@ -51,3 +51,16 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 hrm_reasoning.db
+
+# Audio files (generated, not committed)
+frontend/public/audio/*.mp3
+frontend/public/audio/*.wav
+frontend/public/audio/*.m4a
+frontend/public/audio/*.ogg
+
+# Backend environment files
+backend/.env
+backend/.env.local
+
+# Root environment
+.env.local

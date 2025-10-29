@@ -1,0 +1,42 @@
+{
+  "name": "sonar-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist",
+    "start": "bun dist/index.js",
+    "type-check": "tsc --noEmit",
+    "setup": "bun scripts/setup.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:push": "prisma db push",
+    "db:reset": "prisma migrate reset",
+    "generate": "prisma generate"
+  },
+  "prisma": {
+    "seed": "bun prisma/seed.ts"
+  },
+  "dependencies": {
+    "@mysten/sui.js": "^0.54.1",
+    "@prisma/client": "^5.8.0",
+    "@sonar/shared": "workspace:*",
+    "fastify": "^4.25.2",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/env": "^4.2.2",
+    "@fastify/rate-limit": "^9.1.0",
+    "dotenv": "^16.3.1",
+    "jsonwebtoken": "^9.1.2",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.10.6",
+    "prisma": "^5.8.0",
+    "typescript": "^5.9.3"
+  }
+}

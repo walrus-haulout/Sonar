@@ -12,7 +12,11 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format large numbers with appropriate suffix (K, M, B)
  */
-export function formatNumber(num: number | bigint): string {
+export function formatNumber(num: number | bigint | undefined | null): string {
+  if (num === undefined || num === null) {
+    return '0';
+  }
+
   const n = typeof num === 'bigint' ? Number(num) : num;
 
   if (n >= 1_000_000_000) {

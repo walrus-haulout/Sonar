@@ -3,6 +3,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { SignalBadge } from '@/components/ui/SignalBadge';
 import { SonarBackground } from '@/components/animations/SonarBackground';
+import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
 import { ProtocolStatsSection } from '@/components/sections/ProtocolStatsSection';
 
 export default function HomePage() {
@@ -15,7 +16,16 @@ export default function HomePage() {
       <div className="relative z-10 container mx-auto px-6 py-20">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           {/* Logo/Title */}
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Logo Image with Radar Scanning Effect */}
+            <div className="flex justify-center mb-16">
+              <RadarScanTarget
+                src="/images/walrus-icon.png"
+                alt="SONAR Protocol Walrus"
+                size={220}
+              />
+            </div>
+
             <h1 className="text-7xl font-mono tracking-radar text-sonar-highlight">
               SONAR
             </h1>

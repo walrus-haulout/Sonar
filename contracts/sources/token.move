@@ -3,7 +3,7 @@
 /// Defines the SONAR fungible token used in the SONAR Protocol marketplace.
 /// Total supply: 100,000,000 SONAR (fixed, non-mintable after initialization)
 /// Decimals: 9 (standard Sui token decimals)
-#[allow(duplicate_alias)]
+#[allow(duplicate_alias, unused_use)]
 module sonar::sonar_token {
     use std::option;
     use sui::coin::{Self, TreasuryCap};

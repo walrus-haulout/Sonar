@@ -1,0 +1,82 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dataset {
+  id                String   @id
+  creator           String
+  quality_score     Int
+  price             BigInt
+  listed            Boolean  @default(true)
+  duration_seconds  Int
+  languages         String[]
+  formats           String[]
+  media_type        String
+  created_at        DateTime @default(now())
+  title             String
+  description       String
+  total_purchases   Int      @default(0)
+
+  // Relations
+  blobs             DatasetBlob?
+  purchases         Purchase[]
+  access_logs       AccessLog[]
+
+  @@index([creator])
+  @@index([created_at])
+}
+
+model DatasetBlob {
+  id               String   @id @default(uuid())
+  dataset_id       String   @unique
+  preview_blob_id  String
+  full_blob_id     String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  dataset          Dataset  @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+
+  @@index([dataset_id])
+}
+
+model Purchase {
+  id               String   @id @default(uuid())
+  user_address     String
+  dataset_id       String
+  price            BigInt
+  tx_digest        String   @unique
+  timestamp        DateTime @default(now())
+
+  // Relations
+  dataset          Dataset  @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+
+  @@index([user_address])
+  @@index([dataset_id])
+  @@index([timestamp])
+}
+
+model AccessLog {
+  id               String   @id @default(uuid())
+  user_address     String
+  dataset_id       String
+  action           String   // ACCESS_GRANTED, STREAM_STARTED, DOWNLOAD_COMPLETED, ACCESS_DENIED
+  ip_address       String?
+  user_agent       String?
+  timestamp        DateTime @default(now())
+
+  // Relations
+  dataset          Dataset  @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+
+  @@index([user_address])
+  @@index([dataset_id])
+  @@index([timestamp])
+}

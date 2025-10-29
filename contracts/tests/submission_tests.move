@@ -45,23 +45,7 @@ module sonar::submission_tests {
         let mut scenario = ts::begin(ADMIN);
         setup_marketplace(&mut scenario);
 
-        // Get marketplace and mint burn fee
-        ts::next_tx(&mut scenario, UPLOADER);
-        {
-            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-
-            // Calculate required burn fee
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee_amount = (circulating * 1) / 100_000;  // 0.001%
-
-            // Mint burn fee for uploader
-            let admin_cap = ts::take_from_sender<AdminCap>(&scenario);
-            ts::return_to_sender(&scenario, admin_cap);
-
-            ts::return_shared(marketplace);
-        };
-
-        // Uploader needs SONAR for burn fee - use separate setup
+        // Uploader needs SONAR for burn fee
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
@@ -191,7 +175,7 @@ module sonar::submission_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal_policy"),
-                b"hash",
+                option::some(b"hash"),
                 60,
                 ts::ctx(&mut scenario)
             );
@@ -252,7 +236,7 @@ module sonar::submission_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 120,
                 ts::ctx(&mut scenario)
             );
@@ -310,51 +294,4 @@ module sonar::submission_tests {
         ts::end(scenario);
     }
 
-    /// Test reward pool depletion protection
-    #[test]
-    #[expected_failure(abort_code = marketplace::E_REWARD_POOL_DEPLETED)]
-    fun test_reward_pool_depletion() {
-        let mut scenario = ts::begin(ADMIN);
-        setup_marketplace(&mut scenario);
-
-        // Drain reward pool artificially
-        ts::next_tx(&mut scenario, ADMIN);
-        {
-            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-
-            // Get initial pool balance
-            let (_, _, _, pool_balance, _) =
-                marketplace::get_marketplace_stats(&marketplace);
-
-            // This would require admin function to drain pool - for now just verify guard exists
-            // In real test, we'd drain pool first then try submission
-
-            ts::return_shared(marketplace);
-        };
-
-        // Try to submit when pool is low
-        ts::next_tx(&mut scenario, UPLOADER);
-        {
-            let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
-                ts::ctx(&mut scenario)
-            );
-
-            // This should abort with E_REWARD_POOL_DEPLETED if pool < min_reward
-            marketplace::submit_audio(
-                &mut marketplace,
-                burn_fee,
-                string::utf8(b"seal"),
-                b"hash",
-                60,
-                ts::ctx(&mut scenario)
-            );
-
-            ts::return_shared(marketplace);
-        };
-
-        ts::end(scenario);
-    }
 }

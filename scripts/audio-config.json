@@ -1,0 +1,174 @@
+{
+  "datasets": [
+    {
+      "id": "0xdemo1",
+      "title": "Bilingual Technical Interview",
+      "freesound_id": 123456,
+      "freesound_search": "technical interview conversation",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123456/",
+      "duration_seconds": 3600,
+      "notes": "Hour-long technical discussion"
+    },
+    {
+      "id": "0xdemo2",
+      "title": "Casual Conversation - Daily Life",
+      "freesound_id": 123457,
+      "freesound_search": "casual conversation dialogue",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123457/",
+      "duration_seconds": 2400,
+      "notes": "Natural dialogue about daily activities"
+    },
+    {
+      "id": "0xdemo3",
+      "title": "Multilingual Business Negotiation",
+      "freesound_id": 123458,
+      "freesound_search": "business meeting negotiation",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123458/",
+      "duration_seconds": 5400,
+      "notes": "Professional business meeting"
+    },
+    {
+      "id": "0xdemo4",
+      "title": "Japanese Podcast - Tech News",
+      "freesound_id": 123459,
+      "freesound_search": "japanese podcast tech news",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123459/",
+      "duration_seconds": 1800,
+      "notes": "Technology discussion in Japanese"
+    },
+    {
+      "id": "0xdemo5",
+      "title": "Educational Content - Science Explanation",
+      "freesound_id": 123460,
+      "freesound_search": "science education explanation",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123460/",
+      "duration_seconds": 4200,
+      "notes": "Science education content"
+    },
+    {
+      "id": "0xdemo6",
+      "title": "Customer Service Calls",
+      "freesound_id": 123461,
+      "freesound_search": "customer service call dialogue",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123461/",
+      "duration_seconds": 1200,
+      "notes": "Customer support interactions"
+    },
+    {
+      "id": "0xdemo7",
+      "title": "Medical Consultation Recording",
+      "freesound_id": 123462,
+      "freesound_search": "medical consultation doctor patient",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123462/",
+      "duration_seconds": 7200,
+      "notes": "Professional medical consultation"
+    },
+    {
+      "id": "0xdemo8",
+      "title": "Latin American Sports Commentary",
+      "freesound_id": 123463,
+      "freesound_search": "sports commentary announcement",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123463/",
+      "duration_seconds": 2700,
+      "notes": "Energetic sports commentary"
+    },
+    {
+      "id": "0xdemo9",
+      "title": "Podcast Interview - Startup Founder",
+      "freesound_id": 123464,
+      "freesound_search": "podcast interview startup entrepreneur",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123464/",
+      "duration_seconds": 3300,
+      "notes": "In-depth startup founder interview"
+    },
+    {
+      "id": "0xdemo10",
+      "title": "Korean Drama Dialogue",
+      "freesound_id": 123465,
+      "freesound_search": "korean drama dialogue conversation",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123465/",
+      "duration_seconds": 1500,
+      "notes": "Korean language dialogue"
+    },
+    {
+      "id": "0xdemo11",
+      "title": "News Broadcast - International Affairs",
+      "freesound_id": 123466,
+      "freesound_search": "news broadcast journalism",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123466/",
+      "duration_seconds": 5000,
+      "notes": "Professional news broadcasting"
+    },
+    {
+      "id": "0xdemo12",
+      "title": "Children's Storytelling",
+      "freesound_id": 123467,
+      "freesound_search": "children story narration",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123467/",
+      "duration_seconds": 900,
+      "notes": "Children's stories with expression"
+    },
+    {
+      "id": "0xdemo13",
+      "title": "Opera Performance Recording",
+      "freesound_id": 123468,
+      "freesound_search": "opera singing classical music",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123468/",
+      "duration_seconds": 6000,
+      "notes": "Professional opera performance"
+    },
+    {
+      "id": "0xdemo14",
+      "title": "Russian Literature Audiobook",
+      "freesound_id": 123469,
+      "freesound_search": "audiobook narration literature",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123469/",
+      "duration_seconds": 2100,
+      "notes": "Classical literature narration"
+    },
+    {
+      "id": "0xdemo15",
+      "title": "Bollywood Movie Dialogue",
+      "freesound_id": 123470,
+      "freesound_search": "bollywood movie dialogue drama",
+      "license": "CC BY 3.0",
+      "author": "freesound-user",
+      "url": "https://freesound.org/people/user/sounds/123470/",
+      "duration_seconds": 2800,
+      "notes": "Bollywood film dialogue"
+    }
+  ],
+  "instructions": {
+    "setup": "Update each freesound_id with real FreeSound.org sound IDs. The script will use these to download audio.",
+    "alternatives": "If you don't have FreeSound IDs, comment out this config and the script will generate synthetic audio instead.",
+    "attribution": "All downloaded audio will be attributed in AUDIO_SOURCES.md"
+  }
+}
