@@ -5,6 +5,7 @@ import { RepositoryProvider } from '@/providers/repository-provider';
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui.js/client';
 import { useState } from 'react';
+import { Toaster } from 'sonner';
 import '@mysten/dapp-kit/dist/index.css';
 
 /**
@@ -43,6 +44,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SuiClientProvider networks={networks} defaultNetwork="testnet">
         <WalletProvider autoConnect>
           <RepositoryProvider>{children}</RepositoryProvider>
+          <Toaster
+            position="top-right"
+            richColors
+            theme="dark"
+            closeButton
+          />
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
