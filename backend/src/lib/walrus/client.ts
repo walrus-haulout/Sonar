@@ -60,8 +60,7 @@ export async function fetchBlobMetadata(blobId: string): Promise<BlobMetadata | 
  * Used for integrity verification
  */
 export async function verifyBlobHash(
-  blobId: string,
-  expectedHash: string
+  blobId: string
 ): Promise<boolean> {
   if (MOCK_WALRUS) {
     logger.debug({ blobId }, 'Mock: Blob hash verified');

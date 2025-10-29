@@ -2,7 +2,7 @@
  * Tests for nonce generation and validation
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import {
   generateNonce,
   storeNonce,

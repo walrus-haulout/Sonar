@@ -24,9 +24,7 @@ export function generateToken(address: string): { token: string; expiresAt: numb
     exp: calculateExpiry(now),
   };
 
-  const token = jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  const token = jwt.sign(payload, JWT_SECRET);
 
   return {
     token,

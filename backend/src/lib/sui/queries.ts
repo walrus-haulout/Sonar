@@ -3,7 +3,7 @@
  * Verifies if a user owns/purchased a dataset
  */
 
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui.js/client';
 import { logger } from '../logger';
 
 const SUI_RPC_URL = process.env.SUI_RPC_URL!;

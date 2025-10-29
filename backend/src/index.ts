@@ -67,7 +67,7 @@ async function start(): Promise<void> {
   });
 
   // CORS
-  const corsOrigin = fastify.config.CORS_ORIGIN.split(',').map((s) => s.trim());
+  const corsOrigin = (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map((s: string) => s.trim());
   await fastify.register(fastifyCors, {
     origin: corsOrigin,
     credentials: true,
@@ -90,7 +90,7 @@ async function start(): Promise<void> {
       traceId: request.id,
       path: request.url,
       method: request.method,
-    });
+    }) as any;
   });
 
   // Health check
@@ -133,7 +133,7 @@ async function start(): Promise<void> {
     request.log.error(error, 'Unhandled error');
 
     // Don't expose internal errors to client
-    const message = fastify.config.NODE_ENV === 'production' ? 'Internal server error' : error.message;
+    const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message;
 
     return reply.code(error.statusCode || 500).send({
       error: 'INTERNAL_ERROR',
@@ -142,7 +142,7 @@ async function start(): Promise<void> {
     });
   });
 
-  const port = parseInt(fastify.config.PORT, 10);
+  const port = parseInt(process.env.PORT || '3001', 10);
   const host = '0.0.0.0';
 
   try {

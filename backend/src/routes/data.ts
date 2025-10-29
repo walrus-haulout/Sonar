@@ -7,7 +7,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/db';
-import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
 import { streamBlobFromWalrus } from '../lib/walrus/client';
 import { verifyUserOwnsDataset } from '../lib/sui/queries';
 import { ErrorCode } from '@sonar/shared';
