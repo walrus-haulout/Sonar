@@ -95,7 +95,7 @@ export function DownloadButton({
       }
 
       // Create blob from chunks
-      const blob = new Blob(chunks, { type: 'audio/mpeg' });
+      const blob = new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
 
       // Step 4: Trigger browser download
       const url = URL.createObjectURL(blob);
