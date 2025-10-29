@@ -33,7 +33,7 @@ declare global {
 
 async function start(): Promise<void> {
   const fastify = Fastify({
-    logger: logger,
+    logger: logger as any,
   });
 
   // Environment validation

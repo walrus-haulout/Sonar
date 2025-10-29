@@ -149,13 +149,22 @@ export async function isWalrusAvailable(): Promise<boolean> {
     return true;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     const response = await fetch(WALRUS_AGGREGATOR_URL, {
       method: 'HEAD',
-      timeout: 5000,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return response.ok || response.status === 404; // 404 is ok, means service is up
-  } catch {
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      logger.warn('Walrus health check timeout');
+      return false;
+    }
     return false;
   }
 }

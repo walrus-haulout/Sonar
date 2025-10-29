@@ -17,10 +17,14 @@ export interface Dataset {
   price: bigint;
   listed: boolean;
   duration_seconds: number;
+  sample_count: number;
+  storage_size: number;
+  verified: boolean;
   languages: string[];
   formats: Format[];
   media_type: MediaType;
   created_at: number;
+  updated_at: number;
   title: string;
   description: string;
   total_purchases?: number;
@@ -35,10 +39,16 @@ export interface DatasetWithBlobs extends Dataset {
 // Protocol statistics (economic tier data)
 export interface ProtocolStats {
   circulating_supply: bigint;
+  initial_supply: bigint;
+  total_burned: bigint;
   current_tier: 1 | 2 | 3 | 4;
   burn_rate: number;
   liquidity_rate: number;
   uploader_rate: number;
+  total_datasets: number;
+  total_purchases: number;
+  active_creators: number;
+  total_volume: bigint;
 }
 
 // Tier configuration (matches contract tiers)
