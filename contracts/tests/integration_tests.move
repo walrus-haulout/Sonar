@@ -3,10 +3,10 @@
 /// Tests for tier transitions, full purchase flows, and cross-module interactions
 #[test_only]
 module sonar::integration_tests {
+    use std::option;
     use std::string;
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::coin::{Self, Coin};
-    use sui::balance;
     use sonar::sonar_token::{Self, SONAR_TOKEN};
     use sonar::marketplace::{
         Self,
@@ -195,7 +195,7 @@ module sonar::integration_tests {
                     &mut marketplace,
                     burn_fee,
                     string::utf8(b"seal_policy"),
-                    b"hash",
+                    option::some(b"hash"),
                     180,
                     ts::ctx(&mut scenario)
                 );
@@ -263,7 +263,7 @@ module sonar::integration_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 120,
                 ts::ctx(&mut scenario)
             );
@@ -364,7 +364,7 @@ module sonar::integration_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 90,
                 ts::ctx(&mut scenario)
             );

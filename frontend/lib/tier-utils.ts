@@ -146,14 +146,17 @@ export function getTierInfo(circulatingSupply: number | bigint): TierInfo {
 
 /**
  * Format SONAR amount with appropriate suffix (M, K, etc.)
+ * Accepts both number and bigint for flexibility
  */
-export function formatSonarAmount(amount: number): string {
-  if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1)}M`;
-  } else if (amount >= 1_000) {
-    return `${(amount / 1_000).toFixed(1)}K`;
+export function formatSonarAmount(amount: number | bigint): string {
+  const value = typeof amount === 'bigint' ? Number(amount) : amount;
+
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  } else if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
   } else {
-    return amount.toFixed(2);
+    return value.toFixed(2);
   }
 }
 

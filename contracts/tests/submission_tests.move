@@ -3,10 +3,10 @@
 /// Tests for audio submission, finalization, and vesting mechanics
 #[test_only]
 module sonar::submission_tests {
+    use std::option;
     use std::string;
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::coin::{Self, Coin};
-    use sui::balance;
     use sonar::sonar_token::{Self, SONAR_TOKEN};
     use sonar::marketplace::{
         Self,
@@ -88,7 +88,7 @@ module sonar::submission_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal_policy_xyz"),
-                b"preview_hash_abc",
+                option::some(b"preview_hash_abc"),
                 180,  // 3 minutes
                 ts::ctx(&mut scenario)
             );
@@ -126,7 +126,7 @@ module sonar::submission_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal_policy_xyz"),
-                b"preview_hash",
+                option::some(b"preview_hash"),
                 180,
                 ts::ctx(&mut scenario)
             );

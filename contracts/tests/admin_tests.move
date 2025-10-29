@@ -3,6 +3,7 @@
 /// Tests for admin operations, circuit breaker, and governance functions
 #[test_only]
 module sonar::admin_tests {
+    use std::option;
     use std::string;
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::coin;
@@ -121,7 +122,7 @@ module sonar::admin_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 60,
                 ts::ctx(&mut scenario)
             );
@@ -170,7 +171,7 @@ module sonar::admin_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 60,
                 ts::ctx(&mut scenario)
             );
@@ -202,7 +203,7 @@ module sonar::admin_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 120,
                 ts::ctx(&mut scenario)
             );
@@ -297,7 +298,7 @@ module sonar::admin_tests {
                 &mut marketplace,
                 burn_fee,
                 string::utf8(b"seal"),
-                b"hash",
+                option::some(b"hash"),
                 180,
                 ts::ctx(&mut scenario)
             );

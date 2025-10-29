@@ -4,6 +4,7 @@
 /// dynamic economics, and dataset purchases.
 #[allow(unused_const)]
 module sonar::marketplace {
+    use std::option::{Self, Option};
     use std::string::{Self, String};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin, TreasuryCap};
@@ -80,8 +81,8 @@ module sonar::marketplace {
         uploader: address,
 
         // Walrus integration (metadata only, NO blob ID on-chain)
-        seal_policy_id: String,         // Mysten Seal policy for decryption
-        preview_blob_hash: vector<u8>,  // Optional: hash for verification
+        seal_policy_id: String,              // Mysten Seal policy for decryption
+        preview_blob_hash: Option<vector<u8>>,  // Optional: hash for verification
 
         // Submission details
         duration_seconds: u64,
@@ -108,6 +109,7 @@ module sonar::marketplace {
         treasury_cap: TreasuryCap<SONAR_TOKEN>,
         reward_pool: Balance<SONAR_TOKEN>,
         reward_pool_initial: u64,      // 70M for tracking
+        reward_pool_allocated: u64,    // Total rewards reserved for vesting (not yet claimed)
         liquidity_vault: Balance<SONAR_TOKEN>,
 
         // Statistics
@@ -245,6 +247,7 @@ module sonar::marketplace {
             treasury_cap,
             reward_pool,
             reward_pool_initial: reward_pool_amount,
+            reward_pool_allocated: 0,  // No rewards allocated yet
             liquidity_vault: balance::zero(),
             total_submissions: 0,
             total_purchases: 0,
@@ -327,7 +330,7 @@ module sonar::marketplace {
         marketplace: &mut QualityMarketplace,
         burn_fee: Coin<SONAR_TOKEN>,
         seal_policy_id: String,
-        preview_blob_hash: vector<u8>,
+        preview_blob_hash: Option<vector<u8>>,
         duration_seconds: u64,
         ctx: &mut TxContext
     ) {
@@ -401,6 +404,7 @@ module sonar::marketplace {
 
     /// Finalize submission with quality score (ValidatorCap required)
     /// Calculates reward based on quality and vests over 90 epochs
+    /// CRITICAL: Reserves reward from pool to prevent over-allocation
     public entry fun finalize_submission(
         _cap: &ValidatorCap,
         marketplace: &mut QualityMarketplace,
@@ -419,10 +423,14 @@ module sonar::marketplace {
         // Determine status (approved if score >= 30)
         let status = if (quality_score >= 30) { 1 } else { 2 };
 
-        // Debit reward pool if approved
+        // Reserve reward from pool if approved
         if (status == 1) {
             let pool_balance = balance::value(&marketplace.reward_pool);
-            assert!(pool_balance >= reward_amount, E_INSUFFICIENT_REWARDS);
+            let available = pool_balance - marketplace.reward_pool_allocated;
+            assert!(available >= reward_amount, E_INSUFFICIENT_REWARDS);
+
+            // Reserve the reward (increment allocated counter)
+            marketplace.reward_pool_allocated = marketplace.reward_pool_allocated + reward_amount;
 
             // Initialize vesting schedule
             let current_epoch = tx_context::epoch(ctx);
@@ -496,6 +504,7 @@ module sonar::marketplace {
 
     /// Claim vested tokens
     /// Transfers unlocked tokens from reward pool to uploader
+    /// CRITICAL: Decrements allocated counter as rewards are distributed
     public entry fun claim_vested_tokens(
         marketplace: &mut QualityMarketplace,
         submission: &mut AudioSubmission,
@@ -520,6 +529,9 @@ module sonar::marketplace {
         // Update claimed amount
         submission.vested_balance.claimed_amount =
             submission.vested_balance.claimed_amount + claimable;
+
+        // Release allocated reservation (these tokens are now distributed)
+        marketplace.reward_pool_allocated = marketplace.reward_pool_allocated - claimable;
 
         // Emit event
         event::emit(VestedTokensClaimed {
@@ -730,6 +742,7 @@ module sonar::marketplace {
 
     /// Withdraw from liquidity vault
     /// Subject to withdrawal limits (10% per epoch, 7 epoch minimum between)
+    /// CRITICAL: Checks cooldown BEFORE resetting epoch counter
     public entry fun withdraw_liquidity_vault(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
@@ -744,18 +757,19 @@ module sonar::marketplace {
         // Check withdrawal limits
         let limits = &mut marketplace.withdrawal_limits;
 
+        // Check minimum epochs between withdrawals BEFORE resetting
+        // Skip check if this is the very first withdrawal (last_withdrawal_epoch == 0)
+        if (limits.last_withdrawal_epoch > 0) {
+            assert!(
+                current_epoch >= limits.last_withdrawal_epoch + limits.min_epochs_between,
+                E_WITHDRAWAL_TOO_FREQUENT
+            );
+        };
+
         // Reset epoch counter if new epoch
         if (current_epoch > limits.last_withdrawal_epoch) {
             limits.total_withdrawn_this_epoch = 0;
-            limits.last_withdrawal_epoch = current_epoch;
         };
-
-        // Check minimum epochs between withdrawals
-        assert!(
-            current_epoch >= limits.last_withdrawal_epoch + limits.min_epochs_between ||
-            limits.total_withdrawn_this_epoch == 0,  // First withdrawal of epoch
-            E_WITHDRAWAL_TOO_FREQUENT
-        );
 
         // Check max per epoch limit (10% of vault)
         let max_withdrawal = (vault_balance * limits.max_per_epoch_bps) / 10_000;
