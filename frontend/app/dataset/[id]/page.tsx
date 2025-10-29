@@ -94,7 +94,7 @@ export default function DatasetDetailPage() {
                       ? 'success'
                       : dataset.quality_score >= 6
                         ? 'warning'
-                        : 'error'
+                        : 'danger'
                   }
                   className="text-lg px-4 py-2"
                 >
