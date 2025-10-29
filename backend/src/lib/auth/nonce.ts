@@ -45,8 +45,37 @@ export function storeNonce(
 }
 
 /**
+ * Get a nonce entry without mutating state
+ * Returns the entry if valid, null otherwise
+ */
+export function getNonceEntry(nonce: string): { message: string; expiresAt: number } | null {
+  const entry = nonceStore.get(nonce);
+
+  if (!entry) {
+    return null;
+  }
+
+  // Check if expired
+  if (Date.now() > entry.expiresAt) {
+    nonceStore.delete(nonce);
+    return null;
+  }
+
+  // Check if already used
+  if (entry.used) {
+    return null;
+  }
+
+  return {
+    message: entry.message,
+    expiresAt: entry.expiresAt,
+  };
+}
+
+/**
  * Verify a nonce is valid and mark it as used (one-time use)
  * Returns true if valid, false if expired/invalid/already used
+ * This is a mutation operation - only call after validation succeeds
  */
 export function verifyNonce(nonce: string): boolean {
   const entry = nonceStore.get(nonce);
@@ -70,6 +99,14 @@ export function verifyNonce(nonce: string): boolean {
   entry.used = true;
 
   return true;
+}
+
+/**
+ * Consume a nonce - permanently remove it to prevent replay attacks
+ * Call this after successful authentication
+ */
+export function consumeNonce(nonce: string): void {
+  nonceStore.delete(nonce);
 }
 
 /**

@@ -8,8 +8,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import {
   generateNonce,
   storeNonce,
-  verifyNonce,
-  getChallengeMessage,
+  getNonceEntry,
+  consumeNonce,
 } from '../lib/auth/nonce';
 import {
   generateToken,
@@ -116,9 +116,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           });
         }
 
-        // Verify nonce exists and hasn't been used
-        if (!verifyNonce(nonce)) {
-          request.log.warn({ nonce }, 'Invalid or expired nonce');
+        // Get nonce entry (without mutating state)
+        const nonceEntry = getNonceEntry(nonce);
+        if (!nonceEntry) {
+          request.log.warn({ nonce }, 'Invalid, expired, or already-used nonce');
           return reply.code(401).send({
             error: ErrorCode.NONCE_INVALID,
             code: ErrorCode.NONCE_INVALID,
@@ -126,16 +127,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
           });
         }
 
-        // Get the stored challenge message
-        const storedMessage = getChallengeMessage(nonce);
-        if (!storedMessage) {
-          request.log.warn({ nonce }, 'Challenge message not found');
-          return reply.code(401).send({
-            error: ErrorCode.NONCE_INVALID,
-            code: ErrorCode.NONCE_INVALID,
-            message: 'Challenge not found. Request a new challenge.',
-          });
-        }
+        const storedMessage = nonceEntry.message;
 
         // Validate that the provided message matches the stored message
         if (message !== storedMessage) {
@@ -148,17 +140,9 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         }
 
         // Verify the signature against the stored message
+        let isValid = false;
         try {
-          const isValid = await verifyWalletSignature(address, storedMessage, signature);
-
-          if (!isValid) {
-            request.log.warn({ address }, 'Invalid signature');
-            return reply.code(401).send({
-              error: ErrorCode.INVALID_SIGNATURE,
-              code: ErrorCode.INVALID_SIGNATURE,
-              message: 'Invalid wallet signature',
-            });
-          }
+          isValid = await verifyWalletSignature(address, storedMessage, signature);
         } catch (error) {
           request.log.error(error, 'Signature verification failed');
           return reply.code(401).send({
@@ -167,6 +151,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
             message: 'Failed to verify signature',
           });
         }
+
+        if (!isValid) {
+          request.log.warn({ address }, 'Invalid signature');
+          return reply.code(401).send({
+            error: ErrorCode.INVALID_SIGNATURE,
+            code: ErrorCode.INVALID_SIGNATURE,
+            message: 'Invalid wallet signature',
+          });
+        }
+
+        // SUCCESS: Signature verified. Consume nonce to prevent replay attacks.
+        consumeNonce(nonce);
 
         // Generate JWT token
         const { token, expiresAt } = generateToken(address);
