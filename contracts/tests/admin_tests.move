@@ -121,6 +121,7 @@ module sonar::admin_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"admin_blob1"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 60,
@@ -170,6 +171,7 @@ module sonar::admin_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"admin_blob2"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 60,
@@ -202,6 +204,7 @@ module sonar::admin_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"admin_blob3"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 120,
@@ -297,6 +300,7 @@ module sonar::admin_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"admin_blob4"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 180,
@@ -407,6 +411,7 @@ module sonar::admin_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"admin_blob5"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 180,

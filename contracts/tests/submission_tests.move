@@ -72,6 +72,7 @@ module sonar::submission_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"walrus_blob_xyz"),
                 string::utf8(b"seal_policy_xyz"),
                 option::some(b"preview_hash_abc"),
                 180,  // 3 minutes
@@ -110,6 +111,7 @@ module sonar::submission_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"walrus_blob_123"),
                 string::utf8(b"seal_policy_xyz"),
                 option::some(b"preview_hash"),
                 180,
@@ -174,6 +176,7 @@ module sonar::submission_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"walrus_blob_456"),
                 string::utf8(b"seal_policy"),
                 option::some(b"hash"),
                 60,
@@ -235,6 +238,7 @@ module sonar::submission_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"walrus_blob_789"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 120,

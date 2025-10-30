@@ -89,6 +89,7 @@ module sonar::integration_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"blob1"),
                 string::utf8(b"seal_policy_full_test"),
                 option::some(b"preview_hash_full"),
                 240,
@@ -196,6 +197,7 @@ module sonar::integration_tests {
                 marketplace::submit_audio(
                     &mut marketplace,
                     burn_fee,
+                    string::utf8(b"blob2"),
                     string::utf8(b"seal_policy"),
                     option::some(b"hash"),
                     180,
@@ -265,6 +267,7 @@ module sonar::integration_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"blob3"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 120,
@@ -366,6 +369,7 @@ module sonar::integration_tests {
             marketplace::submit_audio(
                 &mut marketplace,
                 burn_fee,
+                string::utf8(b"blob4"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 90,
