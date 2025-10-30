@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSignAndExecuteTransaction, useCurrentAccount } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import type { Dataset } from '@/types/blockchain';
+import { PACKAGE_ID } from '@/lib/sui/client';
 
 export interface PurchaseState {
   isPurchasing: boolean;
@@ -95,7 +96,7 @@ export function usePurchase(): UsePurchaseReturn {
 
       // Call purchase_dataset Move function
       // Placeholder: Replace with actual package ID and module
-      const packageId = process.env.NEXT_PUBLIC_SONAR_PACKAGE_ID || '0x...';
+      const packageId = PACKAGE_ID;
 
       // Example Move call structure:
       // tx.moveCall({
