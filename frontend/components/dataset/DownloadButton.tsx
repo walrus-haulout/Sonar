@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { Dataset } from '@/types/blockchain';
 import { useAuth } from '@/hooks/useAuth';
-import { requestAccessGrant, getStreamUrl } from '@/lib/api/client';
+import { requestAccessGrant } from '@/lib/api/client';
 import { toastError, toastSuccess, toastPromise } from '@/lib/toast';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { DownloadProgress } from '@/components/ui/DownloadProgress';
@@ -56,8 +56,8 @@ export function DownloadButton({
         }
       );
 
-      // Step 2: Get stream URL with auth
-      const streamUrl = getStreamUrl(dataset.id, token);
+      // Step 2: Use the download URL provided by the backend
+      const streamUrl = accessGrant.download_url;
 
       // Step 3: Download the audio file
       const response = await fetch(streamUrl, {
