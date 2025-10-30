@@ -1,6 +1,8 @@
 import nextConfig from 'eslint-config-next';
+import typescriptEslint from 'typescript-eslint';
 
 export default [
+  ...typescriptEslint.configs.recommended,
   ...nextConfig,
   {
     rules: {

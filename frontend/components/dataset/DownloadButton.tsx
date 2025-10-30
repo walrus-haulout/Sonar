@@ -60,11 +60,19 @@ export function DownloadButton({
       const streamUrl = accessGrant.download_url;
 
       // Step 3: Download the audio file
-      const response = await fetch(streamUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      let response: Response;
+      try {
+        response = await fetch(streamUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Failed to fetch')) {
+          throw new Error('Backend server is unavailable. Unable to download audio. Make sure the backend is running.');
+        }
+        throw error;
+      }
 
       if (!response.ok) {
         throw new Error(`Download failed: ${response.statusText}`);

@@ -17,20 +17,31 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:300
  * Request a signing challenge from the backend
  */
 export async function requestAuthChallenge(address: string): Promise<AuthChallenge> {
-  const response = await fetch(`${BACKEND_URL}/auth/challenge`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ address }),
-  });
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/challenge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ address }),
+    });
 
-  if (!response.ok) {
-    const error = (await response.json()) as ErrorResponse;
-    throw new Error(error.message || 'Failed to request challenge');
+    if (!response.ok) {
+      const error = (await response.json()) as ErrorResponse;
+      throw new Error(error.message || 'Failed to request challenge');
+    }
+
+    return response.json() as Promise<AuthChallenge>;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        error.message.includes('Failed to fetch')
+          ? `Backend server is not available at ${BACKEND_URL}. Make sure the backend is running.`
+          : error.message
+      );
+    }
+    throw error;
   }
-
-  return response.json() as Promise<AuthChallenge>;
 }
 
 /**
@@ -39,20 +50,31 @@ export async function requestAuthChallenge(address: string): Promise<AuthChallen
 export async function verifyAuthSignature(
   verifyRequest: AuthVerifyRequest
 ): Promise<AuthToken> {
-  const response = await fetch(`${BACKEND_URL}/auth/verify`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(verifyRequest),
-  });
+  try {
+    const response = await fetch(`${BACKEND_URL}/auth/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(verifyRequest),
+    });
 
-  if (!response.ok) {
-    const error = (await response.json()) as ErrorResponse;
-    throw new Error(error.message || 'Failed to verify signature');
+    if (!response.ok) {
+      const error = (await response.json()) as ErrorResponse;
+      throw new Error(error.message || 'Failed to verify signature');
+    }
+
+    return response.json() as Promise<AuthToken>;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        error.message.includes('Failed to fetch')
+          ? `Backend server is not available at ${BACKEND_URL}. Make sure the backend is running.`
+          : error.message
+      );
+    }
+    throw error;
   }
-
-  return response.json() as Promise<AuthToken>;
 }
 
 /**
@@ -62,20 +84,31 @@ export async function requestAccessGrant(
   datasetId: string,
   token: string
 ): Promise<AccessGrant> {
-  const response = await fetch(`${BACKEND_URL}/api/datasets/${datasetId}/access`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/datasets/${datasetId}/access`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-  if (!response.ok) {
-    const error = (await response.json()) as ErrorResponse;
-    throw new Error(error.message || 'Failed to request access');
+    if (!response.ok) {
+      const error = (await response.json()) as ErrorResponse;
+      throw new Error(error.message || 'Failed to request access');
+    }
+
+    return response.json() as Promise<AccessGrant>;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        error.message.includes('Failed to fetch')
+          ? `Backend server is not available at ${BACKEND_URL}. Make sure the backend is running.`
+          : error.message
+      );
+    }
+    throw error;
   }
-
-  return response.json() as Promise<AccessGrant>;
 }
 
 /**
