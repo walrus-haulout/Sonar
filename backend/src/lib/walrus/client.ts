@@ -1,7 +1,8 @@
 /**
- * Walrus aggregator client built on top of the Dreamlit Walrus SDK primitives.
- * Provides range streaming, health monitoring, and rate limiting tailored for
- * large audio blobs while reusing the SDK's connection management utilities.
+ * Walrus client using Dreamlit's production SDK.
+ * Built on DirectTransport, HealthMonitor, and RateLimiter for enterprise-grade
+ * reliability with automatic failover, rate limiting, and connection management.
+ * Optimized for large audio blob streaming with range request support.
  */
 
 import type { BlobMetadata } from '@sonar/shared';
@@ -13,6 +14,7 @@ import {
 } from '@dreamlit/walrus';
 import { logger } from '../logger';
 
+// Environment configuration
 const WALRUS_AGGREGATOR_URL = process.env.WALRUS_AGGREGATOR_URL!;
 const WALRUS_PUBLISHER_URL = process.env.WALRUS_PUBLISHER_URL || WALRUS_AGGREGATOR_URL;
 const MOCK_WALRUS = process.env.MOCK_WALRUS === 'true';
@@ -21,30 +23,37 @@ if (!WALRUS_AGGREGATOR_URL) {
   throw new Error('WALRUS_AGGREGATOR_URL environment variable is required');
 }
 
+// Normalize URLs for consistent endpoint handling
 const aggregatorBase = normalizeBaseUrl(WALRUS_AGGREGATOR_URL);
 const publisherBase = normalizeBaseUrl(WALRUS_PUBLISHER_URL);
 
+// Production-ready rate limiting configuration
+// Aggregator: Higher limits for read operations (streaming, metadata)
 const aggregatorLimiter = new RateLimiter({
   name: 'walrus-aggregator',
-  maxRPS: Number(process.env.WALRUS_AGG_MAX_RPS ?? 3),
-  burst: Number(process.env.WALRUS_AGG_BURST ?? 3),
-  maxConcurrent: Number(process.env.WALRUS_AGG_MAX_CONCURRENT ?? 2),
+  maxRPS: Number(process.env.WALRUS_AGG_MAX_RPS ?? 5),
+  burst: Number(process.env.WALRUS_AGG_BURST ?? 5),
+  maxConcurrent: Number(process.env.WALRUS_AGG_MAX_CONCURRENT ?? 3),
 });
 
+// Publisher: Conservative limits for write operations (upload)
 const publisherLimiter = new RateLimiter({
   name: 'walrus-publisher',
   maxRPS: Number(process.env.WALRUS_PUB_MAX_RPS ?? 1),
-  burst: Number(process.env.WALRUS_PUB_BURST ?? 1),
+  burst: Number(process.env.WALRUS_PUB_BURST ?? 2),
   maxConcurrent: Number(process.env.WALRUS_PUB_MAX_CONCURRENT ?? 1),
 });
 
+// Dreamlit DirectTransport: Production SDK transport layer with built-in failover
 const walrusTransport = new DirectTransport({
   walrusAgg: aggregatorLimiter,
   walrusPub: publisherLimiter,
 });
 
+// Connection manager: Tracks health and provides automatic failover
 const connectionManager = new WalrusConnectionManager();
 
+// Health monitor: Continuous health checking with automatic endpoint failover
 const healthMonitor = new HealthMonitor(
   {
     aggregator: { proxy: aggregatorBase, direct: aggregatorBase, proxyEnabled: false },
@@ -54,6 +63,13 @@ const healthMonitor = new HealthMonitor(
   connectionManager
 );
 
+// Initialize health monitoring on startup
+logger.info('Initializing Dreamlit Walrus SDK with health monitoring');
+healthMonitor.check().catch((error: unknown) => {
+  logger.warn({ error }, 'Initial Walrus health check failed (will retry automatically)');
+});
+
+// Stream timeout configuration
 const STREAM_TIMEOUT_MS = Number(process.env.WALRUS_STREAM_TIMEOUT_MS ?? 30_000);
 
 /**

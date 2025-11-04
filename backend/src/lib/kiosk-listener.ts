@@ -1,14 +1,15 @@
 /**
  * Kiosk Event Listener
- * Subscribes to blockchain events and syncs to database
+ * Subscribes to blockchain events and syncs to database using Dreamlit's suiService
  * Events: SonarSold, DatasetPurchasedViaKiosk, KioskPriceUpdated
  */
 
 import { createHash } from 'crypto';
-import type { JsonRpcProvider, SuiEventFilter } from '@mysten/sui.js';
+import type { SuiEventFilter } from '@mysten/sui.js';
 import { prisma } from './db';
 import { logger } from './logger';
 import { syncKioskSnapshotToDatabase } from './kiosk/state';
+import { suiClient } from './sui/client';
 
 interface SonarSoldEvent {
   buyer: string;
@@ -38,17 +39,16 @@ function hashEvent(txDigest: string, eventIndex: number): string {
 }
 
 /**
- * Start listening to kiosk events
+ * Start listening to kiosk events using Dreamlit's suiClient
  */
 export async function startKioskEventListener(
-  provider: JsonRpcProvider,
   packageId: string
 ): Promise<void> {
-  logger.info(`Starting kiosk event listener for package ${packageId}`);
+  logger.info(`Starting kiosk event listener for package ${packageId} using Dreamlit SDK`);
 
   try {
-    // Subscribe to SonarSold events
-    const unsubscribeSonarSold = await provider.subscribeEvent({
+    // Subscribe to SonarSold events using Dreamlit's suiClient
+    const unsubscribeSonarSold = await suiClient.subscribeEvent({
       filter: {
         module: `${packageId}::marketplace`,
         eventType: 'SonarSold',
@@ -82,8 +82,8 @@ export async function startKioskEventListener(
       },
     });
 
-    // Subscribe to DatasetPurchasedViaKiosk events
-    const unsubscribeDatasetPurchase = await provider.subscribeEvent({
+    // Subscribe to DatasetPurchasedViaKiosk events using Dreamlit's suiClient
+    const unsubscribeDatasetPurchase = await suiClient.subscribeEvent({
       filter: {
         module: `${packageId}::marketplace`,
         eventType: 'DatasetPurchasedViaKiosk',
@@ -119,8 +119,8 @@ export async function startKioskEventListener(
       },
     });
 
-    // Subscribe to KioskPriceUpdated events
-    const unsubscribePriceUpdated = await provider.subscribeEvent({
+    // Subscribe to KioskPriceUpdated events using Dreamlit's suiClient
+    const unsubscribePriceUpdated = await suiClient.subscribeEvent({
       filter: {
         module: `${packageId}::marketplace`,
         eventType: 'KioskPriceUpdated',
