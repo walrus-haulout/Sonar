@@ -75,6 +75,11 @@ mock.module('../lib/sui/client', () => {
         };
       },
     },
+    suiQueryExecutor: {
+      async execute(fn: () => Promise<any>) {
+        return fn();
+      },
+    },
     SONAR_MARKETPLACE_ID: '0xkiosk_test',
   };
 });

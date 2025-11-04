@@ -22,6 +22,8 @@
     "seed": "bun prisma/seed.ts"
   },
   "dependencies": {
+    "@dreamlit/walrus": "github:Vjust/dreamlit-walrus-sdk#main:walrus",
+    "@dreamlit/walrus-sui-core": "github:Vjust/dreamlit-walrus-sdk#main:walrus-sui-core",
     "@mysten/sui.js": "^0.54.1",
     "@prisma/client": "^5.8.0",
     "@sonar/shared": "workspace:*",
@@ -32,7 +34,8 @@
     "dotenv": "^16.3.1",
     "jsonwebtoken": "^9.0.0",
     "pino": "^8.17.2",
-    "pino-pretty": "^10.3.1"
+    "pino-pretty": "^10.3.1",
+    "undici": "^5.28.4"
   },
   "devDependencies": {
     "@types/bun": "latest",

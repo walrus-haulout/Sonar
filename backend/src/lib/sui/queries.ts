@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../logger';
-import { SONAR_PACKAGE_ID, suiClient } from './client';
+import { SONAR_PACKAGE_ID, suiClient, suiQueryExecutor } from './client';
 
 if (!SONAR_PACKAGE_ID || SONAR_PACKAGE_ID === '0x0') {
   logger.warn('SONAR_PACKAGE_ID not configured. Purchase verification will use mock data.');
@@ -78,12 +78,14 @@ async function queryPurchaseEvents(
   try {
     // Query events from blockchain
     // Event type: {SONAR_PACKAGE_ID}::marketplace::DatasetPurchased
-    const events = await suiClient.queryEvents({
-      query: {
-        MoveEventType: `${SONAR_PACKAGE_ID}::marketplace::DatasetPurchased`,
-      },
-      limit: 100,
-    });
+    const events = await suiQueryExecutor.execute(async () =>
+      suiClient.queryEvents({
+        query: {
+          MoveEventType: `${SONAR_PACKAGE_ID}::marketplace::DatasetPurchased`,
+        },
+        limit: 100,
+      })
+    );
 
     // Check if any event matches user and dataset
     for (const event of events.data) {

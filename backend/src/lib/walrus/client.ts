@@ -1,44 +1,84 @@
 /**
- * Walrus aggregator HTTP client
- * Handles blob fetching and streaming with Range request support
+ * Walrus aggregator client built on top of the Dreamlit Walrus SDK primitives.
+ * Provides range streaming, health monitoring, and rate limiting tailored for
+ * large audio blobs while reusing the SDK's connection management utilities.
  */
 
-import { logger } from '../logger';
 import type { BlobMetadata } from '@sonar/shared';
+import {
+  DirectTransport,
+  HealthMonitor,
+  RateLimiter,
+  WalrusConnectionManager,
+} from '@dreamlit/walrus';
+import { logger } from '../logger';
 
 const WALRUS_AGGREGATOR_URL = process.env.WALRUS_AGGREGATOR_URL!;
+const WALRUS_PUBLISHER_URL = process.env.WALRUS_PUBLISHER_URL || WALRUS_AGGREGATOR_URL;
 const MOCK_WALRUS = process.env.MOCK_WALRUS === 'true';
 
 if (!WALRUS_AGGREGATOR_URL) {
   throw new Error('WALRUS_AGGREGATOR_URL environment variable is required');
 }
 
+const aggregatorBase = normalizeBaseUrl(WALRUS_AGGREGATOR_URL);
+const publisherBase = normalizeBaseUrl(WALRUS_PUBLISHER_URL);
+
+const aggregatorLimiter = new RateLimiter({
+  name: 'walrus-aggregator',
+  maxRPS: Number(process.env.WALRUS_AGG_MAX_RPS ?? 3),
+  burst: Number(process.env.WALRUS_AGG_BURST ?? 3),
+  maxConcurrent: Number(process.env.WALRUS_AGG_MAX_CONCURRENT ?? 2),
+});
+
+const publisherLimiter = new RateLimiter({
+  name: 'walrus-publisher',
+  maxRPS: Number(process.env.WALRUS_PUB_MAX_RPS ?? 1),
+  burst: Number(process.env.WALRUS_PUB_BURST ?? 1),
+  maxConcurrent: Number(process.env.WALRUS_PUB_MAX_CONCURRENT ?? 1),
+});
+
+const walrusTransport = new DirectTransport({
+  walrusAgg: aggregatorLimiter,
+  walrusPub: publisherLimiter,
+});
+
+const connectionManager = new WalrusConnectionManager();
+
+const healthMonitor = new HealthMonitor(
+  {
+    aggregator: { proxy: aggregatorBase, direct: aggregatorBase, proxyEnabled: false },
+    publisher: { proxy: publisherBase, direct: publisherBase, proxyEnabled: false },
+  },
+  walrusTransport,
+  connectionManager
+);
+
+const STREAM_TIMEOUT_MS = Number(process.env.WALRUS_STREAM_TIMEOUT_MS ?? 30_000);
+
 /**
- * Fetch blob metadata from Walrus
+ * Fetch blob metadata from Walrus via the SDK transport layer.
  */
 export async function fetchBlobMetadata(blobId: string): Promise<BlobMetadata | null> {
   if (MOCK_WALRUS) {
     logger.debug({ blobId }, 'Mock: Returning blob metadata');
     return {
       blob_id: blobId,
-      size: 5242880, // 5MB mock size
+      size: 5_242_880,
       encoding: 'Blob',
       certified: true,
     };
   }
 
   try {
-    const url = `${WALRUS_AGGREGATOR_URL}/v1/${blobId}`;
-    const response = await fetch(url, {
-      method: 'HEAD',
-    });
-
-    if (!response.ok) {
-      logger.warn({ blobId, status: response.status }, 'Blob not found on Walrus');
+    const { exists, response } = await walrusTransport.headBlob(aggregatorBase, blobId);
+    if (!exists || !response) {
+      logger.warn({ blobId }, 'Blob not found on Walrus');
       return null;
     }
 
-    // Parse metadata from headers
+    connectionManager.recordSuccess();
+
     const size = response.headers.get('content-length');
     const encoding = response.headers.get('x-walrus-encoding') || 'Blob';
     const certified = response.headers.get('x-walrus-certified') === 'true';
@@ -50,18 +90,16 @@ export async function fetchBlobMetadata(blobId: string): Promise<BlobMetadata | 
       certified,
     };
   } catch (error) {
+    connectionManager.recordFailure(error instanceof Error ? error : undefined);
     logger.error({ error, blobId }, 'Failed to fetch blob metadata');
     return null;
   }
 }
 
 /**
- * Verify blob hash against expected value
- * Used for integrity verification
+ * Verify blob hash against expected value using Walrus certification header.
  */
-export async function verifyBlobHash(
-  blobId: string
-): Promise<boolean> {
+export async function verifyBlobHash(blobId: string): Promise<boolean> {
   if (MOCK_WALRUS) {
     logger.debug({ blobId }, 'Mock: Blob hash verified');
     return true;
@@ -69,13 +107,7 @@ export async function verifyBlobHash(
 
   try {
     const metadata = await fetchBlobMetadata(blobId);
-    if (!metadata) {
-      return false;
-    }
-
-    // In production, would fetch blob and compute hash
-    // For now, rely on Walrus certification
-    return metadata.certified;
+    return Boolean(metadata?.certified);
   } catch (error) {
     logger.error({ error, blobId }, 'Failed to verify blob hash');
     return false;
@@ -83,9 +115,7 @@ export async function verifyBlobHash(
 }
 
 /**
- * Stream blob from Walrus with Range request support
- * Forwards Range headers from client to Walrus aggregator
- * Returns response that can be piped directly to client
+ * Stream blob from Walrus with Range request support and SDK-backed rate limiting.
  */
 export async function streamBlobFromWalrus(
   blobId: string,
@@ -95,9 +125,7 @@ export async function streamBlobFromWalrus(
 ): Promise<Response> {
   if (MOCK_WALRUS) {
     logger.debug({ blobId, range: options?.range }, 'Mock: Streaming blob');
-    // Return mock response
-    const mockData = Buffer.alloc(options?.range ? 1024 : 5242880);
-    mockData.fill(0x7b); // '{' character as placeholder
+    const mockData = Buffer.alloc(options?.range ? 1_024 : 5_242_880, 0x7b);
     return new Response(mockData, {
       status: options?.range ? 206 : 200,
       headers: {
@@ -108,64 +136,86 @@ export async function streamBlobFromWalrus(
     });
   }
 
-  const url = `${WALRUS_AGGREGATOR_URL}/v1/${blobId}`;
-  const headers: HeadersInit = {
-    'Accept': 'audio/mpeg',
-  };
+  const rangeDescriptor = options?.range
+    ? `${options.range.start}-${options.range.end ?? ''}`
+    : 'full';
 
-  // Add Range header if requested
-  if (options?.range) {
-    const { start, end } = options.range;
-    headers['Range'] = `bytes=${start}${end !== undefined ? `-${end}` : '-'}`;
-  }
+  return aggregatorLimiter.schedule(
+    `walrus:stream:${blobId}:${rangeDescriptor}`,
+    async () => {
+      const requestUrl = new URL(`/v1/blobs/${blobId}`, `${aggregatorBase}/`).toString();
+      const headers: HeadersInit = {
+        Accept: 'audio/mpeg',
+      };
 
-  try {
-    const response = await fetch(url, {
-      headers,
-    });
+      if (options?.range) {
+        const { start, end } = options.range;
+        headers['Range'] = `bytes=${start}${end !== undefined ? `-${end}` : '-'}`;
+      }
 
-    if (!response.ok) {
-      logger.error(
-        { blobId, status: response.status, range: options?.range },
-        'Failed to stream blob from Walrus'
-      );
-      throw new Error(`Walrus error: ${response.statusText}`);
-    }
+      const { signal, dispose } = createTimeoutController(STREAM_TIMEOUT_MS);
 
-    return response;
-  } catch (error) {
-    logger.error({ error, blobId, range: options?.range }, 'Stream failed');
-    throw error;
-  }
+      try {
+        const response = await fetch(requestUrl, { headers, signal });
+
+        if (!response.ok) {
+          const error = new Error(`Walrus error: ${response.status} ${response.statusText}`);
+          connectionManager.recordFailure(error);
+          logger.error({ blobId, status: response.status, range: options?.range }, 'Failed to stream blob from Walrus');
+          throw error;
+        }
+
+        connectionManager.recordSuccess();
+        dispose();
+        return response;
+      } catch (error) {
+        connectionManager.recordFailure(error instanceof Error ? error : undefined);
+        logger.error({ error, blobId, range: options?.range }, 'Stream failed');
+        dispose();
+        throw error;
+      }
+    },
+    { timeoutMs: STREAM_TIMEOUT_MS + 5_000 }
+  );
 }
 
 /**
- * Check if Walrus is available
- * Used for health checks
+ * Check Walrus health using the SDK health monitor.
  */
 export async function isWalrusAvailable(): Promise<boolean> {
   if (MOCK_WALRUS) {
     return true;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-
   try {
-    const response = await fetch(WALRUS_AGGREGATOR_URL, {
-      method: 'HEAD',
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response.ok || response.status === 404; // 404 is ok, means service is up
+    const status = await healthMonitor.check();
+    return status.aggregatorAvailable;
   } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      logger.warn('Walrus health check timeout');
-      return false;
-    }
+    logger.error({ error }, 'Walrus health check failed');
     return false;
   }
+}
+
+function normalizeBaseUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.pathname = url.pathname.replace(/\/$/, '');
+    return url.toString().replace(/\/$/, '');
+  } catch (error) {
+    throw new Error(`Invalid Walrus URL provided: ${raw}`);
+  }
+}
+
+function createTimeoutController(timeoutMs: number): { signal?: AbortSignal; dispose: () => void } {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return { signal: undefined, dispose: () => undefined };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const dispose = () => clearTimeout(timeoutId);
+  controller.signal.addEventListener('abort', dispose, { once: true });
+  return { signal: controller.signal, dispose };
 }
 
 /**

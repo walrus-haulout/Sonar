@@ -42,6 +42,11 @@ mock.module('../lib/sui/client', () => ({
       return { data: [] };
     },
   },
+  suiQueryExecutor: {
+    async execute<T>(fn: () => Promise<T>) {
+      return fn();
+    },
+  },
 }));
 
 type AnyFn = (...args: any[]) => any;

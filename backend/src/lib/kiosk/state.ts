@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { logger } from '../logger';
-import { SONAR_MARKETPLACE_ID, suiClient } from '../sui/client';
+import { SONAR_MARKETPLACE_ID, suiClient, suiQueryExecutor } from '../sui/client';
 
 export interface MarketplaceSnapshot {
   marketplaceId: string;
@@ -24,10 +24,12 @@ export async function fetchMarketplaceSnapshot(marketplaceId = SONAR_MARKETPLACE
   }
 
   try {
-    const response = await suiClient.getObject({
-      id: marketplaceId,
-      options: { showContent: true },
-    });
+    const response = await suiQueryExecutor.execute(async () =>
+      suiClient.getObject({
+        id: marketplaceId,
+        options: { showContent: true },
+      })
+    );
 
     const content = response.data?.content;
 
