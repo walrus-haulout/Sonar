@@ -15,9 +15,9 @@ WAL = { local = "./dependencies/wal" }
 
 [addresses]
 sonar = "0x0"
-walrus = "0x0"
-# Note: walrus address will be replaced with deployed WAL package ID
-# Testnet: 0x261b2e46428a152570f9ac08972d67f7c12d62469ccd381a51774c1df7a829ca
+walrus = "0x795ddbc26b8cfff2551f45e198b87fc19473f2df50f995376b924ac80e56f88b"
+# Note: walrus address updated to match current testnet deployment
+# Deployed to testnet on 2025-01-04
 
 [dev-dependencies]
 # Add any test-specific dependencies here if needed

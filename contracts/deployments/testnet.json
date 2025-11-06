@@ -1,0 +1,25 @@
+{
+  "network": "testnet",
+  "deploymentTimestamp": "1762290960144",
+  "initializationTimestamp": "1762291026910",
+  "publishDigest": "F37cadVVTxBrVpv4ViQrXzjeWz69V6Zqd6mf5uVYXzQh",
+  "initializeDigest": "CPCFSLcNG7RHKTfdGCjAc9H26RyBrADm3ADSZBqRZaVY",
+  "packageId": "0x6e4a4e65ba20ead7cea8d6ef0ed4d5639afdfff259c6943f02cbce927b21ae89",
+  "modules": ["economics", "marketplace", "sonar_token"],
+  "objects": {
+    "upgradeCap": "0x54052c736d48235477c08a955ee2918d696d531e3f2b607d56cf0147b7d4cb30",
+    "treasuryCap": "0xf910fec94bc66557505e1cb7b9c41bac7599076c2c9f40b862f20bd27cca4539",
+    "coinMetadata": "0x1f8068ab6e9ded8d95035e3205849344684995e5ac97b7c64e7864a26fbfd3a4",
+    "marketplace": "0xaa422269e77e2197188f9c8e47ffb3faf21c0bafff1d5d04ea9613acc4994bb4",
+    "adminCap": "0x52a1575dae26605ff643793556d6ab29b0ecd91ef29ab660b07f5b7c8588efbf",
+    "validatorCap": "0x64a770966bc583c1ee40f90fef5bc6e32a28cea64feffdbd18cd087965bbe065",
+    "teamTokens": "0xe0503cb2b7cafc29ecae0f89b3e5bb342ba0c534931f4483c29259485316143e"
+  },
+  "tokenomics": {
+    "totalSupply": "100000000000000000",
+    "rewardPool": "70000000000000000",
+    "teamAllocation": "30000000000000000"
+  },
+  "deployer": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+  "walrusPackageId": "0x795ddbc26b8cfff2551f45e198b87fc19473f2df50f995376b924ac80e56f88b"
+}
