@@ -206,7 +206,11 @@ export function VerificationStep({
           {/* Radar Animation */}
           <div className="flex justify-center py-8">
             <div className="relative w-64 h-64">
-              <RadarScanTarget />
+              <RadarScanTarget
+                src="/images/walrus-icon.png"
+                alt="Verification in Progress"
+                size={256}
+              />
             </div>
           </div>
 

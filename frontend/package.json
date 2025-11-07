@@ -15,8 +15,8 @@
   "license": "MIT",
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
-    "@mysten/dapp-kit": "^0.19.7",
-    "@mysten/sui": "^1.43.2",
+    "@mysten/dapp-kit": "^0.19.8",
+    "@mysten/sui": "^1.44.0",
     "@radix-ui/react-dialog": "^1.1.2",
     "@sonar/seal": "workspace:*",
     "@sonar/shared": "workspace:*",
@@ -55,6 +55,6 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "@mysten/sui": "1.43.2"
+    "@mysten/sui": "1.44.0"
   }
 }

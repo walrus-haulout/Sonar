@@ -74,7 +74,15 @@ export function EncryptionStep({
       setStage('uploading-walrus');
       setProgress(50);
 
-      const walrusResult = await uploadWithPreview(encryptionResult, previewBlob);
+      // Transform SEAL result to upload format
+      const uploadData = {
+        encryptedBlob: new Blob([new Uint8Array(encryptionResult.encryptedData)]),
+        seal_policy_id: encryptionResult.identity,
+        backupKey: encryptionResult.backupKey,
+        metadata: encryptionResult.metadata,
+      };
+
+      const walrusResult = await uploadWithPreview(uploadData, previewBlob);
       setProgress(75);
 
       // Stage 4: Finalize
@@ -85,9 +93,9 @@ export function EncryptionStep({
       setProgress(100);
 
       const finalResult = {
-        encryptedBlob: new Blob([encryptionResult.encryptedData]), // Convert Uint8Array to Blob
-        seal_policy_id: encryptionResult.identity, // Seal identity becomes seal_policy_id
-        backupKey: encryptionResult.backupKey,
+        encryptedBlob: uploadData.encryptedBlob,
+        seal_policy_id: uploadData.seal_policy_id,
+        backupKey: uploadData.backupKey,
         metadata: encryptionResult.metadata,
         previewBlob,
         walrusBlobId: walrusResult.blobId,

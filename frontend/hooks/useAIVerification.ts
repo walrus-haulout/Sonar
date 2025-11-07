@@ -141,6 +141,7 @@ export function useAIVerification(options?: UseAIVerificationOptions) {
 
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [pollStartTime, verificationId, verificationResult, options]);
 
   /**
