@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RepositoryProvider } from '@/providers/repository-provider';
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { useState } from 'react';
 import { Toaster } from 'sonner';
 import '@mysten/dapp-kit/dist/index.css';

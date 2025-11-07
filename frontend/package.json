@@ -17,7 +17,6 @@
     "@hookform/resolvers": "^3.9.1",
     "@mysten/dapp-kit": "^0.19.7",
     "@mysten/sui": "^1.43.2",
-    "@mysten/sui.js": "^0.54.1",
     "@radix-ui/react-dialog": "^1.1.2",
     "@sonar/seal": "workspace:*",
     "@sonar/shared": "workspace:*",
@@ -54,5 +53,8 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.9.3"
+  },
+  "resolutions": {
+    "@mysten/sui": "^1.43.2"
   }
 }
