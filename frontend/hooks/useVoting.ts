@@ -53,18 +53,14 @@ export function useVoting({ submissionId, onSuccess, onError }: UseVotingOptions
 
       const result = await signAndExecute({
         transaction: tx,
-        options: {
-          showEffects: true,
-          showEvents: true,
-        },
       });
 
-      if (result.effects?.status.status === 'success') {
-        toast.success(isUpvote ? 'Upvoted!' : 'Downvoted!');
-        onSuccess?.();
-      } else {
+      if (!('digest' in result) || !result.digest) {
         throw new Error('Transaction failed');
       }
+
+      toast.success(isUpvote ? 'Upvoted!' : 'Downvoted!');
+      onSuccess?.();
     } catch (error: any) {
       console.error('Vote error:', error);
 
@@ -104,18 +100,14 @@ export function useVoting({ submissionId, onSuccess, onError }: UseVotingOptions
 
       const result = await signAndExecute({
         transaction: tx,
-        options: {
-          showEffects: true,
-          showEvents: true,
-        },
       });
 
-      if (result.effects?.status.status === 'success') {
-        toast.success('Vote removed');
-        onSuccess?.();
-      } else {
+      if (!('digest' in result) || !result.digest) {
         throw new Error('Transaction failed');
       }
+
+      toast.success('Vote removed');
+      onSuccess?.();
     } catch (error: any) {
       console.error('Remove vote error:', error);
 
