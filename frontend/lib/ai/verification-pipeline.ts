@@ -85,10 +85,10 @@ export async function runVerificationPipeline(
       'analysis',
       'in_progress',
       30,
-      'Analyzing content with Claude...'
+      'Analyzing content with Gemini...'
     );
 
-    // Analyze with Claude
+    // Analyze with Gemini via OpenRouter
     const analysisResult = await analyzeDataset(
       transcriptionResult.text,
       metadata,
@@ -240,13 +240,13 @@ export function estimateVerificationTime(durationSeconds: number): number {
  * Estimate verification cost (USD)
  */
 export function estimateVerificationCost(durationSeconds: number): number {
-  // Whisper: $0.006 per minute
-  // Claude: ~$0.003 per 1K input tokens (assuming 2K tokens avg)
-  // Total per minute of audio: ~$0.012
+  // Whisper via OpenRouter: $0.006 per minute
+  // Gemini 2.5 Flash via OpenRouter: Free tier
+  // Total per minute of audio: ~$0.006
 
   const minutes = durationSeconds / 60;
   const whisperCost = minutes * 0.006;
-  const claudeCost = 0.006; // Roughly fixed per analysis
+  const geminiCost = 0.0; // Free tier
 
-  return whisperCost + claudeCost;
+  return whisperCost + geminiCost;
 }

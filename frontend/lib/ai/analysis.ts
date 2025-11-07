@@ -1,8 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
+import {
+  createOpenRouterClient,
+  OPENROUTER_MODELS,
+} from './openrouter-client';
 import type { DatasetMetadata } from '@/lib/types/upload';
 
 /**
- * Anthropic Claude Analysis Service
+ * Gemini Analysis Service (via OpenRouter)
  * Analyzes audio dataset quality, safety, and value
  */
 
@@ -15,7 +18,7 @@ export interface AnalysisResult {
 }
 
 /**
- * Analyze dataset using Claude
+ * Analyze dataset using Gemini via OpenRouter
  */
 export async function analyzeDataset(
   transcript: string,
@@ -26,19 +29,19 @@ export async function analyzeDataset(
     format: string;
   }
 ): Promise<AnalysisResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured');
+    throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = createOpenRouterClient(apiKey);
 
   try {
     const prompt = buildAnalysisPrompt(transcript, metadata, audioMetadata);
 
-    const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+    const completion = await client.chat.completions.create({
+      model: OPENROUTER_MODELS.GEMINI_FLASH,
       max_tokens: 2048,
       temperature: 0.3, // Lower temperature for consistent analysis
       messages: [
@@ -49,13 +52,12 @@ export async function analyzeDataset(
       ],
     });
 
-    // Parse Claude's response
-    const responseText =
-      message.content[0].type === 'text' ? message.content[0].text : '';
+    // Parse Gemini's response
+    const responseText = completion.choices[0]?.message?.content || '';
 
     return parseAnalysisResponse(responseText);
   } catch (error) {
-    console.error('Claude analysis failed:', error);
+    console.error('Gemini analysis failed:', error);
     throw new Error(
       `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -63,7 +65,7 @@ export async function analyzeDataset(
 }
 
 /**
- * Build analysis prompt for Claude
+ * Build analysis prompt for Gemini
  */
 function buildAnalysisPrompt(
   transcript: string,
@@ -135,7 +137,7 @@ Respond ONLY with the JSON object, no additional text.`;
 }
 
 /**
- * Parse Claude's analysis response
+ * Parse Gemini's analysis response
  */
 function parseAnalysisResponse(responseText: string): AnalysisResult {
   try {
@@ -151,7 +153,7 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
       typeof parsed.safetyPassed !== 'boolean' ||
       !Array.isArray(parsed.insights)
     ) {
-      throw new Error('Invalid response structure from Claude');
+      throw new Error('Invalid response structure from Gemini');
     }
 
     // Normalize quality score to 0-1 range
@@ -165,7 +167,7 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
       recommendations: parsed.recommendations || [],
     };
   } catch (error) {
-    console.error('Failed to parse Claude response:', error);
+    console.error('Failed to parse Gemini response:', error);
     console.error('Raw response:', responseText);
 
     // Return safe default values if parsing fails
@@ -185,17 +187,17 @@ function parseAnalysisResponse(responseText: string): AnalysisResult {
  * Quick safety check (for pre-screening before full analysis)
  */
 export async function quickSafetyCheck(transcript: string): Promise<boolean> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not configured');
+    throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = createOpenRouterClient(apiKey);
 
   try {
-    const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+    const completion = await client.chat.completions.create({
+      model: OPENROUTER_MODELS.GEMINI_FLASH,
       max_tokens: 100,
       temperature: 0,
       messages: [
@@ -217,10 +219,7 @@ Response:`,
       ],
     });
 
-    const response =
-      message.content[0].type === 'text'
-        ? message.content[0].text.trim().toUpperCase()
-        : '';
+    const response = completion.choices[0]?.message?.content?.trim().toUpperCase() || '';
 
     return response === 'SAFE';
   } catch (error) {

@@ -1,7 +1,11 @@
-import OpenAI from 'openai';
+import {
+  createOpenRouterClient,
+  OPENROUTER_MODELS,
+  estimateOpenRouterCost,
+} from './openrouter-client';
 
 /**
- * OpenAI Whisper Transcription Service
+ * Whisper Transcription Service (via OpenRouter)
  * Converts audio to text using Whisper API
  */
 
@@ -19,13 +23,13 @@ export interface TranscriptionResult {
 export async function transcribeAudio(
   audioBlob: Blob
 ): Promise<TranscriptionResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not configured');
+    throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
-  const openai = new OpenAI({ apiKey });
+  const openai = createOpenRouterClient(apiKey);
 
   // Convert Blob to File (Whisper requires File object)
   const file = new File([audioBlob], 'audio.mp3', { type: audioBlob.type });
@@ -33,10 +37,10 @@ export async function transcribeAudio(
   try {
     const startTime = Date.now();
 
-    // Call Whisper API
+    // Call Whisper API via OpenRouter
     const transcription = await openai.audio.transcriptions.create({
       file,
-      model: 'whisper-1',
+      model: OPENROUTER_MODELS.WHISPER,
       language: 'en', // Auto-detect if not specified
       response_format: 'verbose_json', // Get detailed metadata
     });
@@ -57,12 +61,12 @@ export async function transcribeAudio(
 }
 
 /**
- * Estimate transcription cost
+ * Estimate transcription cost via OpenRouter
  * Whisper charges $0.006 per minute
  */
 export function estimateTranscriptionCost(durationSeconds: number): number {
   const minutes = durationSeconds / 60;
-  return minutes * 0.006;
+  return estimateOpenRouterCost(OPENROUTER_MODELS.WHISPER, minutes);
 }
 
 /**

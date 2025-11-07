@@ -22,9 +22,9 @@ Complete guide for deploying SONAR to production with Vercel and Railway.
          ├──→ Walrus (Storage)
          │    - Encrypted Audio Files
          │
-         └──→ OpenAI APIs
+         └──→ OpenRouter APIs
               - Whisper (Transcription)
-              - Moderation (Content Filter)
+              - Gemini 2.5 Flash (Quality Analysis)
 ```
 
 ---
@@ -35,7 +35,7 @@ Complete guide for deploying SONAR to production with Vercel and Railway.
 - [x] Vercel account (Pro plan for Edge functions)
 - [x] Railway account
 - [x] Sui wallet with mainnet SUI
-- [x] OpenAI API key
+- [x] OpenRouter API key (https://openrouter.ai/keys)
 - [x] AcoustID API key (free at https://acoustid.org/api-key)
 - [x] Domain: `projectsonar.xyz` (Name.com)
 
@@ -160,16 +160,8 @@ NEXT_PUBLIC_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
 
 **AI & Verification:**
 ```bash
-OPENAI_API_KEY=<your-openai-key>
+OPENROUTER_API_KEY=<your-openrouter-key>
 AUDIO_CHECKER_URL=<from-part-1>
-```
-
-**FreeSound (Optional):**
-```bash
-NEXT_PUBLIC_USE_FREESOUND=true
-FREESOUND_API_KEY=<your-key>
-FREESOUND_API_TOKEN=<your-token>
-FREESOUND_API_CLIENT_ID=<your-client-id>
 ```
 
 **Backend (Disabled for now):**
@@ -230,8 +222,8 @@ curl https://projectsonar.xyz/api/health
 3. Verify steps:
    - ✅ Upload to Walrus
    - ✅ Call Audio Checker (quality + copyright)
-   - ✅ Call Whisper (transcription)
-   - ✅ Content moderation
+   - ✅ Call Whisper via OpenRouter (transcription)
+   - ✅ Call Gemini 2.5 Flash (quality analysis)
    - ✅ SEAL encryption
    - ✅ Blockchain submission
 
@@ -293,10 +285,10 @@ Watch for:
 - **Audio Checker:** ~$5-10/month (low usage)
 - Scales automatically with traffic
 
-### OpenAI API
+### OpenRouter API
 - **Whisper:** ~$0.006/minute of audio
-- **Moderation:** Free
-- Estimate: ~$10-50/month depending on volume
+- **Gemini 2.5 Flash:** Free tier
+- Estimate: ~$5-30/month depending on volume
 
 ### Sui Network
 - **Gas fees:** ~0.01-0.05 SUI per transaction
@@ -338,7 +330,7 @@ Watch for:
   curl https://seal.projectsonar.xyz/health
   curl https://your-audio-checker.railway.app/health
   ```
-- Verify OpenAI API key is valid
+- Verify OpenRouter API key is valid
 - Check Vercel function logs
 
 ---
@@ -346,8 +338,7 @@ Watch for:
 ## Security Checklist
 
 - [x] SEAL master key stored in Railway secrets (not in git)
-- [x] OpenAI API key in Vercel environment (not in git)
-- [x] FreeSound tokens in Vercel environment (not in git)
+- [x] OpenRouter API key in Vercel environment (not in git)
 - [x] No secrets committed to repository
 - [x] CORS configured for known domains only
 - [x] HTTPS enforced on all services
