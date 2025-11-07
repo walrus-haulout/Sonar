@@ -34,7 +34,7 @@ COPY --from=builder /work/target/release/key-server /opt/key-server/bin/key-serv
 RUN mkdir -p /app/config
 
 # Copy config template (actual secrets substituted at runtime)
-COPY key-server-config.yaml.example /app/config/template.yaml
+COPY railway/key-server-config.yaml.example /app/config/template.yaml
 
 # Create startup script that substitutes Railway secrets into config
 RUN printf '#!/bin/bash\n\
