@@ -28,12 +28,10 @@ server_mode: !Permissioned
       key_server_object_id: "0x0000000000000000000000000000000000000000000000000000000000000000"
 
       # Allowed package IDs (only these can request derived keys)
-      # IMPORTANT: Update this to your MAINNET package ID after deployment
-      # The ID below is testnet - replace with mainnet ID from `sui client publish`
+      # SONAR Mainnet package ID (deployed 2025-11-06)
+      # Testnet ID (for reference): 0x7375bdf0438c9430cb230a5ac0a278d1cba97dd991a2635a29055ce75825a7f4
       package_ids:
-        # SONAR package ID (REPLACE WITH YOUR MAINNET PACKAGE ID)
-        # Testnet ID (for reference): 0x7375bdf0438c9430cb230a5ac0a278d1cba97dd991a2635a29055ce75825a7f4
-        - "0x7375bdf0438c9430cb230a5ac0a278d1cba97dd991a2635a29055ce75825a7f4"
+        - "0x63d29adf5adde737a28f9a541f62070c251e1cc0bd5c76d96d4e5800cfd77950"
 
       # Client master key derivation
       # Uses MASTER_KEY environment variable with derivation_index 0
