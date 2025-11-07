@@ -10,6 +10,10 @@
 # 3. Dockerfile substitutes REPLACE_KEY_SERVER_OBJECT_ID at startup
 
 # Sui network configuration
+# NOTE: For Mainnet deployment, ensure:
+# 1. SONAR package is deployed to Mainnet (see railway/MAINNET_DEPLOYMENT.md)
+# 2. KEY_SERVER_OBJECT_ID is registered on Mainnet
+# 3. package_ids below use your Mainnet package ID
 network: Mainnet
 
 # Server mode: Permissioned (only SONAR package can request keys)
@@ -24,8 +28,11 @@ server_mode: !Permissioned
       key_server_object_id: "0x0000000000000000000000000000000000000000000000000000000000000000"
 
       # Allowed package IDs (only these can request derived keys)
+      # IMPORTANT: Update this to your MAINNET package ID after deployment
+      # The ID below is testnet - replace with mainnet ID from `sui client publish`
       package_ids:
-        # SONAR package ID (upgraded testnet version - Nov 2025)
+        # SONAR package ID (REPLACE WITH YOUR MAINNET PACKAGE ID)
+        # Testnet ID (for reference): 0x7375bdf0438c9430cb230a5ac0a278d1cba97dd991a2635a29055ce75825a7f4
         - "0x7375bdf0438c9430cb230a5ac0a278d1cba97dd991a2635a29055ce75825a7f4"
 
       # Client master key derivation

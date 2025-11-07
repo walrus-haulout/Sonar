@@ -2,6 +2,7 @@
   "name": "sonar",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.2.x",
   "description": "SONAR Protocol - Decentralized Audio Data Marketplace",
   "workspaces": [
     "frontend",
@@ -9,6 +10,7 @@
     "packages/*"
   ],
   "scripts": {
+    "build:frontend": "bun run build:packages && bun run --filter frontend build",
     "dev": "bun scripts/dev.ts",
     "dev:frontend": "bun run --filter frontend dev",
     "dev:backend": "bun run --filter backend dev",

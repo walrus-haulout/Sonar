@@ -1,6 +1,10 @@
 # 🔐 SONAR SEAL Key Server Deployment
 
-Production-ready SEAL key server for permissioned encryption on Sui testnet.
+Production-ready SEAL key server for permissioned encryption on Sui.
+
+> **📍 Deploying to Mainnet?** See [MAINNET_DEPLOYMENT.md](./MAINNET_DEPLOYMENT.md) for the complete mainnet deployment guide.
+>
+> **This README covers testnet deployment** - perfect for testing and development.
 
 ## 🎯 Hackathon Showcase
 

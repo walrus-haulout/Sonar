@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "installCommand": "bun install",
+  "buildCommand": "bun run build",
+  "devCommand": "bun run dev",
+  "outputDirectory": ".next",
+  "functions": {
+    "app/api/edge/verify/worker/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
