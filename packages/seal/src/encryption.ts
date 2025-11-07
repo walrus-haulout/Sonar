@@ -96,10 +96,9 @@ async function encryptSmallFile(
     // Encrypt with Seal
     const { encryptedObject, key } = await client.encrypt({
       threshold,
-      packageId: parsePackageId(packageId),
-      id: identity,
+      packageId,
+      id: identityHex,
       data,
-      demType: DEFAULT_DEM_TYPE,
     });
 
     onProgress?.(90, 'Finalizing...');
@@ -175,10 +174,9 @@ async function encryptLargeFile(
     const { encryptedObject: sealedKey, key: backupKey } =
       await client.encrypt({
         threshold,
-        packageId: parsePackageId(packageId),
-        id: identity,
+        packageId,
+        id: identityHex,
         data: aesKey,
-        demType: DEFAULT_DEM_TYPE,
       });
 
     onProgress?.(90, 'Creating envelope...');
@@ -231,7 +229,7 @@ async function encryptWithAES(
     // Import AES key
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key,
+      new Uint8Array(key),
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -244,10 +242,10 @@ async function encryptWithAES(
     const encrypted = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv,
+        iv: new Uint8Array(iv),
       },
       cryptoKey,
-      data
+      new Uint8Array(data)
     );
 
     // Prepend IV to encrypted data: [IV (12 bytes)][encrypted data]

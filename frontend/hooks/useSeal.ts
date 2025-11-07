@@ -145,11 +145,9 @@ export function useSeal() {
           ttlMin: options.ttlMin || 10,
           suiClient: suiClient as SuiClient,
           mvrName: 'SONAR',
-          signMessage: async (message: string) => {
-            // Convert string to Uint8Array for wallet signing
-            const messageBytes = new TextEncoder().encode(message);
-            // Call the provided signing function
-            const result = await options.signMessage(messageBytes);
+          signMessage: async (message: Uint8Array) => {
+            // Call the provided signing function with message bytes
+            const result = await options.signMessage(message);
             return { signature: result.signature };
           },
         });

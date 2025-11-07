@@ -182,7 +182,7 @@ export interface CreateSessionOptions {
   /** Multi-version registry name (optional) */
   mvrName?: string;
   /** Function to sign personal message */
-  signMessage: (message: string) => Promise<{ signature: string }>;
+  signMessage: (message: Uint8Array) => Promise<{ signature: string }>;
 }
 
 /**
@@ -265,6 +265,8 @@ export interface BatchDecryptOptions {
   policyModule: string;
   /** Sui client for transaction building */
   suiClient: SuiClient;
+  /** Threshold for decryption (default: 2) */
+  threshold?: number;
   /** Batch size for key fetching (default: 10) */
   batchSize?: number;
 }

@@ -43,7 +43,7 @@ export async function createSession(
     // Create session key
     const sessionKey = await SessionKey.create({
       address,
-      packageId: parsePackageId(packageId),
+      packageId,
       ttlMin,
       suiClient,
       mvrName,

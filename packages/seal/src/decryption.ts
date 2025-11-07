@@ -14,7 +14,7 @@ import type {
   ProgressCallback,
 } from './types';
 import { DecryptionError, SessionExpiredError, PolicyDeniedError } from './errors';
-import { DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE } from './constants';
+import { DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE, DEFAULT_THRESHOLD } from './constants';
 import { parsePackageId, hexToBytes, retry } from './utils';
 import { ensureSessionValid } from './session';
 
@@ -250,7 +250,7 @@ async function decryptWithAES(
     // Import AES key
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key,
+      new Uint8Array(key),
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -291,6 +291,7 @@ export async function batchDecrypt(
     packageId,
     policyModule,
     suiClient,
+    threshold = DEFAULT_THRESHOLD,
     batchSize = DEFAULT_BATCH_SIZE,
   } = options;
 
@@ -326,12 +327,10 @@ export async function batchDecrypt(
 
     // Pre-fetch decryption keys for batch
     await client.fetchKeys({
-      identities: batch.map((item) => ({
-        packageId: parsePackageId(packageId),
-        id: hexToBytes(item.identity),
-      })),
+      ids: batch.map((item) => item.identity),
       sessionKey,
       txBytes,
+      threshold,
     });
 
     onProgress?.(

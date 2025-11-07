@@ -296,7 +296,8 @@ export class SuiRepository implements DataRepository {
     const datasets = response.objects.nodes
       .filter((node: any) => node.asMoveObject?.contents?.json) // Null check on asMoveObject
       .map((node: any) => {
-        const content = JSON.parse(node.asMoveObject.contents.json);
+        const jsonData = node.asMoveObject.contents.json;
+        const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
         return parseDataset({
           id: node.address,
           ...content,
@@ -328,7 +329,8 @@ export class SuiRepository implements DataRepository {
     const datasets = response.objects.nodes
       .filter((node: any) => node.asMoveObject?.contents?.json) // Null check on asMoveObject
       .map((node: any) => {
-        const content = JSON.parse(node.asMoveObject.contents.json);
+        const jsonData = node.asMoveObject.contents.json;
+        const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
         return parseDataset({
           id: node.address,
           ...content,
