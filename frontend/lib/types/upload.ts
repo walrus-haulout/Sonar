@@ -25,7 +25,6 @@ export interface DatasetMetadata {
   languages: string[];
   tags: string[];
   consent: boolean;
-  fastUploadEnabled?: boolean;
 }
 
 export interface EncryptionResult {

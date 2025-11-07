@@ -216,7 +216,6 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
                 <EncryptionStep
                   audioFile={state.audioFile!}
                   audioFiles={state.audioFiles}
-                  metadata={state.metadata!}
                   onEncrypted={(result) => {
                     // Extract walrusUpload info from encryption result
                     const walrusUpload: WalrusUploadResult = {

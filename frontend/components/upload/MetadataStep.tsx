@@ -4,12 +4,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Info, Tag, Globe, FileText, Zap } from 'lucide-react';
+import { Info, Tag, Globe, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DatasetMetadata, AudioFile } from '@/lib/types/upload';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { estimateSubWalletCosts, formatGasCost } from '@/lib/gas-estimation';
 
 interface MetadataStepProps {
   metadata: DatasetMetadata | null;
@@ -67,7 +66,6 @@ const metadataSchema = z.object({
   consent: z
     .boolean()
     .refine((val) => val === true, 'You must confirm consent and rights'),
-  fastUploadEnabled: z.boolean().optional(),
 });
 
 type MetadataFormData = z.infer<typeof metadataSchema>;
@@ -98,14 +96,12 @@ export function MetadataStep({
       languages: [],
       tags: [],
       consent: false,
-      fastUploadEnabled: false,
     },
   });
 
   const selectedLanguages = watch('languages') || [];
   const selectedTags = watch('tags') || [];
   const consentChecked = watch('consent');
-  const fastUploadEnabled = watch('fastUploadEnabled');
 
   const toggleLanguage = (code: string) => {
     const current = selectedLanguages;
@@ -310,42 +306,6 @@ export function MetadataStep({
         )}
       </GlassCard>
 
-      {/* Fast Upload Option - only show for multi-file */}
-      {audioFiles && audioFiles.length > 1 && (
-        <GlassCard className="bg-sonar-blue/5">
-          <div className="flex items-start space-x-3">
-            <input
-              id="fastUpload"
-              type="checkbox"
-              {...register('fastUploadEnabled')}
-              className={cn(
-                'mt-1 w-5 h-5 rounded border-2',
-                'focus:ring-2 focus:ring-sonar-signal focus:ring-offset-2 focus:ring-offset-sonar-abyss',
-                'cursor-pointer',
-                fastUploadEnabled
-                  ? 'bg-sonar-signal border-sonar-signal'
-                  : 'bg-transparent border-sonar-blue/50'
-              )}
-            />
-            <div className="flex-1">
-              <label
-                htmlFor="fastUpload"
-                className="font-mono font-semibold text-sonar-blue cursor-pointer block mb-1"
-              >
-                <Zap className="w-4 h-4 inline mr-1" />
-                Enable Fast Upload Mode (Dynamic Parallel Processing)
-              </label>
-              <p className="text-xs text-sonar-highlight/70">
-                Automatically scales: 4 wallets per GB for maximum parallelization.
-                <span className="text-sonar-coral"> Higher gas cost</span> but dramatically faster for large datasets.
-              </p>
-
-              {fastUploadEnabled && <FastUploadCostEstimate files={audioFiles.map(f => f.file)} />}
-            </div>
-          </div>
-        </GlassCard>
-      )}
-
       {/* Info Box */}
       <GlassCard className="bg-sonar-signal/5">
         <div className="flex items-start space-x-3">
@@ -378,59 +338,5 @@ export function MetadataStep({
         </SonarButton>
       </div>
     </form>
-  );
-}
-
-/**
- * FastUploadCostEstimate Component
- * Shows dynamic cost breakdown for parallel upload
- */
-function FastUploadCostEstimate({ files }: { files: File[] }) {
-  const costs = estimateSubWalletCosts(files);
-
-  return (
-    <div className="mt-2 p-3 rounded-sonar bg-sonar-signal/10 text-xs font-mono">
-      <p className="text-sonar-signal font-semibold mb-1">Dynamic Scaling:</p>
-      <div className="space-y-0.5 text-sonar-highlight/80 mb-2">
-        <div className="flex justify-between">
-          <span>Total dataset size:</span>
-          <span className="font-semibold">{costs.totalSizeGB.toFixed(2)} GB</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Sub-wallets to create:</span>
-          <span className="font-semibold text-sonar-signal">
-            {costs.walletCount} wallets
-          </span>
-        </div>
-        <p className="text-sonar-highlight/60 text-xs">
-          Formula: 4 wallets per GB = {costs.walletCount}x parallel uploads
-        </p>
-      </div>
-
-      <p className="text-sonar-signal font-semibold mb-1 border-t border-sonar-signal/20 pt-2">
-        Extra Cost Breakdown:
-      </p>
-      <div className="space-y-0.5 text-sonar-highlight/80">
-        <div className="flex justify-between">
-          <span>• Fund {costs.walletCount} wallets:</span>
-          <span>{formatGasCost(costs.fundingGas)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span>• Sweep {costs.walletCount} wallets:</span>
-          <span>{formatGasCost(costs.sweepingGas)}</span>
-        </div>
-        <div className="flex justify-between border-t border-sonar-signal/20 pt-1 mt-1 font-semibold">
-          <span>Total Extra Gas:</span>
-          <span className="text-sonar-signal">{formatGasCost(costs.totalExtra)}</span>
-        </div>
-      </div>
-
-      <p className="text-sonar-highlight/60 mt-2">
-        ⚡ Estimated speed-up: ~{costs.walletCount}x faster than sequential
-      </p>
-      <p className="text-sonar-highlight/60 text-xs">
-        ⏱️ Upload time: ~{Math.ceil(files.length / costs.walletCount)} batches
-      </p>
-    </div>
   );
 }
