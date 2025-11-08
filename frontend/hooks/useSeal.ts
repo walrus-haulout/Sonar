@@ -58,10 +58,15 @@ export function useSeal() {
     }
 
     try {
+      // Set threshold based on number of key servers
+      // Threshold must be between 1 and keyServers.length
+      const threshold = Math.min(2, keyServers.length);
+
       const client = createSonarSealClient({
         suiClient: suiClient as SuiClient,
         network: NETWORK as 'testnet' | 'mainnet',
         keyServers,
+        threshold, // Explicitly set threshold based on available servers
       });
       setSealClient(client);
       setIsInitialized(true);

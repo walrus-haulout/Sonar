@@ -17,6 +17,7 @@ module sonar::marketplace {
     use sui::vec_set::{Self, VecSet};
     use sonar::sonar_token::SONAR_TOKEN;
     use sonar::economics::{Self, EconomicConfig};
+    use sonar::purchase_policy;
 
     // ========== Error Codes ==========
 
@@ -987,10 +988,20 @@ module sonar::marketplace {
         submission.purchase_count = submission.purchase_count + 1;
         marketplace.total_purchases = marketplace.total_purchases + 1;
 
+        // Mint purchase receipt for SEAL access control
+        let buyer_address = tx_context::sender(ctx);
+        let receipt = purchase_policy::mint_receipt(
+            submission.seal_policy_id,
+            object::uid_to_inner(&submission.id),
+            buyer_address,
+            ctx
+        );
+        transfer::public_transfer(receipt, buyer_address);
+
         // Emit purchase event (NO walrus_blob_id!)
         event::emit(DatasetPurchased {
             submission_id: object::uid_to_inner(&submission.id),
-            buyer: tx_context::sender(ctx),
+            buyer: buyer_address,
             price,
             burned: burn_amount,
             burn_rate_bps: burn_rate,
