@@ -49,9 +49,13 @@ echo "🔐 SONAR SEAL Key Server - Auto Key Generation"\n\
 echo "========================================================================"\n\
 echo ""\n\
 \n\
+# Save Railway env MASTER_KEY if provided\n\
+RAILWAY_MASTER_KEY="${MASTER_KEY:-}"\n\
+\n\
 # Generate new master seed on each deployment\n\
 echo "📝 Generating new master seed..."\n\
-MASTER_KEY=$(/opt/key-server/bin/seal-cli gen-seed)\n\
+MASTER_KEY_RAW=$(/opt/key-server/bin/seal-cli gen-seed)\n\
+GENERATED_MASTER_KEY=$(echo "$MASTER_KEY_RAW" | grep -oP "0x[a-f0-9]+" || echo "$MASTER_KEY_RAW")\n\
 \n\
 echo "✅ Master seed generated"\n\
 echo ""\n\
@@ -60,17 +64,23 @@ echo ""\n\
 cat > /app/config/derive-config.yaml <<EOF\n\
 network: Mainnet\n\
 server_mode: !Permissioned\n\
+  client_configs:\n\
+  - name: Temporary\n\
+    client_master_key: !Derived\n\
+      derivation_index: 0\n\
+    key_server_object_id: "0x0000000000000000000000000000000000000000000000000000000000000000"\n\
+    package_ids:\n\
+    - "0x0000000000000000000000000000000000000000000000000000000000000000"\n\
 \n\
 server:\n\
   address: "0.0.0.0:2024"\n\
   metrics_address: "0.0.0.0:9184"\n\
 \n\
 master_key:\n\
-  master_seed: "${MASTER_KEY}"\n\
+  master_seed: "${GENERATED_MASTER_KEY}"\n\
 \n\
 sui:\n\
   url: "https://fullnode.mainnet.sui.io"\n\
-  key_server_object_id: "0x0000000000000000000000000000000000000000000000000000000000000000"\n\
 EOF\n\
 \n\
 echo "📝 Deriving public key..."\n\
@@ -86,7 +96,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "📋 MASTER_KEY (save to Railway secrets):"\n\
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"\n\
 echo ""\n\
-echo "${MASTER_KEY}"\n\
+echo "$GENERATED_MASTER_KEY"\n\
 echo ""\n\
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"\n\
 echo "📋 PUBLIC_KEY (for on-chain registration):"\n\
@@ -106,7 +116,7 @@ echo "  --args ${PUBLIC_KEY} <YOUR_ADDRESS> \\\\"\n\
 echo "  --gas-budget 100000000"\n\
 echo ""\n\
 echo "Then set Railway env vars and redeploy:"\n\
-echo "  MASTER_KEY=${MASTER_KEY}"\n\
+echo "  MASTER_KEY=$GENERATED_MASTER_KEY"\n\
 echo "  KEY_SERVER_OBJECT_ID=<object ID from transaction>"\n\
 echo ""\n\
 echo "========================================================================"\n\
@@ -126,8 +136,8 @@ echo "✅ Using provided MASTER_KEY and KEY_SERVER_OBJECT_ID"\n\
 echo "🚀 Starting production key server..."\n\
 echo ""\n\
 \n\
-# Use env var MASTER_KEY if provided, otherwise use generated one\n\
-FINAL_MASTER_KEY="${MASTER_KEY}"\n\
+# Use Railway MASTER_KEY for production\n\
+FINAL_MASTER_KEY="${RAILWAY_MASTER_KEY}"\n\
 \n\
 # Generate production config\n\
 sed "s|0x0000000000000000000000000000000000000000000000000000000000000000|${KEY_SERVER_OBJECT_ID}|g" /app/config/template.yaml | \\\n\
