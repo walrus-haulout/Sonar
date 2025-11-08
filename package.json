@@ -10,12 +10,12 @@
     "packages/*"
   ],
   "scripts": {
-    "build:frontend": "bun run build:packages && bun run --filter frontend build",
+    "build:frontend": "bun run build:packages && bun run --filter sonar-marketplace build",
     "dev": "bun scripts/dev.ts",
-    "dev:frontend": "bun run --filter frontend dev",
+    "dev:frontend": "bun run --filter sonar-marketplace dev",
     "dev:backend": "bun run --filter backend dev",
     "build:packages": "bun run --filter '@sonar/seal' build",
-    "build": "bun run build:packages && bun run --filter frontend build && bun run --filter backend build",
+    "build": "bun run build:packages && bun run --filter sonar-marketplace build",
     "lint": "bun run --filter '*' lint",
     "type-check": "bun run --filter '*' type-check",
     "test": "bun run --filter '*' test",
