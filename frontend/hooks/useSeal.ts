@@ -22,10 +22,6 @@ import { suiClient, PACKAGE_ID, NETWORK } from '@/lib/sui/client';
 
 const RAW_KEY_SERVERS = process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS || '';
 
-// Debug logging
-console.log('[useSeal] RAW_KEY_SERVERS:', RAW_KEY_SERVERS);
-console.log('[useSeal] process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS:', process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS);
-
 function parseKeyServers(value: string) {
   const servers = value
     .split(',')
@@ -36,7 +32,6 @@ function parseKeyServers(value: string) {
       weight: 1,
     }));
 
-  console.log('[useSeal] Parsed key servers:', servers);
   return servers;
 }
 

@@ -8,6 +8,7 @@ import { AudioFile, EncryptionResult, FileUploadResult } from '@/lib/types/uploa
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useSealEncryption } from '@/hooks/useSeal';
 import { useWalrusUpload, generatePreviewBlob } from '@/hooks/useWalrusUpload';
+import { PACKAGE_ID } from '@/lib/sui/client';
 
 interface EncryptionStepProps {
   audioFile: AudioFile; // Backwards compatibility (single file)
@@ -85,7 +86,10 @@ export function EncryptionStep({
         // Encrypt
         const encryptionResult = await encrypt(
           file.file,
-          { accessPolicy: 'purchase' },
+          {
+            accessPolicy: 'purchase',
+            packageId: PACKAGE_ID
+          },
           (progressPercent) => {
             const fileProgress = (index + progressPercent / 100) / totalFiles;
             setProgress(Math.min(fileProgress * 60, 60));
