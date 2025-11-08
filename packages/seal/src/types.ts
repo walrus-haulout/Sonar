@@ -91,8 +91,8 @@ export interface EncryptOptions {
 export interface EncryptFileOptions {
   /** Encryption threshold (default: 2) */
   threshold?: number;
-  /** Package ID for access policy */
-  packageId: string;
+  /** Package ID for access policy (optional for encryption, required for decryption) */
+  packageId?: string;
   /** Access policy type */
   accessPolicy: PolicyType;
   /** Custom identity (optional, random if not provided) */

@@ -192,7 +192,7 @@ export function useSeal() {
           sealClient,
           data,
           {
-            packageId: PACKAGE_ID,
+            // packageId is only needed for decryption, not encryption
             accessPolicy: 'purchase',
             ...options,
           },
