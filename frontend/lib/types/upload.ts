@@ -34,7 +34,7 @@ export interface EncryptionResult {
   previewBlob?: Blob;
   metadata: {
     threshold: number;
-    packageId: string;
+    packageId?: string; // Optional for encryption, required for decryption
     accessPolicy: string;
     demType: string;
     timestamp: number;
