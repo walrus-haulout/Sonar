@@ -94,12 +94,18 @@ async function encryptSmallFile(
     onProgress?.(40, 'Encrypting with Seal...');
 
     // Encrypt with Seal
-    const { encryptedObject, key } = await client.encrypt({
+    // packageId is optional - only needed for decryption with custom policies
+    const encryptParams: any = {
       threshold,
-      packageId,
       id: identityHex,
       data,
-    });
+    };
+
+    if (packageId) {
+      encryptParams.packageId = packageId;
+    }
+
+    const { encryptedObject, key } = await client.encrypt(encryptParams);
 
     onProgress?.(90, 'Finalizing...');
 
@@ -171,13 +177,19 @@ async function encryptLargeFile(
     const identityHex = bytesToHex(identity);
 
     // Seal-encrypt the AES key
+    // packageId is optional - only needed for decryption with custom policies
+    const sealParams: any = {
+      threshold,
+      id: identityHex,
+      data: aesKey,
+    };
+
+    if (packageId) {
+      sealParams.packageId = packageId;
+    }
+
     const { encryptedObject: sealedKey, key: backupKey } =
-      await client.encrypt({
-        threshold,
-        packageId,
-        id: identityHex,
-        data: aesKey,
-      });
+      await client.encrypt(sealParams);
 
     onProgress?.(90, 'Creating envelope...');
 

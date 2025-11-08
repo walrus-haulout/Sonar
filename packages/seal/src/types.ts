@@ -121,8 +121,8 @@ export interface EncryptionResult {
 export interface EncryptionMetadata {
   /** Decryption threshold */
   threshold: number;
-  /** Package ID used */
-  packageId: string;
+  /** Package ID used (optional for encryption, required for decryption) */
+  packageId?: string;
   /** Access policy type */
   accessPolicy: PolicyType;
   /** DEM type used */
