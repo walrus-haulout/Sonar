@@ -58,6 +58,9 @@ echo ""\n\
 \n\
 # Create temporary config for key derivation\n\
 cat > /app/config/derive-config.yaml <<EOF\n\
+network: Mainnet\n\
+server_mode: !Permissioned\n\
+\n\
 server:\n\
   address: "0.0.0.0:2024"\n\
   metrics_address: "0.0.0.0:9184"\n\
@@ -95,11 +98,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""\n\
 echo "📝 Register on-chain:"\n\
 echo ""\n\
-echo "sui client call \\\\\n\
-echo "  --package 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d \\\\\n\
-echo "  --module key_server \\\\\n\
-echo "  --function create_and_transfer_v1 \\\\\n\
-echo "  --args ${PUBLIC_KEY} <YOUR_ADDRESS> \\\\\n\
+echo "sui client call \\\\"\n\
+echo "  --package 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d \\\\"\n\
+echo "  --module key_server \\\\"\n\
+echo "  --function create_and_transfer_v1 \\\\"\n\
+echo "  --args ${PUBLIC_KEY} <YOUR_ADDRESS> \\\\"\n\
 echo "  --gas-budget 100000000"\n\
 echo ""\n\
 echo "Then set Railway env vars and redeploy:"\n\
