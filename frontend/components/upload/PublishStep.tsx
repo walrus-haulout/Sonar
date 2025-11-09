@@ -113,11 +113,6 @@ export function PublishStep({
       signAndExecute(
         {
           transaction: tx,
-          options: {
-            showEffects: true,
-            showEvents: true,
-            showObjectChanges: true,
-          },
         },
         {
           onSuccess: async (result) => {
@@ -140,7 +135,6 @@ export function PublishStep({
 
             if (!datasetId) {
               console.error('Failed to extract dataset ID from transaction result', result);
-              console.error('Make sure showObjectChanges is enabled in transaction options');
               onError('Failed to extract dataset ID from blockchain transaction. Please try again.');
               setPublishState('idle');
               return;
