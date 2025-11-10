@@ -47,15 +47,58 @@ fi
 echo -e "${GREEN}✅ Master key retrieved from Keychain${NC}"
 echo ""
 
-echo -e "${BLUE}🚀 Starting key server locally...${NC}"
-echo -e "${YELLOW}   This will derive the public key for index 0${NC}"
-echo -e "${YELLOW}   Copy the derived public key from the output below${NC}"
+CLEAN_MASTER_KEY=$(echo -n "$MASTER_KEY" | tr -d "\n\r")
+DERIVATION_INDEX=${DERIVATION_INDEX:-0}
+
+if ! [[ "$DERIVATION_INDEX" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}❌ Error: DERIVATION_INDEX must be a non-negative integer (got '$DERIVATION_INDEX')${NC}"
+    exit 1
+fi
+
+echo -e "${BLUE}🧮 Deriving client key pair (index ${DERIVATION_INDEX})...${NC}"
 echo ""
+cd seal
+
+if [ ! -f "target/release/seal-cli" ]; then
+    echo -e "${BLUE}🔨 Building seal-cli (release)...${NC}"
+    cargo build --bin seal-cli --release
+    echo ""
+fi
+
+set +e
+DERIVE_OUTPUT=$(./target/release/seal-cli derive-key --seed "$CLEAN_MASTER_KEY" --index "$DERIVATION_INDEX" 2>&1)
+DERIVE_STATUS=$?
+set -e
+
+if [ $DERIVE_STATUS -ne 0 ]; then
+    echo -e "${RED}❌ Failed to derive key material:${NC}"
+    echo "$DERIVE_OUTPUT"
+    exit 1
+fi
+
+CLIENT_MASTER_KEY=$(echo "$DERIVE_OUTPUT" | grep -oE "0x[0-9a-fA-F]+" | head -1 || true)
+DERIVED_PUBLIC_KEY=$(echo "$DERIVE_OUTPUT" | grep -oE "0x[0-9a-fA-F]+" | tail -1 || true)
+
+if [ -z "$CLIENT_MASTER_KEY" ] || [ -z "$DERIVED_PUBLIC_KEY" ]; then
+    echo -e "${RED}❌ Unable to parse CLIENT_MASTER_KEY or PUBLIC_KEY from seal-cli output${NC}"
+    echo "$DERIVE_OUTPUT"
+    exit 1
+fi
+
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}CLIENT_MASTER_KEY (store securely):${NC} ${CLIENT_MASTER_KEY}"
+echo -e "${GREEN}PUBLIC_KEY (register on-chain):${NC} ${DERIVED_PUBLIC_KEY}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-
-# Run key server with retrieved master key
-cd seal
-MASTER_KEY=$MASTER_KEY \
-  CONFIG_PATH=../key-server-config.yaml.example \
-  cargo run --bin key-server
+echo -e "${YELLOW}📋 Next steps:${NC}"
+echo -e "1. Register the public key with the SEAL package:"
+echo -e "   ${BLUE}# Mainnet: 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d${NC}"
+echo -e "   ${BLUE}# Testnet: 0x927a54e9ae803f82ebf480136a9bcff45101ccbe28b13f433c89f5181069d682${NC}"
+echo -e "   ${BLUE}sui client call \\${NC}"
+echo -e "   ${BLUE}  --package <SEAL_PACKAGE_ID> \\${NC}"
+echo -e "   ${BLUE}  --module key_server \\${NC}"
+echo -e "   ${BLUE}  --function create_and_transfer_v1 \\${NC}"
+echo -e "   ${BLUE}  --args <SERVER_NAME> https://<SERVER_URL> 0 ${DERIVED_PUBLIC_KEY} \\${NC}"
+echo -e "   ${BLUE}  --gas-budget 100000000${NC}"
+echo ""
+echo -e "2. Update environment variables or Railway secrets with the new KEY_SERVER_OBJECT_ID."

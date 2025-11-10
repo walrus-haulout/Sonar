@@ -108,7 +108,7 @@ cargo build --bin seal-cli --release
 # ⚠️ SAVE THIS SECURELY - Store in password manager
 ```
 
-### 3.2 Get Derived Public Key
+### 3.2 Derive Client Key Pair
 
 Update the key server config to use your mainnet package ID first:
 
@@ -116,26 +116,21 @@ Update the key server config to use your mainnet package ID first:
 cd /path/to/sonar/seal-keyserver
 
 # Edit key-server-config.yaml.example
-# Update line 29 to use your MAINNET package ID from Step 2.1
+# Update package_ids to include your MAINNET package ID from Step 2.1
 ```
 
-Then run the key server locally to derive the public key:
+Use `seal-cli derive-key` to produce the client key pair for derivation index 0:
 
 ```bash
-# Set environment variables
-export MASTER_KEY=<your-64-char-seed-from-3.1>
-export KEY_SERVER_OBJECT_ID=0x0000000000000000000000000000000000000000000000000000000000000000
+cd /path/to/sonar/seal-keyserver/seal
+./target/release/seal-cli derive-key --seed <MASTER_KEY_FROM_3.1> --index 0
 
-# Run key server locally
-cd ../seal
-cargo run --bin key-server -- --config ../sonar/seal-keyserver/key-server-config.yaml.example
-
-# Server will log:
-# "Derived public key for client 'SONAR Marketplace' (index 0): 0xABC123..."
-# ⚠️ COPY THIS PUBLIC KEY
+# Output:
+# Master key: 0x<CLIENT_MASTER_KEY>
+# Public key: 0x<PUBLIC_KEY>
 ```
 
-The server will fail to start (expected - object doesn't exist yet), but it will log the derived public key. **Copy this public key** before the error occurs.
+Save both values. `CLIENT_MASTER_KEY` is your backup secret (do not share). `PUBLIC_KEY` is registered on-chain in the next step.
 
 ### 3.3 Register Key Server On-Chain (Mainnet)
 
@@ -155,9 +150,11 @@ sui client call \
   --package <SEAL_PACKAGE_ID_MAINNET> \
   --module key_server \
   --function create_and_transfer_v1 \
-  --args <PUBLIC_KEY_FROM_3.2> <YOUR_WALLET_ADDRESS> \
-  --gas-budget 10000000
+  --args <SERVER_NAME> https://<SERVER_URL> 0 <PUBLIC_KEY_FROM_3.2> \
+  --gas-budget 100000000
 ```
+
+Pick an easy-to-recognize `<SERVER_NAME>` (for example, `"sonar-mainnet"`) and supply the HTTPS URL where the service will run. Each derivation index returns a unique `KEY_SERVER_OBJECT_ID`, so reserve a new index when onboarding additional clients in the future.
 
 **Find the created object ID** in the transaction output:
 

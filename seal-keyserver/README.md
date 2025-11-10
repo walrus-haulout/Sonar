@@ -21,22 +21,32 @@ docker run seal-keyserver
 
 **Copy the MASTER_KEY from the logs** and save it securely.
 
-### 2. Derive Public Key (Second Run)
+### 2. Derive Client Key Pair (Second Run)
 
 ```bash
 docker run -e MASTER_KEY="0x..." seal-keyserver
 ```
 
-**Copy the PUBLIC_KEY from the logs** and register it on-chain:
+The container will print both:
+- `CLIENT_MASTER_KEY` (keep this secret; used for backup/export)
+- `PUBLIC_KEY` (register this on-chain)
+
+Register the public key on-chain with the SEAL package for your network:
 
 ```bash
 sui client call \
-  --package 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d \
+  --package <SEAL_PACKAGE_ID> \
   --module key_server \
   --function create_and_transfer_v1 \
-  --args <PUBLIC_KEY> <YOUR_ADDRESS> \
+  --args <SERVER_NAME> https://<SERVER_URL> 0 <PUBLIC_KEY> \
   --gas-budget 100000000
 ```
+
+Use the correct SEAL package ID:
+- Mainnet: `0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d`
+- Testnet: `0x927a54e9ae803f82ebf480136a9bcff45101ccbe28b13f433c89f5181069d682`
+
+Pick a descriptive `<SERVER_NAME>` (e.g., `"sonar-mainnet"`) and the HTTPS URL where your deployment will live. Each derivation index yields a unique `KEY_SERVER_OBJECT_ID`, so increment the index for every additional client registration.
 
 **Copy the KEY_SERVER_OBJECT_ID** from the transaction.
 

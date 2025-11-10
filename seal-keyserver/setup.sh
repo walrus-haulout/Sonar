@@ -99,7 +99,15 @@ echo ""
 echo -e "${GREEN}🎲 Generating master seed...${NC}"
 echo ""
 
-MASTER_SEED=$(./target/release/seal-cli gen-seed)
+MASTER_SEED_OUTPUT=$(./target/release/seal-cli gen-seed)
+MASTER_SEED=$(echo "$MASTER_SEED_OUTPUT" | grep -oE "0x[0-9a-fA-F]+")
+
+if [ -z "$MASTER_SEED" ]; then
+    echo -e "${RED}❌ Failed to parse master seed from seal-cli output${NC}"
+    echo "$MASTER_SEED_OUTPUT"
+    exit 1
+fi
+
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}Master Seed (SAVE THIS):${NC}"
 echo -e "${GREEN}${MASTER_SEED}${NC}"
@@ -163,21 +171,22 @@ echo ""
 
 echo -e "${YELLOW}📋 Next Steps:${NC}"
 echo ""
-echo -e "1. ${GREEN}Get derived public key${NC} (run key server locally):"
+echo -e "1. ${GREEN}Derive client key pair${NC}:"
 echo -e "   ${BLUE}cd seal${NC}"
-echo -e "   ${BLUE}MASTER_KEY=${MASTER_SEED} \\${NC}"
-echo -e "   ${BLUE}  CONFIG_PATH=../key-server-config.yaml.example \\${NC}"
-echo -e "   ${BLUE}  cargo run --bin key-server${NC}"
-echo -e "   ${YELLOW}→ Copy the derived public key from logs${NC}"
+echo -e "   ${BLUE}./target/release/seal-cli derive-key --seed <MASTER_KEY> --index 0${NC}"
+echo -e "   ${YELLOW}→ Save CLIENT_MASTER_KEY (secret) and PUBLIC_KEY (register on-chain)${NC}"
 echo ""
-echo -e "2. ${GREEN}Register on Sui testnet:${NC}"
+echo -e "2. ${GREEN}Register on Sui${NC}:"
+echo -e "   ${BLUE}# Choose the SEAL package ID for your network${NC}"
+echo -e "   ${BLUE}#   • Mainnet: 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d${NC}"
+echo -e "   ${BLUE}#   • Testnet: 0x927a54e9ae803f82ebf480136a9bcff45101ccbe28b13f433c89f5181069d682${NC}"
 echo -e "   ${BLUE}sui client call \\${NC}"
-echo -e "   ${BLUE}  --package 0x599d35684e6c8bcbe8c34ad75f7273e2abedc8067d192d05c71bb5d63a4cbd5f \\${NC}"
+echo -e "   ${BLUE}  --package <SEAL_PACKAGE_ID> \\${NC}"
 echo -e "   ${BLUE}  --module key_server \\${NC}"
 echo -e "   ${BLUE}  --function create_and_transfer_v1 \\${NC}"
-echo -e "   ${BLUE}  --args <PUBLIC_KEY> <YOUR_ADDRESS> \\${NC}"
-echo -e "   ${BLUE}  --gas-budget 10000000${NC}"
-echo -e "   ${YELLOW}→ Copy the object ID from transaction output${NC}"
+echo -e "   ${BLUE}  --args <SERVER_NAME> https://<SERVER_URL> 0 <PUBLIC_KEY> \\${NC}"
+echo -e "   ${BLUE}  --gas-budget 100000000${NC}"
+echo -e "   ${YELLOW}→ Record the KeyServer object ID from the transaction output${NC}"
 echo ""
 echo -e "3. ${GREEN}Update .env with object ID${NC}"
 echo ""

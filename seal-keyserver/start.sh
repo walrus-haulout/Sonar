@@ -107,26 +107,54 @@ CLEAN_MASTER_KEY=$(echo -n "${MASTER_KEY}" | tr -d "\n\r")
 
 # Check if we have KEY_SERVER_OBJECT_ID
 if [ -z "$KEY_SERVER_OBJECT_ID" ] || [ "$KEY_SERVER_OBJECT_ID" = "" ]; then
-  echo "⚠️  KEY_SERVER_OBJECT_ID not set - deriving PUBLIC_KEY"
+  echo "⚠️  KEY_SERVER_OBJECT_ID not set - deriving client key material"
   echo ""
 
-  # Use seal-cli to derive the public key directly
-  echo "📝 Deriving public key from MASTER_KEY..."
-  PUBLIC_KEY=$(/opt/key-server/bin/seal-cli derived-public-key --index 0 2>&1 || true)
+  DERIVATION_INDEX=${DERIVATION_INDEX:-0}
+  if ! [[ "$DERIVATION_INDEX" =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: DERIVATION_INDEX must be a non-negative integer (got '$DERIVATION_INDEX')"
+    run_setup_server "invalid_configuration" "DERIVATION_INDEX must be a non-negative integer."
+  fi
 
-  # Extract just the public key from output
-  PUBLIC_KEY_CLEAN=$(echo "$PUBLIC_KEY" | grep -oP "0x[a-f0-9]+" | head -1 || echo "$PUBLIC_KEY")
+  echo "📝 Deriving client key pair from MASTER_KEY (index ${DERIVATION_INDEX})..."
+
+  set +e
+  DERIVE_OUTPUT=$(/opt/key-server/bin/seal-cli derive-key --seed "$CLEAN_MASTER_KEY" --index "$DERIVATION_INDEX" 2>&1)
+  DERIVE_STATUS=$?
+  set -e
+
+  if [ $DERIVE_STATUS -ne 0 ]; then
+    echo "❌ Failed to derive key material:"
+    echo "$DERIVE_OUTPUT"
+    run_setup_server "derive_key_failed" "seal-cli derive-key failed. Verify MASTER_KEY (0x + 64 hex) and DERIVATION_INDEX."
+  fi
+
+  CLIENT_MASTER_KEY=$(echo "$DERIVE_OUTPUT" | grep -oE "0x[0-9a-fA-F]+" | head -1 || true)
+  DERIVED_PUBLIC_KEY=$(echo "$DERIVE_OUTPUT" | grep -oE "0x[0-9a-fA-F]+" | tail -1 || true)
+
+  if [ -z "$CLIENT_MASTER_KEY" ] || [ -z "$DERIVED_PUBLIC_KEY" ]; then
+    echo "❌ Unable to parse derived public key from seal-cli output:"
+    echo "$DERIVE_OUTPUT"
+    run_setup_server "derive_key_failed" "seal-cli derive-key output did not contain key material. Verify MASTER_KEY."
+  fi
 
   echo ""
   echo "========================================================================"
-  echo "🎉 PUBLIC KEY DERIVED"
+  echo "🎉 CLIENT KEY MATERIAL DERIVED"
   echo "========================================================================"
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "📋 PUBLIC_KEY (use this to register on-chain):"
+  echo "📋 CLIENT_MASTER_KEY (store securely - do not share):"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
-  echo "$PUBLIC_KEY_CLEAN"
+  echo "$CLIENT_MASTER_KEY"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "📋 PUBLIC_KEY (register this on-chain):"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "$DERIVED_PUBLIC_KEY"
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
@@ -138,15 +166,16 @@ if [ -z "$KEY_SERVER_OBJECT_ID" ] || [ "$KEY_SERVER_OBJECT_ID" = "" ]; then
   echo "     --package 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d \\"
   echo "     --module key_server \\"
   echo "     --function create_and_transfer_v1 \\"
-  echo "     --args $PUBLIC_KEY_CLEAN <YOUR_ADDRESS> \\"
+  echo "     --args <SERVER_NAME> https://<SERVER_URL> 0 $DERIVED_PUBLIC_KEY \\"
   echo "     --gas-budget 100000000"
   echo ""
   echo "2. Set KEY_SERVER_OBJECT_ID from the transaction and redeploy"
   echo ""
   echo "========================================================================"
   echo ""
-  export DERIVED_PUBLIC_KEY="$PUBLIC_KEY_CLEAN"
-  run_setup_server "public_key_registration" "Register the derived PUBLIC_KEY (shown in logs) on-chain, set KEY_SERVER_OBJECT_ID, then redeploy."
+  export DERIVED_CLIENT_MASTER_KEY="$CLIENT_MASTER_KEY"
+  export DERIVED_PUBLIC_KEY="$DERIVED_PUBLIC_KEY"
+  run_setup_server "public_key_registration" "Register the derived PUBLIC_KEY on-chain using create_and_transfer_v1 (<SERVER_NAME> https://<SERVER_URL> 0 <PUBLIC_KEY>), set KEY_SERVER_OBJECT_ID, then redeploy."
 fi
 
 # Validate KEY_SERVER_OBJECT_ID format
