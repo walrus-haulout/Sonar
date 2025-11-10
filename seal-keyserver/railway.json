@@ -2,7 +2,8 @@
   "$schema": "https://railway.app/json-schema/railway.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "seal-keyserver/Dockerfile"
+    "context": "seal-keyserver",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "healthcheckPath": "/health",
