@@ -2,7 +2,6 @@
   "$schema": "https://railway.app/json-schema/railway.json",
   "build": {
     "builder": "DOCKERFILE",
-    "context": "seal-keyserver",
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
@@ -23,10 +22,7 @@
     "KEY_SERVER_OBJECT_ID": {
       "description": "Registered key server object ID (0x + 64 hex chars). Leave empty until after registration.",
       "value": ""
-    },
-    "RAILWAY_DOCKERFILE_PATH": {
-      "description": "Explicit path to Dockerfile so Railway builds from the correct service directory",
-      "value": "seal-keyserver/Dockerfile"
     }
   }
 }
+
