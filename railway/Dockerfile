@@ -167,7 +167,7 @@ EOFCONFIG\n\
   \n\
   echo "📝 Deriving public key..."\n\
   CONFIG_PATH=/app/config/derive-config.yaml timeout 5 /opt/key-server/bin/key-server 2>&1 | tee /tmp/derive.log || true\n\
-  PUBLIC_KEY=$(grep -oP 'Derived public key for index 0: \\K0x[a-f0-9]+' /tmp/derive.log || echo "DERIVATION_FAILED")\n\
+  PUBLIC_KEY=$(grep -oP "Derived public key for index 0: \\\\K0x[a-f0-9]+" /tmp/derive.log || echo "DERIVATION_FAILED")\n\
   \n\
   echo ""\n\
   echo "========================================================================"\n\
