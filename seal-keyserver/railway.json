@@ -9,5 +9,19 @@
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "variables": {
+    "PORT": {
+      "description": "HTTP port exposed by the key server",
+      "value": "2024"
+    },
+    "MASTER_KEY": {
+      "description": "SEAL master key (0x + 64 hex chars). Leave empty on first deploy to generate one.",
+      "value": ""
+    },
+    "KEY_SERVER_OBJECT_ID": {
+      "description": "Registered key server object ID (0x + 64 hex chars). Leave empty until after registration.",
+      "value": ""
+    }
   }
 }
