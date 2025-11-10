@@ -135,10 +135,66 @@ echo "✅ Using existing MASTER_KEY from Railway"\n\
 \n\
 # Check if we have KEY_SERVER_OBJECT_ID\n\
 if [ -z "$KEY_SERVER_OBJECT_ID" ] || [ "$KEY_SERVER_OBJECT_ID" = "" ]; then\n\
-  echo "❌ ERROR: MASTER_KEY is set but KEY_SERVER_OBJECT_ID is missing"\n\
+  echo "⚠️  KEY_SERVER_OBJECT_ID not set - deriving PUBLIC_KEY for registration"\n\
   echo ""\n\
-  echo "Please set KEY_SERVER_OBJECT_ID in Railway and redeploy"\n\
-  exit 1\n\
+  \n\
+  # Create temporary config for key derivation\n\
+  cat > /app/config/derive-config.yaml <<EOF\n\
+network: Mainnet\n\
+server_mode: !Permissioned\n\
+  client_configs:\n\
+  - name: Temporary\n\
+    client_master_key: !Derived\n\
+      derivation_index: 0\n\
+    key_server_object_id: \"0x0000000000000000000000000000000000000000000000000000000000000000\"\n\
+    package_ids:\n\
+    - \"0x0000000000000000000000000000000000000000000000000000000000000000\"\n\
+\n\
+server:\n\
+  address: \"0.0.0.0:2024\"\n\
+  metrics_address: \"0.0.0.0:9184\"\n\
+\n\
+master_key:\n\
+  master_seed: \"${MASTER_KEY}\"\n\
+\n\
+sui:\n\
+  url: \"https://fullnode.mainnet.sui.io\"\n\
+EOF\n\
+  \n\
+  echo "📝 Deriving public key..."\n\
+  CONFIG_PATH=/app/config/derive-config.yaml timeout 5 /opt/key-server/bin/key-server 2>&1 | tee /tmp/derive.log || true\n\
+  PUBLIC_KEY=$(grep -oP \"Derived public key for index 0: \\\\K0x[a-f0-9]+\" /tmp/derive.log || echo \"DERIVATION_FAILED\")\n\
+  \n\
+  echo ""\n\
+  echo "========================================================================"\n\
+  echo "🎉 PUBLIC KEY DERIVED"\n\
+  echo "========================================================================"\n\
+  echo ""\n\
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"\n\
+  echo "📋 PUBLIC_KEY (for on-chain registration):"\n\
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"\n\
+  echo ""\n\
+  echo \"${PUBLIC_KEY}\"\n\
+  echo ""\n\
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"\n\
+  echo ""\n\
+  echo "📝 Register on-chain:"\n\
+  echo ""\n\
+  echo \"sui client call \\\\\\\\\"\n\
+  echo \"  --package 0xa212c4c6c7183b911d0be8768f4cb1df7a383025b5d0ba0c014009f0f30f5f8d \\\\\\\\\"\n\
+  echo \"  --module key_server \\\\\\\\\"\n\
+  echo \"  --function create_and_transfer_v1 \\\\\\\\\"\n\
+  echo \"  --args ${PUBLIC_KEY} <YOUR_ADDRESS> \\\\\\\\\"\n\
+  echo \"  --gas-budget 100000000\"\n\
+  echo ""\n\
+  echo \"Then add the KEY_SERVER_OBJECT_ID from the transaction to Railway and redeploy\"\n\
+  echo ""\n\
+  echo \"========================================================================\"\n\
+  echo ""\n\
+  \n\
+  echo \"⏳ Keeping container alive for 90 seconds so you can copy the PUBLIC_KEY...\"\n\
+  sleep 90\n\
+  exit 0\n\
 fi\n\
 \n\
 echo "🚀 Starting production key server..."\n\
