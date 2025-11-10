@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     libpq-dev \
     curl \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries from builder stage

@@ -18,6 +18,51 @@ validate_object_id() {
   return 0
 }
 
+run_setup_server() {
+  local stage="$1"
+  shift
+  local message="$*"
+
+  export SETUP_STAGE="$stage"
+  export SETUP_MESSAGE="$message"
+
+  cat <<'PY' > /tmp/setup_server.py
+import http.server
+import json
+import os
+import socketserver
+
+PORT = int(os.environ.get("PORT", "2024"))
+STAGE = os.environ.get("SETUP_STAGE", "setup")
+MESSAGE = os.environ.get("SETUP_MESSAGE", "")
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path not in ("/", "/health"):
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        payload = {
+            "status": "setup",
+            "stage": STAGE,
+            "message": MESSAGE,
+        }
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
+
+    def log_message(self, format, *args):
+        return
+
+with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    print(f"📡 Setup helper listening on port {PORT} (stage={STAGE})")
+    print("   Health endpoint will return setup status until configuration is complete.")
+    httpd.serve_forever()
+PY
+
+  python3 /tmp/setup_server.py
+}
+
 # Check if MASTER_KEY is already set
 if [ -z "${MASTER_KEY:-}" ]; then
   # Setup mode: Generate new keys
@@ -48,10 +93,12 @@ if [ -z "${MASTER_KEY:-}" ]; then
   echo ""
   echo "========================================================================"
   echo ""
-  echo "⚠️  Exiting - please save MASTER_KEY and redeploy"
+  echo "📡 Setup helper server will keep running so deployment stays healthy."
+  echo "   Retrieve the MASTER_KEY from the logs above and update Railway variables."
   echo ""
-  sleep 10
-  exit 0
+
+  export GENERATED_MASTER_KEY="$GENERATED_MASTER_KEY"
+  run_setup_server "master_key_generation" "Set MASTER_KEY environment variable to the generated value shown in the logs, then redeploy."
 fi
 
 # Production mode: MASTER_KEY is set
@@ -98,10 +145,8 @@ if [ -z "$KEY_SERVER_OBJECT_ID" ] || [ "$KEY_SERVER_OBJECT_ID" = "" ]; then
   echo ""
   echo "========================================================================"
   echo ""
-  echo "⚠️  Exiting - please register PUBLIC_KEY and set KEY_SERVER_OBJECT_ID"
-  echo ""
-  sleep 10
-  exit 0
+  export DERIVED_PUBLIC_KEY="$PUBLIC_KEY_CLEAN"
+  run_setup_server "public_key_registration" "Register the derived PUBLIC_KEY (shown in logs) on-chain, set KEY_SERVER_OBJECT_ID, then redeploy."
 fi
 
 # Validate KEY_SERVER_OBJECT_ID format
@@ -109,7 +154,7 @@ CLEAN_KEY_SERVER_ID=$(echo -n "${KEY_SERVER_OBJECT_ID}" | tr -d "\n\r")
 if ! validate_object_id "$CLEAN_KEY_SERVER_ID"; then
   echo ""
   echo "Please check your KEY_SERVER_OBJECT_ID environment variable"
-  exit 1
+  run_setup_server "invalid_configuration" "KEY_SERVER_OBJECT_ID must be 0x followed by 64 hex characters. Update the variable and redeploy."
 fi
 
 # Production mode: Both MASTER_KEY and KEY_SERVER_OBJECT_ID are set
