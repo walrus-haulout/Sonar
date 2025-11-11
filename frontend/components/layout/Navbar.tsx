@@ -20,7 +20,7 @@ export function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/marketplace', label: 'Marketplace' },
-    { href: '/stats', label: 'Economics' },
+    { href: '/tokenomics', label: 'Tokenomics' },
     { href: '/roadmap', label: 'Roadmap' },
   ];
 
