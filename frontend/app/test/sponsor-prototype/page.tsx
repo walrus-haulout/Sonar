@@ -105,7 +105,7 @@ export default function SponsorPrototypePage() {
       const uploadResult = await uploadBlob(
         encryptedBlob,
         encryptionResult.identity,
-        encryptionResult.metadata
+        encryptionResult.metadata as Record<string, unknown>
       );
 
       addLog(`✅ Upload complete!`);
