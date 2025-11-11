@@ -7,7 +7,8 @@
   "epoch": 939,
   "modules": ["economics", "marketplace", "sonar_token"],
   "objects": {
-    "upgradeCap": "0x71d3aed5ef5e502ed075b8fc7c59ce5c7a7b42677ad942a936cca46ab2ec05a1"
+    "upgradeCap": "0x71d3aed5ef5e502ed075b8fc7c59ce5c7a7b42677ad942a936cca46ab2ec05a1",
+    "marketplace": "0xaa422269e77e2197188f9c8e47ffb3faf21c0bafff1d5d04ea9613acc4994bb4"
   },
   "features": {
     "multiFileDatasets": true,
