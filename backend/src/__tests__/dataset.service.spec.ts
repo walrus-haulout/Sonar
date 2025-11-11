@@ -271,7 +271,7 @@ describe('dataset service', () => {
     expect(response.status).toBe(200);
     expect(mimeType).toBe('audio/mpeg');
     expect(walrusCalls[0]?.[0]).toBe('full-blob');
-    expect(walrusCalls[0]?.[1]).toEqual({ range: { start: 0, end: 100 }, mimeType: 'audio/mpeg' });
+    expect(walrusCalls[0]?.[1]).toEqual({ range: { start: 0, end: 100 } });
   });
 
   test('streams preview audio', async () => {
@@ -287,6 +287,6 @@ describe('dataset service', () => {
     expect(response.status).toBe(200);
     expect(mimeType).toBe('audio/mpeg');
     expect(walrusCalls[0]?.[0]).toBe('preview-blob');
-    expect(walrusCalls[0]?.[1]).toEqual({ mimeType: 'audio/mpeg' });
+    expect(walrusCalls[0]?.[1]).toEqual({});
   });
 });

@@ -37,13 +37,13 @@ export async function fetchBlobMetadata(blobId: string): Promise<BlobMetadata | 
   }
 
   try {
-    const { exists, response } = await walrusTransport.headBlob(aggregatorBase, blobId);
-    if (!exists || !response) {
-      logger.warn({ blobId }, 'Blob not found on Walrus');
+    const requestUrl = `${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`;
+    const response = await fetch(requestUrl, { method: 'HEAD' });
+
+    if (!response.ok) {
+      logger.warn({ blobId, status: response.status }, 'Blob not found on Walrus');
       return null;
     }
-
-    connectionManager.recordSuccess();
 
     const size = response.headers.get('content-length');
     const encoding = response.headers.get('x-walrus-encoding') || 'Blob';
@@ -56,7 +56,6 @@ export async function fetchBlobMetadata(blobId: string): Promise<BlobMetadata | 
       certified,
     };
   } catch (error) {
-    connectionManager.recordFailure(error instanceof Error ? error : undefined);
     logger.error({ error, blobId }, 'Failed to fetch blob metadata');
     return null;
   }
@@ -102,10 +101,6 @@ export async function streamBlobFromWalrus(
       },
     });
   }
-
-  const rangeDescriptor = options?.range
-    ? `${options.range.start}-${options.range.end ?? ''}`
-    : 'full';
 
   const requestUrl = `${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`;
   const headers: HeadersInit = {

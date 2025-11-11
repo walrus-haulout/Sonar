@@ -3,7 +3,7 @@
  * IndexedDB and memory cache strategies for session keys and decryption keys
  */
 
-import type { CacheStrategy, SessionKeyExport } from './types';
+import type { CacheStrategy } from './types';
 import {
   INDEXEDDB_NAME,
   INDEXEDDB_VERSION,
@@ -152,7 +152,7 @@ export class IndexedDBCache implements CacheStrategy {
   /**
    * Set value in cache
    */
-  async set(key: string, value: any, ttl?: number): Promise<void> {
+  async set(_key: string, value: any, _ttl?: number): Promise<void> {
     await this.ensureInitialized();
 
     // Determine which store to use based on value structure

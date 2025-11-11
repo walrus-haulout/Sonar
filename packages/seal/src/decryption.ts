@@ -15,7 +15,7 @@ import type {
 } from './types';
 import { DecryptionError, SessionExpiredError, PolicyDeniedError } from './errors';
 import { DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE, DEFAULT_THRESHOLD } from './constants';
-import { parsePackageId, hexToBytes, retry } from './utils';
+import { hexToBytes, retry } from './utils';
 import { ensureSessionValid } from './session';
 
 /**

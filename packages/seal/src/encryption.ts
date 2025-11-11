@@ -7,7 +7,6 @@ import type { SealClient } from '@mysten/seal';
 import type {
   EncryptFileOptions,
   EncryptionResult,
-  EnvelopeEncryptionResult,
   EncryptionMetadata,
   ProgressCallback,
 } from './types';
@@ -16,12 +15,10 @@ import { EncryptionError } from './errors';
 import {
   DEFAULT_THRESHOLD,
   DEFAULT_DEM_TYPE,
-  ENVELOPE_THRESHOLD_BYTES,
   SEAL_OVERHEAD_BYTES,
 } from './constants';
 import {
   generateRandomIdentity,
-  parsePackageId,
   bytesToHex,
   shouldUseEnvelopeEncryption,
   estimateEncryptedSize,
@@ -37,14 +34,6 @@ export async function encryptFile(
   options: EncryptFileOptions,
   onProgress?: ProgressCallback
 ): Promise<EncryptionResult> {
-  const {
-    threshold = DEFAULT_THRESHOLD,
-    packageId,
-    accessPolicy,
-    customId,
-    useEnvelope,
-  } = options;
-
   onProgress?.(0, 'Preparing encryption...');
 
   // Convert File to Uint8Array if needed
@@ -55,7 +44,7 @@ export async function encryptFile(
 
   // Determine encryption strategy
   const shouldEnvelope =
-    useEnvelope ??
+    options.useEnvelope ??
     shouldUseEnvelopeEncryption(originalSize);
 
   if (shouldEnvelope) {
@@ -105,7 +94,7 @@ async function encryptSmallFile(
       encryptParams.packageId = packageId;
     }
 
-    const { encryptedObject, key } = await client.encrypt(encryptParams);
+    const { encryptedObject } = await client.encrypt(encryptParams);
 
     onProgress?.(90, 'Finalizing...');
 

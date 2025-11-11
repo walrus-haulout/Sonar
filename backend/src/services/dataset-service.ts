@@ -62,9 +62,23 @@ type DatasetQueryResult = NonNullable<
   >
 >;
 
+type BlobType = {
+  id: string;
+  dataset_id: string;
+  file_index: number;
+  preview_blob_id: string;
+  full_blob_id: string;
+  mime_type?: string;
+  preview_mime_type?: string | null;
+  duration_seconds: number;
+  seal_policy_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
 interface DatasetWithBlob {
-  dataset: DatasetQueryResult;
-  blobs: NonNullable<DatasetQueryResult['blobs']>;
+  dataset: DatasetQueryResult & { blobs?: BlobType[] };
+  blobs: BlobType[];
 }
 
 interface WalrusStreamResult {
@@ -91,16 +105,16 @@ async function fetchDatasetWithBlobs(
     throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, 'Dataset not found.');
   }
 
-  if (!dataset.blobs) {
+  if (!dataset.blobs || dataset.blobs.length === 0) {
     logger.error({ datasetId }, 'Dataset blob mapping not found');
     throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, 'Audio file not found.');
   }
 
-  return { dataset, blobs: dataset.blobs };
+  return { dataset, blobs: dataset.blobs as BlobType[] };
 }
 
-function selectPrimaryBlob(blobs: NonNullable<DatasetQueryResult['blobs']>) {
-  if (Array.isArray(blobs) && blobs.length > 0) {
+function selectPrimaryBlob(blobs: BlobType[]): BlobType {
+  if (blobs.length > 0) {
     const primary = blobs.find((blob) => blob.file_index === 0);
     return primary ?? blobs[0];
   }
@@ -155,6 +169,7 @@ export async function createDatasetAccessGrant({
   }
 
   const { dataset, blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
+  const blob = selectPrimaryBlob(blobs);
 
   await prisma.accessLog.create({
     data: {
@@ -173,7 +188,7 @@ export async function createDatasetAccessGrant({
   return {
     seal_policy_id: dataset.seal_policy_id || '',
     download_url: downloadUrl,
-    blob_id: blobs.full_blob_id,
+    blob_id: blob.full_blob_id,
     expires_at: Date.now() + 24 * 60 * 60 * 1000,
   };
 }
@@ -245,7 +260,7 @@ export async function getDatasetAudioStream({
     throw new HttpError(403, ErrorCode.PURCHASE_REQUIRED, 'Purchase required to stream this dataset');
   }
 
-  const { dataset, blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
+  const { blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
   const blob = selectPrimaryBlob(blobs);
 
   await prisma.accessLog.create({
@@ -263,12 +278,12 @@ export async function getDatasetAudioStream({
   try {
     const response = await streamBlobFromWalrus(blob.full_blob_id, {
       range,
-      mimeType: blob.mime_type,
+      mimeType: blob.mime_type ?? 'audio/mpeg',
     });
 
     return {
       response,
-      mimeType: blob.mime_type,
+      mimeType: blob.mime_type ?? 'audio/mpeg',
     };
   } catch (error) {
     logger.error({ error, datasetId }, 'Failed to stream audio from Walrus');
@@ -316,8 +331,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
-        mime_type: mimeType,
-        preview_mime_type: previewMimeType,
+        ...(mimeType && { mime_type: mimeType } as any),
+        ...(previewMimeType !== null && { preview_mime_type: previewMimeType } as any),
       },
       create: {
         dataset_id: datasetId,
@@ -326,8 +341,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
-        mime_type: mimeType,
-        preview_mime_type: previewMimeType,
+        ...(mimeType && { mime_type: mimeType } as any),
+        ...(previewMimeType !== null && { preview_mime_type: previewMimeType } as any),
       },
     });
   }

@@ -5,7 +5,7 @@
 
 import { SessionKey } from '@mysten/seal';
 import type { SuiClient } from '@mysten/sui/client';
-import type { CreateSessionOptions, SessionKeyExport } from './types';
+import type { CreateSessionOptions } from './types';
 import { SessionError, SessionExpiredError } from './errors';
 import { SealErrorCode } from './types';
 import { getCache } from './cache';
@@ -14,7 +14,7 @@ import {
   MIN_SESSION_TTL_MIN,
   MAX_SESSION_TTL_MIN,
 } from './constants';
-import { validateSessionTTL, parsePackageId } from './utils';
+import { validateSessionTTL } from './utils';
 
 /**
  * Create new session key with wallet signature
@@ -163,7 +163,7 @@ export function isSessionExpired(sessionKey: SessionKey): boolean {
 /**
  * Get session expiration timestamp
  */
-export function getSessionExpirationTime(sessionKey: SessionKey): number {
+export function getSessionExpirationTime(_sessionKey: SessionKey): number {
   // SessionKey doesn't expose expiration directly, so we calculate it
   // based on the TTL that was used when creating it
   // This is an approximation - actual expiration is stored in the session
