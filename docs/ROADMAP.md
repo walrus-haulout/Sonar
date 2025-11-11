@@ -1,6 +1,6 @@
 # SONAR Protocol Roadmap
 
-**Building the future of decentralized audio datasets—from hackathon MVP to global creator network**
+**Building the future of decentralized audio datasets, from hackathon MVP to global creator network**
 
 ---
 
@@ -10,7 +10,7 @@ SONAR Protocol is developing a comprehensive ecosystem for decentralized audio d
 
 ---
 
-## Phase 1: NOW - Hackathon MVP ✅
+## Phase 1: NOW (Hackathon MVP) ✅
 
 **Status:** Completed
 **Timeline:** Current
@@ -56,7 +56,7 @@ SONAR Protocol is developing a comprehensive ecosystem for decentralized audio d
 
 ---
 
-## Phase 2: NEXT - Post-Hackathon Growth 📋
+## Phase 2: NEXT (Post-Hackathon Growth) 📋
 
 **Status:** Planned
 **Timeline:** 6-12 months
@@ -107,7 +107,7 @@ SONAR Protocol is developing a comprehensive ecosystem for decentralized audio d
 
 ---
 
-## Phase 3: FUTURE - Scale & Decentralize 🚀
+## Phase 3: FUTURE (Scale & Decentralize) 🚀
 
 **Status:** Vision
 **Timeline:** 12+ months
@@ -170,32 +170,32 @@ SONAR Protocol is developing a comprehensive ecosystem for decentralized audio d
 ## Technical Milestones
 
 ### Infrastructure
-- [ ] **Nautilus Integration** - On-chain compute for verification
-- [ ] **Multi-Region Deployment** - Edge nodes in 5+ regions
-- [ ] **CDN Optimization** - Sub-100ms audio streaming globally
-- [ ] **Scalability Testing** - 10,000 concurrent users
-- [ ] **Archive Storage** - Cold storage tier for cost optimization
+- [ ] **Nautilus Integration:** On-chain compute for verification
+- [ ] **Multi-Region Deployment:** Edge nodes in 5+ regions
+- [ ] **CDN Optimization:** Sub-100ms audio streaming globally
+- [ ] **Scalability Testing:** 10,000 concurrent users
+- [ ] **Archive Storage:** Cold storage tier for cost optimization
 
 ### Smart Contracts
-- [ ] **Governance Contracts** - DAO voting and treasury management
-- [ ] **Token Contract** - SNR token with staking and burning
-- [ ] **Cross-Chain Bridge** - Secure multi-chain token bridge
-- [ ] **Subscription Model** - Recurring access subscriptions
-- [ ] **NFT Certificates** - Dataset ownership NFTs
+- [ ] **Governance Contracts:** DAO voting and treasury management
+- [ ] **Token Contract:** SNR token with staking and burning
+- [ ] **Cross-Chain Bridge:** Secure multi-chain token bridge
+- [ ] **Subscription Model:** Recurring access subscriptions
+- [ ] **NFT Certificates:** Dataset ownership NFTs
 
 ### Frontend
-- [ ] **Mobile App** - iOS and Android native apps
-- [ ] **Batch Upload UI** - Drag-and-drop for 100+ files
-- [ ] **Advanced Search** - Filters, tags, metadata search
-- [ ] **Social Features** - Creator profiles, follows, comments
-- [ ] **Notifications** - Purchase alerts, lease expirations
+- [ ] **Mobile App:** iOS and Android native apps
+- [ ] **Batch Upload UI:** Drag and drop for 100+ files
+- [ ] **Advanced Search:** Filters, tags, metadata search
+- [ ] **Social Features:** Creator profiles, follows, comments
+- [ ] **Notifications:** Purchase alerts, lease expirations
 
 ### AI/ML
-- [ ] **Deepfake Detector** - 95%+ accuracy on synthetic audio
-- [ ] **Copyright Fingerprinting** - Million-track database
-- [ ] **Quality Scorer** - Automated quality assessment
-- [ ] **Content Classifier** - Genre, mood, instrument detection
-- [ ] **Recommendation Engine** - Personalized dataset suggestions
+- [ ] **Deepfake Detector:** 95%+ accuracy on synthetic audio
+- [ ] **Copyright Fingerprinting:** Million-track database
+- [ ] **Quality Scorer:** Automated quality assessment
+- [ ] **Content Classifier:** Genre, mood, instrument detection
+- [ ] **Recommendation Engine:** Personalized dataset suggestions
 
 ---
 

@@ -24,7 +24,7 @@ export default function RoadmapPage() {
             SONAR Roadmap
           </h1>
           <p className="text-xl text-sonar-highlight-bright/80 max-w-3xl">
-            Building the future of decentralized audio datasets—from hackathon MVP to global creator network
+            Building the future of decentralized audio datasets, from hackathon MVP to global creator network
           </p>
         </div>
 
