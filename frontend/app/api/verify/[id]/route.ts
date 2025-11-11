@@ -11,7 +11,7 @@ const VERIFIER_AUTH_TOKEN = process.env.VERIFIER_AUTH_TOKEN;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!VERIFIER_AUTH_TOKEN) {
     return NextResponse.json(
@@ -20,7 +20,7 @@ export async function GET(
     );
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   try {
     // Forward to audio-verifier service with server-side auth token
