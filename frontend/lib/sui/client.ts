@@ -34,8 +34,8 @@ export const graphqlClient = createGraphQLClient(NETWORK);
 export const graphqlClients = createGraphQLClients(NETWORK);
 
 type DeploymentJson = {
-  packageId?: string;
-  objects?: Record<string, string>;
+  packageId?: string | null;
+  objects?: Record<string, string | null>;
 };
 
 const deploymentDefaultsByNetwork: Record<string, DeploymentJson> = {
@@ -45,7 +45,7 @@ const deploymentDefaultsByNetwork: Record<string, DeploymentJson> = {
 
 const OBJECT_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
 
-const normalizeObjectId = (value: string | undefined, label: string): string | undefined => {
+const normalizeObjectId = (value: string | null | undefined, label: string): string | undefined => {
   if (!value) return undefined;
   const trimmed = value.trim();
 
