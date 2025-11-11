@@ -38,9 +38,25 @@ type DeploymentJson = {
   objects?: Record<string, string | null>;
 };
 
+const STATIC_FALLBACKS: Record<string, DeploymentJson> = {
+  mainnet: {
+    packageId: '0xc05ced8197d798ce8b49d2043c52823696736232ab9a4d2e93e7b5b4e8b1466e',
+    objects: {
+      marketplace: '0xaa422269e77e2197188f9c8e47ffb3faf21c0bafff1d5d04ea9613acc4994bb4',
+    },
+  },
+};
+
 const deploymentDefaultsByNetwork: Record<string, DeploymentJson> = {
   testnet: testnetDeployment as DeploymentJson,
-  mainnet: mainnetDeployment as DeploymentJson,
+  mainnet: {
+    ...mainnetDeployment,
+    ...STATIC_FALLBACKS.mainnet,
+    objects: {
+      ...(mainnetDeployment.objects || {}),
+      ...(STATIC_FALLBACKS.mainnet?.objects || {}),
+    },
+  },
 };
 
 const OBJECT_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
