@@ -331,8 +331,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
-        ...(mimeType && { mime_type: mimeType } as any),
-        ...(previewMimeType !== null && { preview_mime_type: previewMimeType } as any),
+        mime_type: mimeType,
+        preview_mime_type: previewMimeType,
       },
       create: {
         dataset_id: datasetId,
@@ -341,8 +341,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
-        ...(mimeType && { mime_type: mimeType } as any),
-        ...(previewMimeType !== null && { preview_mime_type: previewMimeType } as any),
+        mime_type: mimeType,
+        preview_mime_type: previewMimeType,
       },
     });
   }
