@@ -11,6 +11,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import type { EncryptionMetadata } from '@sonar/seal';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
 
 export interface WalrusUploadProgress {
@@ -34,7 +35,7 @@ export interface WalrusUploadResult {
   };
 }
 
-type WalrusUploadMetadata = Record<string, unknown> | undefined;
+type WalrusUploadMetadata = EncryptionMetadata | Record<string, unknown> | undefined;
 
 export function useWalrusParallelUpload() {
   const orchestrator = useSubWalletOrchestrator();
