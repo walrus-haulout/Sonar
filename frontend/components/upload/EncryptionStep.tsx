@@ -161,7 +161,7 @@ export function EncryptionStep({
 
         addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
 
-        const completedProgress = ((index + 1) / totalFiles) * 80; // 40-80% for upload
+        const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
         setProgress(40 + completedProgress);
 
         return {

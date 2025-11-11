@@ -122,37 +122,13 @@ async function start(): Promise<void> {
   // Register routes
   const { registerAuthRoutes } = await import('./routes/auth');
   const { registerDataRoutes } = await import('./routes/data');
-  const { registerKioskRoutes } = await import('./routes/kiosk');
   const { registerMonitoringRoutes } = await import('./routes/monitoring');
-  const { syncKioskSnapshotToDatabase } = await import('./lib/kiosk/state');
 
   await registerAuthRoutes(fastify);
   await registerDataRoutes(fastify);
-  await registerKioskRoutes(fastify);
   await registerMonitoringRoutes(fastify);
 
   fastify.log.info('Routes registered');
-
-  // Start periodic kiosk health monitoring
-  const { kioskMonitor } = await import('./lib/monitoring/kiosk-monitor');
-  const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
-  try {
-    await syncKioskSnapshotToDatabase(prisma);
-  } catch (error) {
-    fastify.log.warn(error, 'Initial kiosk snapshot sync failed');
-  }
-
-  setInterval(async () => {
-    try {
-      await syncKioskSnapshotToDatabase(prisma);
-      await kioskMonitor.runHealthChecks();
-    } catch (error) {
-      fastify.log.error(error, 'Periodic health check failed');
-    }
-  }, HEALTH_CHECK_INTERVAL);
-
-  fastify.log.info('Kiosk monitoring started (interval: 5 minutes)');
 
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {

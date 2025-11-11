@@ -12,6 +12,7 @@ import { SonarBackground } from '@/components/animations/SonarBackground';
 import { AudioPlayer } from '@/components/dataset/AudioPlayer';
 import { PurchaseCard } from '@/components/dataset/PurchaseCard';
 import { DatasetMetadata } from '@/components/dataset/DatasetMetadata';
+import { DownloadDecryptedButton } from '@/components/dataset/DownloadDecryptedButton';
 import { formatNumber } from '@/lib/utils';
 import { formatSonarAmount } from '@/lib/tier-utils';
 
@@ -167,6 +168,12 @@ export default function DatasetDetailPage() {
             <div className="lg:col-span-1">
               <div className="sticky top-24">
                 <PurchaseCard dataset={dataset} stats={stats} />
+
+                {/* Download Decrypted Audio */}
+                <GlassCard className="mt-6">
+                  <h4 className="text-sm font-mono text-sonar-highlight mb-4">Download Audio</h4>
+                  <DownloadDecryptedButton dataset={dataset} />
+                </GlassCard>
 
                 {/* Additional Info Card */}
                 <GlassCard className="mt-6">

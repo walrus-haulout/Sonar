@@ -293,3 +293,159 @@ export function useSealEncryption() {
     error,
   };
 }
+
+export interface DecryptionProgress {
+  stage: 'fetching' | 'decrypting' | 'complete' | 'error';
+  progress: number; // 0-100
+  message: string;
+  error?: string;
+}
+
+export interface DecryptAudioOptions {
+  blobId: string;
+  sealPolicyId: string;
+  policyModule?: string;
+  onProgress?: (progress: DecryptionProgress) => void;
+}
+
+/**
+ * Hook for browser-based audio decryption with progress tracking
+ * Handles the full flow: fetch encrypted blob, request Seal capsules, decrypt
+ */
+export function useSealDecryption() {
+  const { decrypt, sealClient, sessionKey, createSession, isReady, error: sealError } = useSeal();
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [progress, setProgress] = useState<DecryptionProgress | null>(null);
+
+  /**
+   * Fetch encrypted blob from Walrus
+   */
+  const fetchEncryptedBlob = useCallback(async (blobId: string): Promise<Uint8Array> => {
+    const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+    const response = await fetch(`${walrusAggregator}/v1/${blobId}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch blob from Walrus: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  }, []);
+
+  /**
+   * Decrypt audio blob for playback
+   * Returns decrypted audio data as Uint8Array
+   */
+  const decryptAudio = useCallback(async (options: DecryptAudioOptions): Promise<Uint8Array> => {
+    const { blobId, sealPolicyId, policyModule = 'purchase_policy', onProgress } = options;
+
+    if (!sessionKey) {
+      throw new Error('No active session. Please create a session first.');
+    }
+
+    if (!sealClient) {
+      throw new Error('Seal client not initialized');
+    }
+
+    setIsDecrypting(true);
+
+    try {
+      // Stage 1: Fetch encrypted blob from Walrus
+      const updateProgress = (update: Partial<DecryptionProgress>) => {
+        setProgress((prev) => {
+          const next = { ...(prev ?? {}), ...update } as DecryptionProgress;
+          onProgress?.(next);
+          return next;
+        });
+      };
+
+      updateProgress({
+        stage: 'fetching',
+        progress: 0,
+        message: 'Fetching encrypted audio from Walrus...',
+      });
+
+      const encryptedData = await fetchEncryptedBlob(blobId);
+
+      updateProgress({
+        stage: 'fetching',
+        progress: 30,
+        message: `Fetched ${(encryptedData.length / 1024 / 1024).toFixed(2)} MB encrypted data`,
+      });
+
+      // Stage 2: Decrypt using Seal
+      updateProgress({
+        stage: 'decrypting',
+        progress: 40,
+        message: 'Requesting key shares from Seal servers...',
+      });
+
+      const result = await decrypt(
+        encryptedData,
+        sealPolicyId,
+        { policyModule },
+        (decryptProgress) => {
+          // Map Seal progress (0-1) to our progress (40-90)
+          const progressPercent = 40 + Math.floor(decryptProgress * 50);
+          updateProgress({
+            stage: 'decrypting',
+            progress: progressPercent,
+            message: `Decrypting audio... ${Math.floor(decryptProgress * 100)}%`,
+          });
+        }
+      );
+
+      updateProgress({
+        stage: 'complete',
+        progress: 100,
+        message: 'Audio decrypted successfully',
+      });
+
+      return result.data;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Decryption failed';
+
+      const errorProgress: DecryptionProgress = {
+        stage: 'error',
+        progress: 0,
+        message: 'Decryption failed',
+        error: errorMessage,
+      };
+
+      setProgress(errorProgress);
+      onProgress?.(errorProgress);
+
+      throw err;
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [sessionKey, sealClient, decrypt, fetchEncryptedBlob, progress]);
+
+  /**
+   * Reset progress state
+   */
+  const resetProgress = useCallback(() => {
+    setProgress(null);
+  }, []);
+
+  const clientReady = isReady;
+  const sessionAvailable = !!sessionKey;
+
+  return {
+    // State
+    isReady: clientReady && sessionAvailable,
+    isClientReady: clientReady,
+    hasSession: sessionAvailable,
+    isDecrypting,
+    progress,
+    error: sealError,
+
+    // Methods
+    decryptAudio,
+    createSession,
+    resetProgress,
+
+    // Raw objects
+    sessionKey,
+  };
+}

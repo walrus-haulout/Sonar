@@ -48,7 +48,6 @@ model DatasetBlob {
   full_blob_id     String
   duration_seconds Int
   seal_policy_id   String?
-  backup_key       Bytes?   // Encrypted Seal backup key for emergency decryption
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 
@@ -93,44 +92,5 @@ model AccessLog {
 
   @@index([user_address])
   @@index([dataset_id])
-  @@index([timestamp])
-}
-
-model KioskPurchase {
-  id               String   @id @default(uuid())
-  user_address     String
-  dataset_id       String?  // null if just trading SONAR, not buying dataset
-  sonar_amount     BigInt
-  tx_digest        String
-  event_signature  String   @unique  // hash(tx_digest + event_index) for idempotency
-  timestamp        DateTime @default(now())
-
-  @@index([user_address])
-  @@index([dataset_id])
-  @@index([event_signature])
-  @@index([timestamp])
-}
-
-model KioskReserve {
-  id               String   @id @default(uuid())
-  sonar_balance    BigInt
-  sui_balance      BigInt
-  current_price    BigInt
-  price_override   BigInt?
-  current_tier     Int      @default(1)
-  circulating_supply BigInt @default(0)
-  last_synced_at   DateTime @default(now())
-  updated_at       DateTime @updatedAt
-
-  @@index([updated_at])
-}
-
-model PriceHistory {
-  id               String   @id @default(uuid())
-  recorded_price   BigInt
-  tier_at_time     Int
-  admin_override   Boolean
-  timestamp        DateTime @default(now())
-
   @@index([timestamp])
 }

@@ -11,6 +11,8 @@ const WALRUS_AGGREGATOR_URL =
   process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
   'https://aggregator.walrus-testnet.walrus.space';
 
+const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || '';
+
 /**
  * Edge Function: Walrus Preview Upload
  * Uploads a smaller preview blob (public, unencrypted)
@@ -49,12 +51,19 @@ export async function POST(request: NextRequest) {
       : `${WALRUS_PUBLISHER_URL}/v1/blobs`;
 
     // Upload to Walrus
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/octet-stream',
+    };
+
+    // Add Blockberry API key if configured
+    if (BLOCKBERRY_API_KEY) {
+      headers['X-API-Key'] = BLOCKBERRY_API_KEY;
+    }
+
     const uploadResponse = await fetch(walrusUrl, {
       method: 'PUT',
       body: file,
-      headers: {
-        'Content-Type': 'application/octet-stream',
-      },
+      headers,
     });
 
     if (!uploadResponse.ok) {

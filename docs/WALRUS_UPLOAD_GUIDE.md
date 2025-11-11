@@ -1,6 +1,6 @@
 # Walrus Audio Upload Guide
 
-This guide explains how to upload real 5+ minute audio files to Walrus testnet for the SONAR kiosk system.
+This guide explains how to upload real 5+ minute audio files to Walrus testnet for the SONAR marketplace.
 
 ## Prerequisites
 
@@ -80,33 +80,22 @@ Blob ID: Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0
 File: ambient_1.wav
 Size: 52M
 
-Add this to backend/seed/kiosk-datasets.json:
+Record this blob ID:
   "walrus_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0"
   "preview_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0_preview"
 ```
 
-### Step 3: Update Seed Data
+### Step 3: Use Blob ID
 
-Edit `/Users/angel/Projects/sonar/backend/seed/kiosk-datasets.json` and replace the blob IDs:
+Use the blob ID when creating datasets through your application or seed scripts.
 
 ```json
-[
-  {
-    "title": "Ambient Meditation",
-    "creator": "0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b",
-    "walrus_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0",
-    "preview_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0_preview",
-    "duration_seconds": 330,
-    ...
-  }
-]
-```
-
-### Step 4: Re-seed Database
-
-```bash
-cd /Users/angel/Projects/sonar/backend
-bun run scripts/seed-kiosk.ts
+{
+  "title": "Ambient Meditation",
+  "walrus_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0",
+  "preview_blob_id": "Cg4bXHWZD3rmK9QvGPZxp4dMB_SqJUr7kVtF8wN2eL0_preview",
+  "duration_seconds": 330
+}
 ```
 
 ## Verify Upload
@@ -166,14 +155,9 @@ cd /Users/angel/Projects/sonar/scripts
 ./upload-to-walrus.sh ~/audio/test2.wav
 ./upload-to-walrus.sh ~/audio/test3.wav
 
-# 3. Update seed data with blob IDs from output
-nano /Users/angel/Projects/sonar/backend/seed/kiosk-datasets.json
+# 3. Record blob IDs from output
 
-# 4. Re-seed database
-cd /Users/angel/Projects/sonar/backend
-bun run scripts/seed-kiosk.ts
-
-# 5. Verify in frontend
+# 4. Verify in frontend
 cd /Users/angel/Projects/sonar/frontend
 bun run dev
 # Visit http://localhost:3000/marketplace

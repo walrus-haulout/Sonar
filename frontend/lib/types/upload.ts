@@ -30,7 +30,6 @@ export interface DatasetMetadata {
 export interface EncryptionResult {
   encryptedBlob: Blob;
   seal_policy_id: string; // Seal identity (hex string) for decryption
-  backupKey: Uint8Array; // Emergency backup key (should be stored securely)
   previewBlob?: Blob;
   metadata: {
     threshold: number;
@@ -51,7 +50,6 @@ export interface FileUploadResult {
   blobId: string;
   previewBlobId?: string;
   seal_policy_id: string;
-  backupKey: Uint8Array;
   duration: number;
 }
 
@@ -60,7 +58,6 @@ export interface WalrusUploadResult {
   blobId: string;
   previewBlobId?: string;
   seal_policy_id: string; // Seal identity for decryption
-  backupKey: Uint8Array; // Backup key (should be stored securely)
   // Multi-file dataset support
   files?: FileUploadResult[]; // For multi-file datasets
   bundleDiscountBps?: number; // Basis points (e.g., 2000 = 20%)

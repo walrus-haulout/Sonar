@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { SonarButton } from '@/components/ui/SonarButton';
 import type { Dataset } from '@/types/blockchain';
 import { useWaveform } from '@/hooks/useWaveform';
 import { useAuth } from '@/hooks/useAuth';
-import { getStreamUrl, getPreviewUrl } from '@/lib/api/client';
+import { getStreamUrl, getPreviewUrl, requestAccessGrant } from '@/lib/api/client';
+import { useSealDecryption, type DecryptionProgress } from '@/hooks/useSeal';
+import type { AccessGrant } from '@/types/blockchain';
 
 interface AudioPlayerProps {
   dataset: Dataset;
@@ -14,17 +17,32 @@ interface AudioPlayerProps {
 /**
  * AudioPlayer Component
  * Displays waveform visualization and playback controls with real audio
+ * Supports both server streaming (legacy) and browser-side Seal decryption
  * Integrates Wavesurfer.js for accurate peak visualization and playback
  */
 export function AudioPlayer({ dataset }: AudioPlayerProps) {
   const [volume, setVolume] = useState(1);
+  const [mode, setMode] = useState<'preview' | 'stream' | 'decrypt'>('preview');
+  const [decryptedAudioUrl, setDecryptedAudioUrl] = useState<string | null>(null);
+  const [accessGrant, setAccessGrant] = useState<AccessGrant | null>(null);
+  const [decryptProgress, setDecryptProgress] = useState<DecryptionProgress | null>(null);
+
   const waveformRef = useRef<HTMLDivElement>(null);
   const { token, isAuthenticated, isTokenValid } = useAuth();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+
+  const {
+    isClientReady: sealClientReady,
+    hasSession,
+    isDecrypting,
+    decryptAudio,
+    createSession,
+  } = useSealDecryption();
 
   // Use direct preview URL if available, otherwise use backend endpoint
   const previewUrl = dataset.previewUrl || getPreviewUrl(dataset.id);
 
-  // Use stream URL (requires JWT) if user is authenticated
+  // Use stream URL (requires JWT) if user is authenticated (fallback mode)
   const streamUrl = isAuthenticated && isTokenValid() ? getStreamUrl(dataset.id, token || '') : null;
 
   // For authenticated users, pass Authorization header
@@ -34,15 +52,178 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
     },
   } as RequestInit) : undefined;
 
-  // Initialize waveform hook for full audio playback
-  // Use stream URL if authenticated, otherwise preview
+  // Determine which audio source to use
+  const audioSrc = useMemo(() => {
+    if (mode === 'decrypt' && decryptedAudioUrl) {
+      return decryptedAudioUrl;
+    }
+    if (mode === 'stream' && streamUrl) {
+      return streamUrl;
+    }
+    return previewUrl;
+  }, [mode, decryptedAudioUrl, streamUrl, previewUrl]);
+
+  // Initialize waveform hook for playback
   const waveform = useWaveform({
-    src: streamUrl || previewUrl,
+    src: audioSrc,
     sliceCount: 50, // Match current bar count
     autoplay: false,
-    preload: true, // Preload on mount for detail page
-    fetchOptions: fetchOptions,
+    preload: mode === 'preview', // Only preload preview
+    fetchOptions: mode === 'stream' ? fetchOptions : undefined,
   });
+
+  /**
+   * Cleanup decrypted audio URL on unmount
+   */
+  useEffect(() => {
+    return () => {
+      if (decryptedAudioUrl) {
+        URL.revokeObjectURL(decryptedAudioUrl);
+      }
+    };
+  }, [decryptedAudioUrl]);
+
+
+  /**
+   * Handle unlocking full audio with browser-side decryption
+   */
+  const handleUnlockAudio = useCallback(async () => {
+    if (!isAuthenticated || !isTokenValid() || !token) {
+      console.error('[AudioPlayer] User not authenticated');
+      setDecryptProgress({
+        stage: 'error',
+        progress: 0,
+        message: 'Authentication required',
+        error: 'Please log in to unlock full audio',
+      });
+      return;
+    }
+
+    console.log('[AudioPlayer] Starting browser decryption flow', {
+      datasetId: dataset.id,
+      hasSession,
+    });
+
+    try {
+      // Step 1: Create Seal session if needed
+      if (!hasSession) {
+        console.log('[AudioPlayer] Creating new Seal session');
+        setDecryptProgress({
+          stage: 'fetching',
+          progress: 5,
+          message: 'Creating secure session...',
+        });
+
+        try {
+          await createSession({
+            signMessage: async (message: Uint8Array) => {
+              const result = await signPersonalMessage({ message });
+              return { signature: result.signature };
+            },
+          });
+          console.log('[AudioPlayer] Seal session created successfully');
+        } catch (sessionError) {
+          console.error('[AudioPlayer] Failed to create Seal session:', sessionError);
+          throw new Error(
+            sessionError instanceof Error && sessionError.message.includes('User rejected')
+              ? 'Wallet signature required to create secure session'
+              : 'Failed to create secure session. Please try again.'
+          );
+        }
+      }
+
+      // Step 2: Request access grant to get blob_id and seal_policy_id
+      console.log('[AudioPlayer] Requesting access grant');
+      setDecryptProgress({
+        stage: 'fetching',
+        progress: 10,
+        message: 'Verifying purchase and requesting access...',
+      });
+
+      let grant: AccessGrant;
+      try {
+        grant = await requestAccessGrant(dataset.id, token);
+        setAccessGrant(grant);
+        console.log('[AudioPlayer] Access grant received', {
+          blobId: grant.blob_id,
+          policyId: grant.seal_policy_id,
+        });
+      } catch (accessError) {
+        console.error('[AudioPlayer] Access grant denied:', accessError);
+        throw new Error(
+          accessError instanceof Error && accessError.message.includes('purchase')
+            ? 'Purchase required to access full audio'
+            : 'Access denied. Please verify your purchase.'
+        );
+      }
+
+      // Step 3: Decrypt the audio with policy verification
+      console.log('[AudioPlayer] Starting decryption', {
+        policyModule: 'purchase_policy',
+        policyId: grant.seal_policy_id,
+      });
+
+      const decryptedData = await decryptAudio({
+        blobId: grant.blob_id,
+        sealPolicyId: grant.seal_policy_id,
+        policyModule: 'purchase_policy',
+        onProgress: (progress) => {
+          setDecryptProgress(progress);
+          console.log('[AudioPlayer] Decryption progress:', progress);
+        },
+      });
+
+      console.log('[AudioPlayer] Decryption successful', {
+        decryptedSize: decryptedData.length,
+        decryptedSizeMB: (decryptedData.length / 1024 / 1024).toFixed(2),
+      });
+
+      // Step 4: Create Blob URL for playback
+      // Convert Uint8Array to Blob for playback
+      const audioBlob = new Blob([decryptedData as unknown as BlobPart], { type: 'audio/mpeg' });
+      const blobUrl = URL.createObjectURL(audioBlob);
+      waveform.destroy();
+      setDecryptedAudioUrl(blobUrl);
+      setMode('decrypt');
+
+      console.log('[AudioPlayer] Browser decryption complete, loading waveform');
+
+    } catch (error) {
+      console.error('[AudioPlayer] Decryption flow failed:', error);
+
+      // Provide user-friendly error messages
+      let userMessage = 'Failed to unlock audio';
+      let technicalError = error instanceof Error ? error.message : 'Unknown error';
+
+      if (technicalError.includes('policy')) {
+        userMessage = 'Access policy verification failed';
+        technicalError = 'The on-chain policy denied access. Please verify your purchase.';
+      } else if (technicalError.includes('key share') || technicalError.includes('key server')) {
+        userMessage = 'Key server unavailable';
+        technicalError = 'Could not retrieve decryption keys. Please check your network and try again.';
+      } else if (technicalError.includes('blob') || technicalError.includes('Walrus')) {
+        userMessage = 'Failed to fetch encrypted audio';
+        technicalError = 'Could not download encrypted data from Walrus. Please try again.';
+      }
+
+      setDecryptProgress({
+        stage: 'error',
+        progress: 0,
+        message: userMessage,
+        error: technicalError,
+      });
+    }
+  }, [
+    isAuthenticated,
+    isTokenValid,
+    token,
+    hasSession,
+    createSession,
+    signPersonalMessage,
+    dataset.id,
+    decryptAudio,
+    waveform,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -219,23 +400,85 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
         Available formats: {dataset.formats.join(', ')} • Sample rate: 44.1kHz • Bit depth: 16-bit
       </div>
 
+      {/* Unlock Full Audio Button (for authenticated users with purchase) */}
+      {isAuthenticated && isTokenValid() && mode === 'preview' && (
+        <div className="space-y-3">
+          <SonarButton
+            variant="primary"
+            onClick={handleUnlockAudio}
+            disabled={isDecrypting || !sealClientReady}
+            className="w-full"
+          >
+            {isDecrypting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Unlocking...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                Unlock Full Audio (Browser Decryption)
+              </>
+            )}
+          </SonarButton>
+
+          {/* Decryption Progress */}
+          {decryptProgress && (
+            <div className="p-3 rounded-sonar border border-sonar-signal/20 bg-sonar-signal/5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-mono text-sonar-highlight">
+                  {decryptProgress.message}
+                </span>
+                <span className="text-xs font-mono text-sonar-signal">
+                  {decryptProgress.progress}%
+                </span>
+              </div>
+              {decryptProgress.stage !== 'error' && (
+                <div className="w-full bg-sonar-abyss/50 rounded-full h-1.5">
+                  <div
+                    className="bg-sonar-signal h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${decryptProgress.progress}%` }}
+                  />
+                </div>
+              )}
+              {decryptProgress.error && (
+                <p className="text-xs text-sonar-coral mt-2">{decryptProgress.error}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Note about access status */}
       <div className={`p-3 rounded-sonar border ${
-        streamUrl
+        mode === 'decrypt'
           ? 'bg-sonar-signal/5 border-sonar-signal/20'
-          : 'bg-sonar-highlight/5 border-sonar-highlight/20'
+          : mode === 'stream'
+            ? 'bg-sonar-signal/5 border-sonar-signal/20'
+            : 'bg-sonar-highlight/5 border-sonar-highlight/20'
       }`}>
         <p className="text-xs text-sonar-highlight-bright/70">
-          {streamUrl ? (
+          {mode === 'decrypt' ? (
             <>
-              <span className="font-mono text-sonar-signal">✓ Full Access:</span> Playing purchased
-              audio with encrypted decryption via Mysten Seal.
+              <span className="font-mono text-sonar-signal">✓ Browser Decryption:</span> Playing fully
+              decrypted audio. Encrypted data fetched from Walrus and decrypted in your browser using
+              Mysten Seal with zero-knowledge key shares.
+            </>
+          ) : mode === 'stream' ? (
+            <>
+              <span className="font-mono text-sonar-signal">✓ Server Streaming:</span> Playing purchased
+              audio via server. Use browser decryption for enhanced privacy.
             </>
           ) : (
             <>
               <span className="font-mono text-sonar-highlight">ⓘ Preview Mode:</span> Full audio
-              access requires dataset purchase. Encrypted audio is stored on Walrus and decrypted
-              with Mysten Seal upon purchase.
+              access requires dataset purchase. Encrypted audio is stored on Walrus and can be decrypted
+              in your browser with Mysten Seal upon purchase.
             </>
           )}
         </p>

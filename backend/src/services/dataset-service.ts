@@ -34,7 +34,6 @@ interface PreviewOptions {
 export interface FileSealMetadata {
   file_index: number;
   seal_policy_id: string;
-  backup_key: string; // Base64-encoded backup key (TODO: should be encrypted with user's public key)
   blob_id: string;
   preview_blob_id?: string;
   duration_seconds: number;
@@ -154,16 +153,10 @@ export async function createDatasetAccessGrant({
 
   const downloadUrl = `/api/datasets/${datasetId}/stream`;
 
-  // Convert backup key Buffer to base64 string if available
-  const backup_key = blobs.backup_key
-    ? blobs.backup_key.toString('base64')
-    : undefined;
-
   return {
     seal_policy_id: dataset.seal_policy_id || '',
     download_url: downloadUrl,
     blob_id: blobs.full_blob_id,
-    backup_key,
     expires_at: Date.now() + 24 * 60 * 60 * 1000,
   };
 }
@@ -272,15 +265,8 @@ export async function storeSealMetadata({
     throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, 'Dataset not found.');
   }
 
-  // Store metadata for each file
-  // SECURITY NOTE: backup_key is currently stored base64-encoded but not encrypted
-  // TODO: Implement proper encryption:
-  // - Client encrypts backup_key with user's public key before sending
-  // - Only the user can decrypt for recovery purposes
-  // - This maintains recovery property while securing at-rest storage
+  // Store Seal metadata for each file
   for (const fileMetadata of files) {
-    const backupKeyBuffer = Buffer.from(fileMetadata.backup_key, 'base64');
-
     await prisma.datasetBlob.upsert({
       where: {
         dataset_id_file_index: {
@@ -289,7 +275,6 @@ export async function storeSealMetadata({
         },
       },
       update: {
-        backup_key: backupKeyBuffer,
         full_blob_id: fileMetadata.blob_id,
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
@@ -298,7 +283,6 @@ export async function storeSealMetadata({
       create: {
         dataset_id: datasetId,
         file_index: fileMetadata.file_index,
-        backup_key: backupKeyBuffer,
         full_blob_id: fileMetadata.blob_id,
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,

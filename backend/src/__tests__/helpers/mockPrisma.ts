@@ -48,32 +48,13 @@ export function createMockFn(defaultImpl: AnyFn = () => undefined) {
   return fn;
 }
 
-const kioskReserveFindFirst = createMockFn(async () => null);
-const kioskReserveCreate = createMockFn(async () => undefined);
-const kioskReserveUpsert = createMockFn(async () => undefined);
 const priceHistoryFindMany = createMockFn(async () => []);
-const kioskPurchaseAggregate = createMockFn(async () => ({
-  _sum: { sonar_amount: 0n },
-  _count: { id: 0 },
-}));
-const kioskPurchaseCount = createMockFn(async () => 0);
-const kioskPurchaseFindFirst = createMockFn(async () => null);
 const datasetFindUnique = createMockFn(async () => null);
 const accessLogCreate = createMockFn(async () => undefined);
 
 export const prismaMock = {
-  kioskReserve: {
-    findFirst: kioskReserveFindFirst,
-    create: kioskReserveCreate,
-    upsert: kioskReserveUpsert,
-  },
   priceHistory: {
     findMany: priceHistoryFindMany,
-  },
-  kioskPurchase: {
-    aggregate: kioskPurchaseAggregate,
-    count: kioskPurchaseCount,
-    findFirst: kioskPurchaseFindFirst,
   },
   dataset: {
     findUnique: datasetFindUnique,
@@ -84,13 +65,7 @@ export const prismaMock = {
 };
 
 export const prismaFns = {
-  kioskReserveFindFirst,
-  kioskReserveCreate,
-  kioskReserveUpsert,
   priceHistoryFindMany,
-  kioskPurchaseAggregate,
-  kioskPurchaseCount,
-  kioskPurchaseFindFirst,
   datasetFindUnique,
   accessLogCreate,
 };

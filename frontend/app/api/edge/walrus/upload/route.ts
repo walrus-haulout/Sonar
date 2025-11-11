@@ -23,9 +23,6 @@ const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || '';
  *   - seal_policy_id: Seal identity for decryption
  *   - epochs: (optional) Number of epochs to store (default: Walrus default)
  * Returns: { blobId: string, certifiedEpoch: number }
- *
- * SECURITY: backup_key is intentionally NOT accepted here - it must stay client-side
- * until encrypted for backend persistence after dataset is published on-chain
  */
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +31,6 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file');
     const sealPolicyId = formData.get('seal_policy_id');
     const epochsParam = formData.get('epochs');
-    const backupKeyParam = formData.get('backupKey'); // Comma-separated array
     const metadataParam = formData.get('metadata'); // JSON string
 
     if (!file || !(file instanceof Blob)) {
@@ -126,8 +122,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Return blobId and metadata to client
-    // SECURITY: backupKey is intentionally NOT included in response - it stays client-side
-    // Client will store seal_policy_id and backup_key after on-chain publish
     return NextResponse.json({
       blobId,
       certifiedEpoch,

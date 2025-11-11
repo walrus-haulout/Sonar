@@ -9,7 +9,6 @@ export interface AccessGrant {
   seal_policy_id: string;
   download_url: string;
   blob_id: string;
-  backup_key?: string; // Base64-encoded Seal backup key (optional for public datasets)
   expires_at: number;
 }
 

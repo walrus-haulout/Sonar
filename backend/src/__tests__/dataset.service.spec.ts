@@ -9,7 +9,6 @@ const prismaPlaceholder = {
   dataset: { findUnique: async () => null },
   datasetBlob: { findUnique: async () => null },
   purchase: { findFirst: async () => null },
-  kioskPurchase: { findFirst: async () => null },
   accessLog: { create: async () => undefined },
 } as const;
 
@@ -116,9 +115,6 @@ function createPrismaStub() {
         }
         return null;
       },
-    },
-    kioskPurchase: {
-      findFirst: async () => null,
     },
     accessLog: {
       create: async ({ data }: { data: AccessLogRecord }) => {
