@@ -37,22 +37,24 @@ const STEP_TITLES: Record<UploadStep, string> = {
   'success': 'Success!',
 };
 
+const INITIAL_STATE: UploadWizardState = {
+  step: 'file-upload',
+  audioFile: null,
+  audioFiles: [],
+  metadata: null,
+  encryption: null,
+  walrusUpload: null,
+  verification: null,
+  publish: null,
+  error: null,
+};
+
 /**
  * UploadWizard Component
  * Multi-step wizard for dataset upload with Walrus & Sui integration
  */
 export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
-  const [state, setState] = useState<UploadWizardState>({
-    step: 'file-upload',
-    audioFile: null,
-    audioFiles: [], // Multi-file support
-    metadata: null,
-    encryption: null,
-    walrusUpload: null,
-    verification: null,
-    publish: null,
-    error: null,
-  });
+  const [state, setState] = useState<UploadWizardState>(INITIAL_STATE);
 
   // Serialize state for localStorage (exclude large binary data)
   const serializeState = (state: UploadWizardState) => {
@@ -64,10 +66,12 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
         id: state.audioFile.id,
         // Skip 'file', 'waveform', 'preview' - these are large
       } : null,
-      audioFiles: state.audioFiles.map(f => ({
-        duration: f.duration,
-        id: f.id,
-      })),
+      audioFiles: Array.isArray(state.audioFiles)
+        ? state.audioFiles.map((f) => ({
+            duration: f.duration,
+            id: f.id,
+          }))
+        : [],
       // Remove large binary data from encryption result
       encryption: state.encryption ? {
         seal_policy_id: state.encryption.seal_policy_id,
@@ -88,7 +92,11 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
           // Only restore if we're not on success step
           // Note: We can't restore full file data, user will need to re-upload
           if (parsed.step !== 'success' && parsed.step !== 'encryption') {
-            setState(parsed);
+            setState((prev) => ({
+              ...prev,
+              ...parsed,
+              audioFiles: Array.isArray(parsed.audioFiles) ? parsed.audioFiles : [],
+            }));
           }
         } catch (e) {
           console.error('Failed to restore wizard state:', e);
@@ -141,17 +149,7 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
       // Clear state after closing success step
       if (state.step === 'success') {
         localStorage.removeItem('sonar-upload-wizard-state');
-        setState({
-          step: 'file-upload',
-          audioFile: null,
-          audioFiles: [],
-          metadata: null,
-          encryption: null,
-          walrusUpload: null,
-          verification: null,
-          publish: null,
-          error: null,
-        });
+        setState(() => ({ ...INITIAL_STATE }));
       }
     }
   };
