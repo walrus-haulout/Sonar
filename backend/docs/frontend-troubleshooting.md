@@ -591,5 +591,4 @@ When reporting issues, include:
 - [Sui GraphQL Documentation](https://docs.sui.io/references/sui-graphql)
 - [Sui RPC API Reference](https://docs.sui.io/references/sui-api)
 - [SONAR Backend Configuration Guide](/docs/backend-configuration.md)
-- [Kiosk Sync Architecture](/docs/kiosk-sync-architecture.md)
 - [Smart Contract Deployment Guide](/DEPLOYMENT_SUMMARY.md)

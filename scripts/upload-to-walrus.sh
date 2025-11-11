@@ -82,10 +82,6 @@ echo "Blob ID: $BLOB_ID"
 echo "File: $FILE_NAME"
 echo "Size: $FILE_SIZE"
 echo ""
-echo "Add this to backend/seed/kiosk-datasets.json:"
-echo "  \"walrus_blob_id\": \"$BLOB_ID\""
-echo "  \"preview_blob_id\": \"${BLOB_ID}_preview\""
-echo ""
 
 # Save to output file
 OUTPUT_FILE="walrus-uploads.txt"
