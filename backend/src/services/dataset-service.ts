@@ -37,6 +37,9 @@ export interface FileSealMetadata {
   blob_id: string;
   preview_blob_id?: string;
   duration_seconds: number;
+  mime_type: string;
+  preview_mime_type?: string;
+  backup_key?: string;
 }
 
 interface StoreSealMetadataOptions {
@@ -64,6 +67,11 @@ interface DatasetWithBlob {
   blobs: NonNullable<DatasetQueryResult['blobs']>;
 }
 
+interface WalrusStreamResult {
+  response: Response;
+  mimeType: string | null;
+}
+
 function getPrismaClient(prismaClient?: DatasetPrismaClient | PrismaClient) {
   return (prismaClient ?? defaultPrisma) as PrismaClient;
 }
@@ -89,6 +97,15 @@ async function fetchDatasetWithBlobs(
   }
 
   return { dataset, blobs: dataset.blobs };
+}
+
+function selectPrimaryBlob(blobs: NonNullable<DatasetQueryResult['blobs']>) {
+  if (Array.isArray(blobs) && blobs.length > 0) {
+    const primary = blobs.find((blob) => blob.file_index === 0);
+    return primary ?? blobs[0];
+  }
+
+  throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, 'Audio file not found.');
 }
 
 export async function createDatasetAccessGrant({
@@ -165,12 +182,20 @@ export async function getDatasetPreviewStream({
   datasetId,
   logger,
   prismaClient,
-}: PreviewOptions): Promise<Response> {
+}: PreviewOptions): Promise<WalrusStreamResult> {
   const prisma = getPrismaClient(prismaClient);
   const dataset = await fetchDatasetWithBlobs(prisma, datasetId, logger);
+  const blob = selectPrimaryBlob(dataset.blobs);
 
   try {
-    return await streamBlobFromWalrus(dataset.blobs.preview_blob_id);
+    const response = await streamBlobFromWalrus(blob.preview_blob_id, {
+      mimeType: blob.preview_mime_type ?? blob.mime_type ?? undefined,
+    });
+
+    return {
+      response,
+      mimeType: blob.preview_mime_type ?? blob.mime_type ?? null,
+    };
   } catch (error) {
     logger.error({ error, datasetId }, 'Failed to stream preview from Walrus');
     throw new HttpError(500, ErrorCode.WALRUS_ERROR, 'Failed to stream preview');
@@ -184,7 +209,7 @@ export async function getDatasetAudioStream({
   metadata,
   prismaClient,
   ownershipVerifier,
-}: DatasetStreamOptions): Promise<Response> {
+}: DatasetStreamOptions): Promise<WalrusStreamResult> {
   const prisma = getPrismaClient(prismaClient);
   const { logger, ip, userAgent } = metadata;
 
@@ -221,6 +246,7 @@ export async function getDatasetAudioStream({
   }
 
   const { dataset, blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
+  const blob = selectPrimaryBlob(blobs);
 
   await prisma.accessLog.create({
     data: {
@@ -235,7 +261,15 @@ export async function getDatasetAudioStream({
   logger.info({ userAddress, datasetId, range }, 'Starting Walrus audio stream');
 
   try {
-    return await streamBlobFromWalrus(blobs.full_blob_id, { range });
+    const response = await streamBlobFromWalrus(blob.full_blob_id, {
+      range,
+      mimeType: blob.mime_type,
+    });
+
+    return {
+      response,
+      mimeType: blob.mime_type,
+    };
   } catch (error) {
     logger.error({ error, datasetId }, 'Failed to stream audio from Walrus');
     throw new HttpError(500, ErrorCode.WALRUS_ERROR, 'Failed to stream audio');
@@ -267,6 +301,9 @@ export async function storeSealMetadata({
 
   // Store Seal metadata for each file
   for (const fileMetadata of files) {
+    const mimeType = fileMetadata.mime_type?.trim() || 'audio/mpeg';
+    const previewMimeType = fileMetadata.preview_mime_type?.trim() || null;
+
     await prisma.datasetBlob.upsert({
       where: {
         dataset_id_file_index: {
@@ -279,6 +316,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
+        mime_type: mimeType,
+        preview_mime_type: previewMimeType,
       },
       create: {
         dataset_id: datasetId,
@@ -287,6 +326,8 @@ export async function storeSealMetadata({
         preview_blob_id: fileMetadata.preview_blob_id || '',
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
+        mime_type: mimeType,
+        preview_mime_type: previewMimeType,
       },
     });
   }

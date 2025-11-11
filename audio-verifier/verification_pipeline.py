@@ -221,10 +221,10 @@ class VerificationPipeline:
             if not completed:
                 raise RuntimeError("Failed to finalize verification on-chain")
 
-            logger.info(
-                f"[{session_object_id}] Pipeline completed. "
-                f"Approved: {approved}"
-            )
+                logger.info(
+                    f"[{session_object_id}] Pipeline completed. "
+                    f"Approved: {approved}"
+                )
 
         except Exception as e:
             logger.error(f"[{session_object_id}] Pipeline failed: {e}", exc_info=True)

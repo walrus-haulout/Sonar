@@ -19,7 +19,11 @@ async function generatePreviewBlob(audioFile: AudioFile): Promise<Blob> {
   // TODO: Implement actual preview generation using Web Audio API
   // For now, just return a small portion of the original file
   const chunkSize = Math.min(audioFile.file.size, 1024 * 1024); // 1MB max
-  return audioFile.file.slice(0, chunkSize);
+  const snippet = audioFile.file.slice(0, chunkSize);
+  const resolvedType = audioFile.mimeType || audioFile.file.type || 'application/octet-stream';
+  return new Blob([snippet], {
+    type: resolvedType,
+  });
 }
 
 interface EncryptionStepProps {
@@ -146,6 +150,14 @@ export function EncryptionStep({
         const previewBlob = await generatePreviewBlob(file);
         addLog(`[File ${index + 1}/${totalFiles}] Preview generated (${(previewBlob.size / 1024).toFixed(2)} KB)`);
 
+        const resolvedMimeType = file.mimeType || file.file.type || '';
+        const previewMimeType = previewBlob.type || resolvedMimeType || undefined;
+        const metadataWithMime = {
+          ...encryptionResult.metadata,
+          originalMimeType: resolvedMimeType,
+          originalFileName: file.file.name,
+        };
+
         // Step 3: Upload to Walrus using parallel upload hook
         setStage('uploading-walrus');
         addLog(`[File ${index + 1}/${totalFiles}] Uploading to Walrus via ${strategy}...`);
@@ -154,8 +166,12 @@ export function EncryptionStep({
         const walrusResult = await uploadBlob(
           encryptedBlob,
           encryptionResult.identity,
-          encryptionResult.metadata,
-          previewBlob
+          metadataWithMime,
+          {
+            previewBlob,
+            previewMimeType,
+            mimeType: resolvedMimeType,
+          }
         );
 
         addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
@@ -170,8 +186,10 @@ export function EncryptionStep({
           previewBlobId: walrusResult.previewBlobId,
           seal_policy_id: encryptionResult.identity,
           duration: file.duration,
-          metadata: encryptionResult.metadata,
+          metadata: metadataWithMime,
           encryptedData: encryptionResult.encryptedData,
+          mimeType: resolvedMimeType,
+          previewMimeType,
         };
       });
 
@@ -205,6 +223,8 @@ export function EncryptionStep({
         previewBlobId: result.previewBlobId,
         files: isMultiFile ? results : undefined,
         bundleDiscountBps: isMultiFile ? bundleDiscountBps : undefined,
+        mimeType: result.mimeType,
+        previewMimeType: result.previewMimeType,
       };
 
       setStage('completed');

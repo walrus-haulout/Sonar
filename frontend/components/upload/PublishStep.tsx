@@ -181,6 +181,8 @@ export function PublishStep({
                     blob_id: file.blobId,
                     preview_blob_id: file.previewBlobId,
                     duration_seconds: Math.floor(file.duration),
+              mime_type: file.mimeType || walrusUpload.mimeType || 'audio/mpeg',
+              preview_mime_type: file.previewMimeType || walrusUpload.previewMimeType || null,
                   }))
                 : [{
                     file_index: 0,
@@ -189,6 +191,8 @@ export function PublishStep({
                     blob_id: walrusUpload.blobId,
                     preview_blob_id: walrusUpload.previewBlobId,
                     duration_seconds: 3600, // Placeholder for single-file backwards compat
+              mime_type: walrusUpload.mimeType || 'audio/mpeg',
+              preview_mime_type: walrusUpload.previewMimeType || null,
                   }];
 
               // Include verification metadata

@@ -116,8 +116,9 @@ See `backend/.env.example` for all available options:
 - Quality score, duration, languages, formats
 
 ### DatasetBlob
-- Maps dataset_id → blob_ids
-- References for Walrus storage
+- Maps dataset_id → blob metadata
+- Persists Walrus `full_blob_id` + `preview_blob_id`
+- Stores original `mime_type` and `preview_mime_type` for accurate streaming headers
 - **NEVER stores blob_ids on-chain for privacy**
 
 ### Purchase

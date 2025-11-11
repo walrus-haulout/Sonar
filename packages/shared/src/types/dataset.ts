@@ -42,7 +42,10 @@ export interface DatasetBlobMapping {
   dataset_id: string;
   preview_blob_id: string;
   full_blob_id: string;
+  mime_type: string;
+  preview_mime_type?: string | null;
   created_at: Date;
+  updated_at: Date;
 }
 
 /**

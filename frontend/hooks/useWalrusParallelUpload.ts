@@ -10,8 +10,9 @@
  * for detailed architecture notes.
  */
 
-import { useState, useCallback } from 'react';
 import type { EncryptionMetadata } from '@sonar/seal';
+import { useState, useCallback } from 'react';
+import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
 
 export interface WalrusUploadProgress {
@@ -28,6 +29,8 @@ export interface WalrusUploadResult {
   previewBlobId?: string;
   seal_policy_id: string;
   strategy: 'blockberry' | 'sponsored-parallel';
+  mimeType?: string;
+  previewMimeType?: string;
   prototypeMetadata?: {
     walletCount: number;
     chunkCount: number;
@@ -36,6 +39,46 @@ export interface WalrusUploadResult {
 }
 
 type WalrusUploadMetadata = EncryptionMetadata | Record<string, unknown> | undefined;
+
+interface UploadBlobOptions {
+  fileName?: string;
+  mimeType?: string;
+  previewBlob?: Blob;
+  previewFileName?: string;
+  previewMimeType?: string;
+}
+
+function ensureBlobMimeType(blob?: Blob, mime?: string): Blob | undefined {
+  if (!blob) {
+    return undefined;
+  }
+
+  const targetMime = normalizeAudioMimeType(mime) ?? normalizeAudioMimeType(blob.type);
+
+  if (!targetMime) {
+    return blob.type ? blob : new Blob([blob], { type: 'application/octet-stream' });
+  }
+
+  if (normalizeAudioMimeType(blob.type) === targetMime) {
+    return blob;
+  }
+
+  return new Blob([blob], { type: targetMime });
+}
+
+function inferFileName(base: string, mime?: string): string {
+  const normalizedMime = normalizeAudioMimeType(mime);
+  if (!normalizedMime) {
+    return base;
+  }
+
+  if (base.includes('.')) {
+    return base;
+  }
+
+  const extension = getExtensionForMime(normalizedMime);
+  return extension ? `${base}.${extension}` : base;
+}
 
 export function useWalrusParallelUpload() {
   const orchestrator = useSubWalletOrchestrator();
@@ -56,11 +99,11 @@ export function useWalrusParallelUpload() {
     encryptedBlob: Blob,
     seal_policy_id: string,
     metadata: WalrusUploadMetadata,
-    previewBlob?: Blob
-  ): Promise<{ blobId: string; previewBlobId?: string }> => {
+    options: UploadBlobOptions = {}
+  ): Promise<{ blobId: string; previewBlobId?: string; mimeType?: string; previewMimeType?: string }> => {
     // Call existing Blockberry upload endpoint
     const formData = new FormData();
-    formData.append('file', encryptedBlob);
+    formData.append('file', encryptedBlob, options.fileName ?? 'encrypted-audio.bin');
     formData.append('seal_policy_id', seal_policy_id);
     if (metadata) {
       formData.append('metadata', JSON.stringify(metadata));
@@ -79,10 +122,14 @@ export function useWalrusParallelUpload() {
 
     // Upload preview blob if provided and not already handled by API
     let finalPreviewBlobId = result.previewBlobId as string | undefined;
-    if (previewBlob) {
+    let effectivePreviewMimeType = normalizeAudioMimeType(options.previewMimeType) ?? normalizeAudioMimeType(options.previewBlob?.type);
+    if (options.previewBlob) {
       try {
         const previewFormData = new FormData();
-        previewFormData.append('file', previewBlob, 'preview.mp3');
+        const previewBlob = ensureBlobMimeType(options.previewBlob, options.previewMimeType) ?? options.previewBlob;
+        effectivePreviewMimeType = normalizeAudioMimeType(previewBlob.type) ?? effectivePreviewMimeType;
+        const previewFileName = inferFileName(options.previewFileName ?? 'preview', effectivePreviewMimeType);
+        previewFormData.append('file', previewBlob, previewFileName);
 
         const previewResponse = await fetch('/api/edge/walrus/preview', {
           method: 'POST',
@@ -103,6 +150,8 @@ export function useWalrusParallelUpload() {
     return {
       blobId: result.blobId,
       previewBlobId: finalPreviewBlobId,
+      mimeType: normalizeAudioMimeType(options.mimeType) ?? undefined,
+      previewMimeType: effectivePreviewMimeType,
     };
   }, []);
 
@@ -114,7 +163,7 @@ export function useWalrusParallelUpload() {
     encryptedBlob: Blob,
     seal_policy_id: string,
     metadata: WalrusUploadMetadata,
-    previewBlob?: Blob
+    options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
     const minWallets = 1;
 
@@ -159,13 +208,15 @@ export function useWalrusParallelUpload() {
         encryptedBlob,
         seal_policy_id,
         metadata,
-        previewBlob
+        options
       );
 
       return {
         ...blockberryResult,
         seal_policy_id,
         strategy: 'sponsored-parallel',
+        mimeType: blockberryResult.mimeType,
+        previewMimeType: blockberryResult.previewMimeType,
         prototypeMetadata: {
           walletCount,
           chunkCount: chunkPlan.length,
@@ -184,7 +235,7 @@ export function useWalrusParallelUpload() {
     encryptedBlob: Blob,
     seal_policy_id: string,
     metadata: WalrusUploadMetadata,
-    previewBlob?: Blob
+    options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
     const rawStrategy = getUploadStrategy(encryptedBlob.size);
 
@@ -212,20 +263,22 @@ export function useWalrusParallelUpload() {
         encryptedBlob,
         seal_policy_id,
         metadata,
-        previewBlob
+        options
       );
 
       result = {
         ...blockberryResult,
         seal_policy_id,
         strategy: 'blockberry',
+        mimeType: blockberryResult.mimeType ?? normalizeAudioMimeType(options.mimeType) ?? undefined,
+        previewMimeType: blockberryResult.previewMimeType ?? normalizeAudioMimeType(options.previewMimeType),
       };
     } else {
       result = await uploadViaSponsoredPrototype(
         encryptedBlob,
         seal_policy_id,
         metadata,
-        previewBlob
+        options
       );
     }
 
@@ -255,6 +308,10 @@ export function useWalrusParallelUpload() {
       seal_policy_id: string;
       metadata: WalrusUploadMetadata;
       previewBlob?: Blob;
+      mimeType?: string;
+      previewMimeType?: string;
+      fileName?: string;
+      previewFileName?: string;
     }>
   ): Promise<WalrusUploadResult[]> => {
     setProgress({
@@ -282,7 +339,13 @@ export function useWalrusParallelUpload() {
         file.encryptedBlob,
         file.seal_policy_id,
         file.metadata,
-        file.previewBlob
+        {
+          previewBlob: file.previewBlob,
+          previewMimeType: file.previewMimeType ?? normalizeAudioMimeType(file.previewBlob?.type),
+          mimeType: file.mimeType,
+          fileName: file.fileName,
+          previewFileName: file.previewFileName,
+        }
       );
 
       results.push(result);

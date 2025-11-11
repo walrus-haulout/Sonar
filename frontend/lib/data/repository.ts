@@ -68,6 +68,8 @@ export function parseDataset(raw: any): Dataset {
     walrus_blob_id: raw.walrus_blob_id,
     blob_id: raw.blob_id,
     seal_policy_id: raw.seal_policy_id,
+    mime_type: raw.mime_type || raw.original_mime_type || 'audio/mpeg',
+    preview_mime_type: raw.preview_mime_type ?? raw.mime_type ?? null,
   };
 }
 

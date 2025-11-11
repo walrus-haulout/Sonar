@@ -6,6 +6,7 @@ import { SonarButton } from '@/components/ui/SonarButton';
 import type { Dataset } from '@/types/blockchain';
 import { useWaveform } from '@/hooks/useWaveform';
 import { getStreamUrl, getPreviewUrl } from '@/lib/api/client';
+import { ensureMimeType } from '@/lib/audio/mime';
 import { useSealDecryption, type DecryptionProgress } from '@/hooks/useSeal';
 import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
 
@@ -161,7 +162,8 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
 
       // Step 4: Create Blob URL for playback
       // Convert Uint8Array to Blob for playback
-      const audioBlob = new Blob([decryptedData as unknown as BlobPart], { type: 'audio/mpeg' });
+      const audioMimeType = ensureMimeType(dataset.mime_type);
+      const audioBlob = new Blob([decryptedData as unknown as BlobPart], { type: audioMimeType });
       const blobUrl = URL.createObjectURL(audioBlob);
       waveform.destroy();
       setDecryptedAudioUrl(blobUrl);

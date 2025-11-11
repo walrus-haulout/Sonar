@@ -71,12 +71,15 @@ The SEAL SDK in the browser initializes with your key server configuration:
 ```typescript
 const sealClient = new SealClient({
   keyServers: [
-    "0x4af91bd94b19e1fabd12586b5392571f7b76e9b6076ef0813b0a1352fa3d2d10",
-    "0x6f0c33c9fa69d466a32ba1291174604bf4c7a58d7efc986341fe3c169c30338c",
-    "0xd2d3ba4ffbc1373fb6a087ce41a164a5cc7d19b590d3aaad6a027fe863cb6097"
+    process.env.NEXT_PUBLIC_SEAL_KEY_SERVER_1!,
+    process.env.NEXT_PUBLIC_SEAL_KEY_SERVER_2!,
+    process.env.NEXT_PUBLIC_SEAL_KEY_SERVER_3!
   ],
-  threshold: 2  // Need 2 out of 3 servers to decrypt
+  threshold: 2 // Need 2 out of 3 servers to decrypt
 });
+
+// Configure the NEXT_PUBLIC_SEAL_KEY_SERVER_* variables via .env.local or your
+// hosting provider's secret manager. Avoid hard-coding service identifiers.
 ```
 
 ### Step 3: Fetch Public Keys from Key Servers
@@ -84,16 +87,16 @@ const sealClient = new SealClient({
 The browser makes **parallel requests** to all 3 Railway key servers:
 
 ```
-Browser → GET https://seal-1.projectsonar.xyz/v1/service?service_id=0x4af...
-Browser → GET https://seal-2.projectsonar.xyz/v1/service?service_id=0x6f0...
-Browser → GET https://seal-3.projectsonar.xyz/v1/service?service_id=0xd2d...
+Browser → GET https://<key-server-1-domain>/v1/service?service_id=<KEY_SERVER_OBJECT_ID_1>
+Browser → GET https://<key-server-2-domain>/v1/service?service_id=<KEY_SERVER_OBJECT_ID_2>
+Browser → GET https://<key-server-3-domain>/v1/service?service_id=<KEY_SERVER_OBJECT_ID_3>
 ```
 
 **Each key server responds with:**
 
 ```json
 {
-  "public_key": "0x8298...",  // Different for each server
+  "public_key": "<DERIVED_PUBLIC_KEY>",  // Populate from environment, unique per server
   "threshold": 2,
   "version": 1
 }
@@ -155,7 +158,7 @@ Share 3 + Server 3 Public Key → Capsule 3
     capsule2,  // Only Server 2 can decrypt this
     capsule3   // Only Server 3 can decrypt this
   ],
-  policyId: "0xabc123..."  // On-chain access control policy
+  policyId: "<POLICY_ID_PLACEHOLDER>"  // On-chain access control policy
 }
 ```
 
@@ -212,13 +215,12 @@ Each of your 3 Railway deployments runs an identical Docker container with diffe
 │  ┌───────────────────────────────────────────────────┐  │
 │  │ Environment Variables:                            │  │
 │  │                                                   │  │
-│  │ MASTER_KEY=0x8298...                             │  │
+│  │ MASTER_KEY=<MASTER_KEY_HEX>                      │  │
 │  │   └─> Root secret (64 hex chars)                │  │
-│  │   └─> Used to derive private key                │  │
+│  │   └─> Stored in environment/secret manager      │  │
 │  │                                                   │  │
-│  │ KEY_SERVER_OBJECT_ID=0x4af9...                   │  │
+│  │ KEY_SERVER_OBJECT_ID=<KEY_SERVER_OBJECT_ID_1>    │  │
 │  │   └─> On-chain registration                     │  │
-│  │   └─> Links this server to its public key       │  │
 │  │                                                   │  │
 │  │ Derived Keys:                                     │  │
 │  │ Private Key = derive(MASTER_KEY, index=0)       │  │
@@ -230,8 +232,8 @@ Each of your 3 Railway deployments runs an identical Docker container with diffe
 │  Railway Service 2                                      │
 │  URL: https://seal-2.projectsonar.xyz                   │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │ MASTER_KEY=0xa393...      ← Different!           │  │
-│  │ KEY_SERVER_OBJECT_ID=0x6f0c... ← Different!      │  │
+│  │ MASTER_KEY=<MASTER_KEY_HEX_2>      ← Different!  │  │
+│  │ KEY_SERVER_OBJECT_ID=<KEY_SERVER_OBJECT_ID_2> ← Different!      │  │
 │  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 
@@ -239,8 +241,8 @@ Each of your 3 Railway deployments runs an identical Docker container with diffe
 │  Railway Service 3                                      │
 │  URL: https://seal-3.projectsonar.xyz                   │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │ MASTER_KEY=0x980f...      ← Different!           │  │
-│  │ KEY_SERVER_OBJECT_ID=0xd2d3... ← Different!      │  │
+│  │ MASTER_KEY=<MASTER_KEY_HEX_3>      ← Different!  │  │
+│  │ KEY_SERVER_OBJECT_ID=<KEY_SERVER_OBJECT_ID_3> ← Different!      │  │
 │  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -309,7 +311,7 @@ The SEAL SDK contacts the key servers (needs 2 out of 3):
 Browser → POST https://seal-1.projectsonar.xyz/v1/decrypt
        ├─ Request Body:
        │  ├─ capsule: capsule1
-       │  ├─ policy_id: "0xabc..."
+       │  ├─ policy_id: "<POLICY_ID_PLACEHOLDER>"
        │  └─ signature: signed_by_user_wallet
        └─ Response: key_share_1
 
@@ -480,7 +482,7 @@ Let's walk through a concrete example:
 ### Upload
 
 1. Alice selects `song.mp3` (3.5 MB)
-2. Browser generates random key: `K = 0xabc...def`
+2. Browser generates random key: `K = <RANDOM_AES_KEY>`
 3. Browser encrypts: `E = AES-256-GCM(song.mp3, K)`
 4. Browser splits key: `K → [K1, K2, K3]` (Shamir 2-of-3)
 5. Browser fetches public keys from 3 servers

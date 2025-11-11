@@ -145,7 +145,15 @@ function UploadComponent() {
     const result = await uploadBlob(
       encryptedBlob,
       seal_policy_id,
-      metadata
+      {
+        ...metadata,
+        originalMimeType: audioFile.type,
+      },
+      {
+        mimeType: audioFile.type,
+        previewBlob,
+        previewMimeType: previewBlob?.type,
+      }
     );
 
     console.log('Blob uploaded:', result.blobId);

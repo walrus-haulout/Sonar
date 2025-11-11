@@ -8,6 +8,7 @@ import { SonarButton } from '@/components/ui/SonarButton';
 import { DownloadProgress } from '@/components/ui/DownloadProgress';
 import { formatNumber } from '@/lib/utils';
 import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
+import { ensureMimeType, getExtensionForMime } from '@/lib/audio/mime';
 
 interface DownloadButtonProps {
   dataset: Dataset;
@@ -32,6 +33,8 @@ export function DownloadButton({
 
   const account = useCurrentAccount();
   const { verifyOwnership, isConnected } = usePurchaseVerification();
+  const audioMimeType = ensureMimeType(dataset.mime_type);
+  const fileExtension = getExtensionForMime(audioMimeType) ?? 'audio';
 
   // Estimate file size based on duration and bitrate (assume 128kbps for mp3)
   const estimatedFileSize = Math.ceil((dataset.duration_seconds * 128 * 1024) / 8);
@@ -100,13 +103,13 @@ export function DownloadButton({
       }
 
       // Create blob from chunks
-      const blob = new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
+      const blob = new Blob(chunks as BlobPart[], { type: audioMimeType });
 
       // Step 4: Trigger browser download
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.mp3`;
+      link.download = `${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.${fileExtension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -123,7 +126,7 @@ export function DownloadButton({
       setProgress(0);
       setDownloadedBytes(0);
     }
-  }, [dataset, isConnected, onDownloadStart, onDownloadComplete, estimatedFileSize, verifyOwnership]);
+  }, [dataset, isConnected, onDownloadStart, onDownloadComplete, estimatedFileSize, verifyOwnership, audioMimeType, fileExtension]);
 
   if (isDownloading) {
     return (
@@ -132,7 +135,7 @@ export function DownloadButton({
           progress={progress}
           totalBytes={totalBytes || estimatedFileSize}
           bytesDownloaded={downloadedBytes}
-          filename={`${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.mp3`}
+          filename={`${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.${fileExtension}`}
         />
       </div>
     );

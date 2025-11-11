@@ -11,7 +11,7 @@ SONAR now supports browser-side decryption of purchased audio datasets using Mys
 ```
 1. User purchases dataset on Sui blockchain
 2. Encrypted audio stored on Walrus (distributed storage)
-3. Dataset metadata stored in PostgreSQL (includes blob_id, seal_policy_id, backup_key)
+3. Dataset metadata stored in PostgreSQL (includes blob IDs, seal policy IDs, derived `mime_type` details)
 4. User requests playback → Backend verifies purchase → Returns AccessGrant
 5. Frontend fetches encrypted blob from Walrus
 6. Frontend requests key shares from Seal key servers (2-of-3 threshold)
@@ -34,7 +34,7 @@ SONAR now supports browser-side decryption of purchased audio datasets using Mys
 
 **`storeSealMetadata`** (lines 252-324)
 - Called during upload to store encryption metadata
-- Links Seal policy ID, blob ID, and backup key to dataset
+- Links Seal policy ID, blob IDs, per-file MIME types, and backup keys to dataset
 - Supports multi-file datasets via `file_index`
 
 #### Frontend Hooks
@@ -76,7 +76,7 @@ interface DecryptionProgress {
 2. Check authentication and Seal session
 3. Request `AccessGrant` from backend (verifies purchase)
 4. Call `useSealDecryption.decryptAudio()` with blob ID and policy ID
-5. Create Blob URL from decrypted `Uint8Array`
+5. Create Blob URL from decrypted `Uint8Array` using stored `mime_type`
 6. Pass Blob URL to `useWaveform` hook for playback
 7. Display progress UI with stage-specific messages
 8. Show "Download Decrypted Audio" button
@@ -84,7 +84,7 @@ interface DecryptionProgress {
 **Download Flow (lines 86-106):**
 1. User clicks "Download Decrypted Audio" button (visible after successful decryption)
 2. Create download link using existing Blob URL
-3. Trigger browser download with filename: `{datasetId}-{title}.mp3`
+3. Trigger browser download with filename: `{datasetId}-{title}.{extension}`
 4. Log download event for telemetry
 
 **Error Handling:**

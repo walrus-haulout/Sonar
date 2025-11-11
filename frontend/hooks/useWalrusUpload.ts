@@ -148,5 +148,10 @@ export async function generatePreviewBlob(audioFile: AudioFile): Promise<Blob> {
   // TODO: Implement actual preview generation using Web Audio API
   // For now, just return a small portion of the original file
   const chunkSize = Math.min(audioFile.file.size, 1024 * 1024); // 1MB max
-  return audioFile.file.slice(0, chunkSize);
+  const snippet = audioFile.file.slice(0, chunkSize);
+  const resolvedType = audioFile.mimeType || audioFile.file.type || 'application/octet-stream';
+
+  return new Blob([snippet], {
+    type: resolvedType,
+  });
 }

@@ -35,6 +35,8 @@ export interface Dataset {
   walrus_blob_id?: string;
   blob_id?: string; // Legacy backend field
   seal_policy_id?: string;
+  mime_type?: string;
+  preview_mime_type?: string | null;
 }
 
 // Server-side only type (includes blob IDs for backend API routes)

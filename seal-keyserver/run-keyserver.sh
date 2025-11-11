@@ -35,12 +35,16 @@ fi
 
 echo -e "${BLUE}🔑 Retrieving master key from macOS Keychain...${NC}"
 
+KEYCHAIN_ACCOUNT=${KEYCHAIN_ACCOUNT:-"$USER"}
+KEYCHAIN_SERVICE=${KEYCHAIN_SERVICE:-"sonar-seal-master-key"}
+
 # Retrieve master key from Keychain
-MASTER_KEY=$(security find-generic-password -a "angel" -s "sonar-seal-master-key" -w 2>/dev/null)
+MASTER_KEY=$(security find-generic-password -a "$KEYCHAIN_ACCOUNT" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null)
 
 if [ -z "$MASTER_KEY" ]; then
     echo -e "${RED}❌ Error: Master key not found in Keychain${NC}"
     echo -e "${YELLOW}   Run setup.sh to generate and store a master key${NC}"
+    echo -e "${YELLOW}   (account: ${KEYCHAIN_ACCOUNT}, service: ${KEYCHAIN_SERVICE})${NC}"
     exit 1
 fi
 

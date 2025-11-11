@@ -87,6 +87,7 @@ export async function streamBlobFromWalrus(
   blobId: string,
   options?: {
     range?: { start: number; end?: number };
+    mimeType?: string | null;
   }
 ): Promise<Response> {
   if (MOCK_WALRUS) {
@@ -95,7 +96,7 @@ export async function streamBlobFromWalrus(
     return new Response(mockData, {
       status: options?.range ? 206 : 200,
       headers: {
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': options?.mimeType ?? 'audio/mpeg',
         'Content-Length': mockData.length.toString(),
         'Accept-Ranges': 'bytes',
       },
@@ -108,7 +109,7 @@ export async function streamBlobFromWalrus(
 
   const requestUrl = `${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`;
   const headers: HeadersInit = {
-    Accept: 'audio/mpeg',
+    Accept: options?.mimeType ?? 'application/octet-stream',
   };
 
   if (options?.range) {

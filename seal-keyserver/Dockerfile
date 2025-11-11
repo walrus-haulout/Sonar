@@ -51,6 +51,14 @@ COPY scripts/verify-config.sh /app/scripts/verify-config.sh
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh /app/scripts/verify-config.sh
 
+# Create non-root user for runtime
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 keyserver && \
+    chown -R keyserver:root /app /opt/key-server
+
+USER keyserver
+ENV HOME=/home/keyserver
+WORKDIR /app
+
 # Expose ports
 EXPOSE 2024 9184
 

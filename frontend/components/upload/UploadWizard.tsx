@@ -271,6 +271,8 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
                       // backupKey: result.backupKey, // TODO: Add to WalrusUploadResult type when backup key encryption is implemented
                       files: result.files, // Multi-file results
                       bundleDiscountBps: result.bundleDiscountBps,
+                      mimeType: result.mimeType,
+                      previewMimeType: result.previewMimeType,
                     };
 
                     // Store both encryption metadata and walrus upload info

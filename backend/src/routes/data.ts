@@ -98,12 +98,14 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
                 properties: {
                   file_index: { type: 'number' },
                   seal_policy_id: { type: 'string' },
-                  backup_key: { type: 'string' },
                   blob_id: { type: 'string' },
                   preview_blob_id: { type: 'string' },
                   duration_seconds: { type: 'number' },
+                  mime_type: { type: 'string' },
+                  preview_mime_type: { type: ['string', 'null'] },
+                  backup_key: { type: 'string' },
                 },
-                required: ['file_index', 'seal_policy_id', 'backup_key', 'blob_id', 'duration_seconds'],
+                required: ['file_index', 'seal_policy_id', 'blob_id', 'duration_seconds', 'mime_type'],
               },
             },
           },
@@ -125,16 +127,6 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
             error: 'INVALID_REQUEST',
             message: 'files array is required and cannot be empty',
           });
-        }
-
-        // Validate each file's backup_key
-        for (const file of files) {
-          if (!file.backup_key || file.backup_key.length === 0) {
-            return reply.code(400).send({
-              error: 'INVALID_REQUEST',
-              message: `backup_key is required for file at index ${file.file_index}`,
-            });
-          }
         }
 
         await storeSealMetadata({
@@ -178,7 +170,7 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
     async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
       try {
         const datasetId = assertDatasetId(request.params.id);
-        const walrusResponse = await getDatasetPreviewStream({
+        const { response: walrusResponse, mimeType } = await getDatasetPreviewStream({
           datasetId,
           logger: request.log,
         });
@@ -189,7 +181,12 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
           }
         }
 
-        reply.header('Content-Type', 'audio/mpeg');
+        const contentType =
+          mimeType ||
+          walrusResponse.headers.get('Content-Type') ||
+          'audio/mpeg';
+
+        reply.header('Content-Type', contentType);
         reply.header('Cache-Control', 'public, max-age=86400');
 
         if (!walrusResponse.body) {
@@ -199,7 +196,7 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
         request.log.info({ datasetId }, 'Preview stream started');
         return reply
           .status(walrusResponse.status)
-          .type('audio/mpeg')
+          .type(contentType)
           .send(walrusResponse.body);
       } catch (error) {
         if (!isHttpError(error)) {
@@ -239,7 +236,7 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
           : request.headers.range;
         const range = parseRangeHeader(rangeHeader);
 
-        const walrusResponse = await getDatasetAudioStream({
+        const { response: walrusResponse, mimeType } = await getDatasetAudioStream({
           datasetId,
           userAddress,
           range,
@@ -258,7 +255,12 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
           }
         }
 
-        reply.header('Content-Type', 'audio/mpeg');
+        const contentType =
+          mimeType ||
+          walrusResponse.headers.get('Content-Type') ||
+          'audio/mpeg';
+
+        reply.header('Content-Type', contentType);
         reply.header('Accept-Ranges', 'bytes');
 
         if (!walrusResponse.body) {
@@ -266,7 +268,7 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
         }
 
         return reply
-          .type('audio/mpeg')
+          .type(contentType)
           .status(walrusResponse.status)
           .send(walrusResponse.body);
       } catch (error) {

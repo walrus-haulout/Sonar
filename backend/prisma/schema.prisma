@@ -46,6 +46,8 @@ model DatasetBlob {
   file_index       Int      // Order within dataset (0, 1, 2, ...)
   preview_blob_id  String
   full_blob_id     String
+  mime_type        String   @default("audio/mpeg")
+  preview_mime_type String?
   duration_seconds Int
   seal_policy_id   String?
   created_at       DateTime @default(now())

@@ -18,6 +18,37 @@ interface FileUploadStepProps {
   multiFile?: boolean; // Enable multi-file selection (default: true)
 }
 
+const MIME_FALLBACK_MAP: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  mp4: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  flac: 'audio/flac',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+  webm: 'audio/webm',
+  '3gp': 'audio/3gpp',
+  '3gpp': 'audio/3gpp',
+  amr: 'audio/amr',
+};
+
+function resolveMimeType(file: File): string {
+  if (file.type) {
+    return file.type.split(';')[0].toLowerCase();
+  }
+
+  const extensionMatch = /\.([a-z0-9]+)$/i.exec(file.name);
+  if (extensionMatch) {
+    const ext = extensionMatch[1].toLowerCase();
+    if (MIME_FALLBACK_MAP[ext]) {
+      return MIME_FALLBACK_MAP[ext];
+    }
+  }
+
+  return 'application/octet-stream';
+}
+
 const SUPPORTED_FORMATS = [
   'audio/mpeg',
   'audio/mp3',
@@ -25,7 +56,31 @@ const SUPPORTED_FORMATS = [
   'audio/x-wav',
   'audio/flac',
   'audio/ogg',
+  'audio/x-ogg',
+  'audio/opus',
   'audio/m4a',
+  'audio/x-m4a',
+  'audio/mp4',
+  'audio/aac',
+  'audio/webm',
+  'audio/3gpp',
+  'audio/3gp',
+  'audio/amr',
+];
+
+const ACCEPT_PATTERNS = [
+  ...SUPPORTED_FORMATS,
+  '.mp3',
+  '.m4a',
+  '.aac',
+  '.wav',
+  '.flac',
+  '.ogg',
+  '.opus',
+  '.webm',
+  '.3gp',
+  '.3gpp',
+  '.amr',
 ];
 
 const MAX_FILE_SIZE = 13 * 1024 * 1024 * 1024; // 13 GiB (Walrus maximum)
@@ -52,8 +107,26 @@ export function FileUploadStep({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = useCallback((file: File): string | null => {
-    if (!SUPPORTED_FORMATS.includes(file.type)) {
-      return `Unsupported file format. Supported formats: MP3, WAV, FLAC, OGG, M4A`;
+    const mimeType = resolveMimeType(file);
+    const hasKnownMime = mimeType && mimeType !== 'application/octet-stream';
+
+    const isSupported =
+      (hasKnownMime && SUPPORTED_FORMATS.includes(mimeType)) ||
+      (!hasKnownMime && /\.(mp3|m4a|aac|wav|flac|ogg|webm|opus|3gp|3gpp|amr)$/i.test(file.name));
+
+    if (!isSupported) {
+      const supportedList = [
+        'MP3',
+        'M4A/AAC',
+        'MP4 audio',
+        'WAV',
+        'FLAC',
+        'OGG/Opus',
+        'WebM',
+        '3GPP/3GP',
+        'AMR',
+      ].join(', ');
+      return `Unsupported audio format. Supported formats: ${supportedList}`;
     }
 
     if (file.size > MAX_FILE_SIZE) {
@@ -121,6 +194,8 @@ export function FileUploadStep({
         }
 
         try {
+          const resolvedMimeType = resolveMimeType(file);
+
           // Get audio duration
           const duration = await getAudioDuration(file);
 
@@ -132,6 +207,7 @@ export function FileUploadStep({
             file,
             duration,
             preview,
+            mimeType: resolvedMimeType !== 'application/octet-stream' ? resolvedMimeType : '',
           };
 
           processedFiles.push(audioFile);
@@ -272,7 +348,7 @@ export function FileUploadStep({
           <input
             ref={fileInputRef}
             type="file"
-            accept={SUPPORTED_FORMATS.join(',')}
+            accept={ACCEPT_PATTERNS.join(',')}
             onChange={handleFileSelect}
             multiple={multiFile}
             className="hidden"

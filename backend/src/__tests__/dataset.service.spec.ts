@@ -18,13 +18,13 @@ const walrusCalls: Array<[string, { range?: { start: number; end?: number } } | 
 
 async function streamBlobFromWalrusStub(
   blobId: string,
-  options?: { range?: { start: number; end?: number } }
+  options?: { range?: { start: number; end?: number }; mimeType?: string | null }
 ) {
   walrusCalls.push([blobId, options]);
   return new Response(new Uint8Array([1, 2, 3]), {
     status: 200,
     headers: {
-      'Content-Type': 'audio/mpeg',
+      'Content-Type': options?.mimeType ?? 'audio/mpeg',
       'Content-Length': '3',
     },
   });
@@ -53,6 +53,8 @@ type DatasetBlobRecord = {
   dataset_id: string;
   preview_blob_id: string;
   full_blob_id: string;
+  mime_type: string;
+  preview_mime_type: string | null;
 };
 
 type PurchaseRecord = {
@@ -180,6 +182,8 @@ function seedBlob(datasetId: string) {
       dataset_id: datasetId,
       preview_blob_id: 'preview-blob',
       full_blob_id: 'full-blob',
+      mime_type: 'audio/mpeg',
+      preview_mime_type: 'audio/mpeg',
     },
   });
 }
@@ -251,7 +255,7 @@ describe('dataset service', () => {
     await seedBlob('dataset-3');
     await seedPurchase('dataset-3', '0xuser', 'purchase-3');
 
-    const response = await getDatasetAudioStream({
+    const { response, mimeType } = await getDatasetAudioStream({
       datasetId: 'dataset-3',
       userAddress: '0xuser',
       range: { start: 0, end: 100 },
@@ -265,21 +269,24 @@ describe('dataset service', () => {
     });
 
     expect(response.status).toBe(200);
+    expect(mimeType).toBe('audio/mpeg');
     expect(walrusCalls[0]?.[0]).toBe('full-blob');
-    expect(walrusCalls[0]?.[1]).toEqual({ range: { start: 0, end: 100 } });
+    expect(walrusCalls[0]?.[1]).toEqual({ range: { start: 0, end: 100 }, mimeType: 'audio/mpeg' });
   });
 
   test('streams preview audio', async () => {
     await seedDataset('dataset-4');
     await seedBlob('dataset-4');
 
-    const response = await getDatasetPreviewStream({
+    const { response, mimeType } = await getDatasetPreviewStream({
       datasetId: 'dataset-4',
       logger: console as any,
       prismaClient: prisma as any,
     });
 
     expect(response.status).toBe(200);
+    expect(mimeType).toBe('audio/mpeg');
     expect(walrusCalls[0]?.[0]).toBe('preview-blob');
+    expect(walrusCalls[0]?.[1]).toEqual({ mimeType: 'audio/mpeg' });
   });
 });

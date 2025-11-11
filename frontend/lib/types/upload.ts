@@ -17,6 +17,7 @@ export interface AudioFile {
   waveform?: number[];
   preview?: string;
   id?: string; // Unique ID for tracking individual files in multi-file uploads
+  mimeType: string;
 }
 
 export interface DatasetMetadata {
@@ -31,6 +32,8 @@ export interface EncryptionResult {
   encryptedBlob: Blob;
   seal_policy_id: string; // Seal identity (hex string) for decryption
   previewBlob?: Blob;
+  mimeType?: string;
+  previewMimeType?: string;
   metadata: {
     threshold: number;
     packageId?: string; // Optional for encryption, required for decryption
@@ -51,6 +54,8 @@ export interface FileUploadResult {
   previewBlobId?: string;
   seal_policy_id: string;
   duration: number;
+  mimeType?: string;
+  previewMimeType?: string;
 }
 
 // Legacy single-file upload result (backwards compatible)
@@ -61,6 +66,8 @@ export interface WalrusUploadResult {
   // Multi-file dataset support
   files?: FileUploadResult[]; // For multi-file datasets
   bundleDiscountBps?: number; // Basis points (e.g., 2000 = 20%)
+  mimeType?: string;
+  previewMimeType?: string;
 }
 
 export interface VerificationStage {

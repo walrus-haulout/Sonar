@@ -8,6 +8,7 @@ import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
 import { usePurchase } from '@/hooks/usePurchase';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { formatNumber } from '@/lib/utils';
+import { ensureMimeType, getExtensionForMime } from '@/lib/audio/mime';
 
 interface DownloadDecryptedButtonProps {
   dataset: Dataset;
@@ -45,6 +46,8 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
   // Estimate file size based on duration and bitrate (assume 128kbps for mp3)
   const estimatedFileSize = Math.ceil((dataset.duration_seconds * 128 * 1024) / 8);
   const estimatedFileSizeMB = (estimatedFileSize / (1024 * 1024)).toFixed(1);
+  const audioMimeType = ensureMimeType(dataset.mime_type);
+  const downloadExtension = getExtensionForMime(audioMimeType) ?? 'audio';
 
   /**
    * Main download flow: decrypt and download
@@ -141,12 +144,12 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
         message: 'Preparing download...',
       });
 
-      const audioBlob = new Blob([decryptedData as unknown as BlobPart], { type: 'audio/mpeg' });
+      const audioBlob = new Blob([decryptedData as unknown as BlobPart], { type: audioMimeType });
       const blobUrl = URL.createObjectURL(audioBlob);
 
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.mp3`;
+      link.download = `${dataset.id}-${dataset.title.replace(/\s+/g, '-')}.${downloadExtension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -204,6 +207,8 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
     signPersonalMessage,
     decryptAudio,
     verifyOwnership,
+    audioMimeType,
+    downloadExtension,
   ]);
 
   /**

@@ -3,8 +3,25 @@ import { createGraphQLClient, createGraphQLClients } from './graphql-clients';
 import testnetDeployment from '../../../contracts/deployments/testnet.json';
 import mainnetDeployment from '../../../contracts/deployments/mainnet.json';
 
+const MAINNET_PACKAGE_ID = '0xc05ced8197d798ce8b49d2043c52823696736232ab9a4d2e93e7b5b4e8b1466e';
+const MAINNET_MARKETPLACE_ID = '0xaa422269e77e2197188f9c8e47ffb3faf21c0bafff1d5d04ea9613acc4994bb4';
+
+const determineNetwork = (): 'mainnet' | 'testnet' | 'devnet' => {
+  const envNetwork = process.env.NEXT_PUBLIC_NETWORK;
+  if (envNetwork === 'mainnet' || envNetwork === 'testnet' || envNetwork === 'devnet') {
+    return envNetwork;
+  }
+
+  const pkg = process.env.NEXT_PUBLIC_PACKAGE_ID?.toLowerCase();
+  if (pkg === MAINNET_PACKAGE_ID) {
+    return 'mainnet';
+  }
+
+  return 'testnet';
+};
+
 // Network configuration
-export const NETWORK = (process.env.NEXT_PUBLIC_NETWORK || 'testnet') as 'mainnet' | 'testnet' | 'devnet';
+export const NETWORK = determineNetwork();
 
 // Separate RPC and GraphQL endpoints
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || `https://fullnode.${NETWORK}.sui.io`;

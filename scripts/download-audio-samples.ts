@@ -4,6 +4,24 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
+const SCRIPT_DIR = import.meta.dir;
+const ROOT_DIR = path.resolve(SCRIPT_DIR, '..');
+const CONFIG_PATH = path.join(SCRIPT_DIR, 'audio-config.json');
+const OUTPUT_DIR = path.join(ROOT_DIR, 'frontend/public/audio');
+
+function assertWithinRoot(baseDir: string, targetPath: string): string {
+  const normalized = path.normalize(targetPath);
+  const relative = path.relative(baseDir, normalized);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Unsafe path traversal attempt detected: ${targetPath}`);
+  }
+
+  return normalized;
+}
+
+const SAFE_OUTPUT_DIR = assertWithinRoot(ROOT_DIR, OUTPUT_DIR);
+
 interface AudioConfig {
   id: string;
   title: string;
@@ -14,13 +32,10 @@ interface AudioConfig {
   notes?: string;
 }
 
-const CONFIG_PATH = './scripts/audio-config.json';
-const OUTPUT_DIR = './frontend/public/audio';
-
 async function ensureOutputDir(): Promise<void> {
   try {
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-    console.log(`✓ Output directory ready: ${OUTPUT_DIR}`);
+    await fs.mkdir(SAFE_OUTPUT_DIR, { recursive: true });
+    console.log(`✓ Output directory ready: ${SAFE_OUTPUT_DIR}`);
   } catch (error) {
     throw new Error(`Failed to create output directory: ${error}`);
   }
@@ -28,7 +43,8 @@ async function ensureOutputDir(): Promise<void> {
 
 async function loadConfig(): Promise<AudioConfig[]> {
   try {
-    const configContent = await fs.readFile(CONFIG_PATH, 'utf-8');
+    const safeConfigPath = assertWithinRoot(SCRIPT_DIR, CONFIG_PATH);
+    const configContent = await fs.readFile(safeConfigPath, 'utf-8');
     const config = JSON.parse(configContent);
     return config.datasets;
   } catch (error) {
@@ -78,8 +94,8 @@ async function saveAudioFiles(
   const previewName = `preview-${dataset.id}.mp3`;
   const fullName = `full-${dataset.id}.mp3`;
 
-  const previewPath = path.join(OUTPUT_DIR, previewName);
-  const fullPath = path.join(OUTPUT_DIR, fullName);
+  const previewPath = assertWithinRoot(ROOT_DIR, path.join(SAFE_OUTPUT_DIR, previewName));
+  const fullPath = assertWithinRoot(ROOT_DIR, path.join(SAFE_OUTPUT_DIR, fullName));
 
   await fs.writeFile(previewPath, audio.preview);
   await fs.writeFile(fullPath, audio.full);
@@ -123,7 +139,7 @@ Synthetic audio is generated locally using ffmpeg sine wave synthesis.
 Generated content is not subject to external licensing restrictions.
 `;
 
-  const sourcesPath = path.join(OUTPUT_DIR, 'AUDIO_SOURCES.md');
+  const sourcesPath = assertWithinRoot(ROOT_DIR, path.join(SAFE_OUTPUT_DIR, 'AUDIO_SOURCES.md'));
   await fs.writeFile(sourcesPath, markdown);
   console.log(`\n✓ Generated: AUDIO_SOURCES.md`);
 }
@@ -163,8 +179,8 @@ async function main(): Promise<void> {
 
     console.log('\n✅ Audio download complete!');
     console.log(`\nNext steps:`);
-    console.log(`1. Audio files are in: ${OUTPUT_DIR}`);
-    console.log(`2. Add to .gitignore: ${OUTPUT_DIR}/*.mp3`);
+    console.log(`1. Audio files are in: ${SAFE_OUTPUT_DIR}`);
+    console.log(`2. Add to .gitignore: ${path.join(SAFE_OUTPUT_DIR, '*.mp3')}`);
     console.log(`3. Start developing with: bun run dev:frontend`);
   } catch (error) {
     console.error(`\n❌ Error: ${error}`);

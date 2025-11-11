@@ -247,7 +247,7 @@ export function useSeal() {
     const packageId = CHAIN_CONFIG.packageId;
     if (!packageId) {
       throw new Error('Blockchain contracts not configured (missing packageId)');
-    }
+      }
 
       setError(null);
 

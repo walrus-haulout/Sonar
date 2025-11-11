@@ -148,8 +148,15 @@ Dataset {
 DatasetBlob {
   id: String (PK)
   dataset_id: String (FK)
+  file_index: Int
   preview_blob_id: String
-  blob_id: String
+  full_blob_id: String
+  mime_type: String
+  preview_mime_type: String?
+  duration_seconds: Int
+  seal_policy_id: String?
+  created_at: DateTime
+  updated_at: DateTime
 }
 
 Purchase {

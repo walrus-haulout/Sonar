@@ -24,6 +24,8 @@ interface DatasetFromSeed {
   description: string;
   total_purchases: number;
   preview_blob_id: string;
+  mime_type?: string;
+  preview_mime_type?: string;
 }
 
 interface SeedData {
@@ -79,6 +81,8 @@ async function main(): Promise<void> {
           dataset_id: dataset.id,
           preview_blob_id: dataset.preview_blob_id || `preview-${dataset.id}`,
           full_blob_id: `full-${dataset.id}`,
+          mime_type: dataset.mime_type || 'audio/mpeg',
+          preview_mime_type: dataset.preview_mime_type || 'audio/mpeg',
         },
       });
       blobCount++;

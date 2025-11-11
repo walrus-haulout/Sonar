@@ -9,14 +9,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 // Mock fetch globally
 const mockFetch = mock<(...args: any[]) => Promise<any>>(() =>
   Promise.resolve({
-    ok: true,
-    json: async () => ({
-      blobId: 'test-blob-id',
-      certifiedEpoch: 100,
-      fileSize: 1024,
-      seal_policy_id: 'test-policy-id',
-      strategy: 'blockberry',
-    }),
+  ok: true,
+  json: async () => ({
+    blobId: 'test-blob-id',
+    certifiedEpoch: 100,
+    fileSize: 1024,
+    seal_policy_id: 'test-policy-id',
+    strategy: 'blockberry',
+  }),
   })
 );
 
@@ -100,26 +100,26 @@ describe('useWalrusParallelUpload', () => {
       mockFetch
         .mockImplementationOnce(() =>
           Promise.resolve({
-            ok: true,
-            json: async () => ({
-              blobId: 'test-blob-id',
+        ok: true,
+        json: async () => ({
+          blobId: 'test-blob-id',
               certifiedEpoch: 100,
               fileSize: encryptedBlob.size,
-              seal_policy_id: 'test-policy-id',
-              strategy: 'blockberry',
-            }),
+          seal_policy_id: 'test-policy-id',
+          strategy: 'blockberry',
+        }),
           })
         )
         .mockImplementationOnce(() =>
           Promise.resolve({
-            ok: true,
-            json: async () => ({
-              previewBlobId: 'preview-blob-id',
+        ok: true,
+        json: async () => ({
+          previewBlobId: 'preview-blob-id',
               certifiedEpoch: 100,
               fileSize: previewBlob.size,
               seal_policy_id: 'test-policy-id',
               strategy: 'blockberry',
-            }),
+        }),
           })
         );
 
@@ -149,8 +149,8 @@ describe('useWalrusParallelUpload', () => {
 
       mockFetch.mockImplementationOnce(() =>
         Promise.resolve({
-          ok: false,
-          statusText: 'Internal Server Error',
+        ok: false,
+        statusText: 'Internal Server Error',
           json: async () => ({}),
         })
       );
