@@ -57,9 +57,9 @@ type DeploymentJson = {
 
 const STATIC_FALLBACKS: Record<string, DeploymentJson> = {
   mainnet: {
-    packageId: '0xc05ced8197d798ce8b49d2043c52823696736232ab9a4d2e93e7b5b4e8b1466e',
+    packageId: MAINNET_PACKAGE_ID,
     objects: {
-      marketplace: '0xaa422269e77e2197188f9c8e47ffb3faf21c0bafff1d5d04ea9613acc4994bb4',
+      marketplace: MAINNET_MARKETPLACE_ID,
     },
   },
 };
@@ -94,27 +94,43 @@ const normalizeObjectId = (value: string | null | undefined, label: string): str
   return trimmed;
 };
 
+const pickObjectId = (label: string, candidates: Array<string | null | undefined>): string | undefined => {
+  for (const candidate of candidates) {
+    const normalized = normalizeObjectId(candidate, label);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return undefined;
+};
+
 const deploymentDefaults = deploymentDefaultsByNetwork[NETWORK] ?? {};
 
-const packageIdInternal = normalizeObjectId(
-  process.env.NEXT_PUBLIC_PACKAGE_ID || deploymentDefaults.packageId,
-  'PACKAGE_ID'
-);
+const packageIdInternal = pickObjectId('PACKAGE_ID', [
+  process.env.NEXT_PUBLIC_PACKAGE_ID,
+  deploymentDefaults.packageId,
+  STATIC_FALLBACKS[NETWORK]?.packageId,
+]);
 
-const marketplaceIdInternal = normalizeObjectId(
-  process.env.NEXT_PUBLIC_MARKETPLACE_ID || deploymentDefaults.objects?.marketplace,
-  'MARKETPLACE_ID'
-);
+const marketplaceFallbackForPackage =
+  packageIdInternal === MAINNET_PACKAGE_ID ? MAINNET_MARKETPLACE_ID : STATIC_FALLBACKS[NETWORK]?.objects?.marketplace;
 
-const statsObjectIdInternal = normalizeObjectId(
-  process.env.NEXT_PUBLIC_STATS_OBJECT_ID || deploymentDefaults.objects?.marketplace,
-  'STATS_OBJECT_ID'
-);
+const marketplaceIdInternal = pickObjectId('MARKETPLACE_ID', [
+  process.env.NEXT_PUBLIC_MARKETPLACE_ID,
+  deploymentDefaults.objects?.marketplace,
+  marketplaceFallbackForPackage,
+]);
 
-const rewardPoolIdInternal = normalizeObjectId(
+const statsObjectIdInternal = pickObjectId('STATS_OBJECT_ID', [
+  process.env.NEXT_PUBLIC_STATS_OBJECT_ID,
+  deploymentDefaults.objects?.marketplace,
+  marketplaceFallbackForPackage,
+]);
+
+const rewardPoolIdInternal = pickObjectId('REWARD_POOL_ID', [
   process.env.NEXT_PUBLIC_REWARD_POOL_ID,
-  'REWARD_POOL_ID'
-);
+  deploymentDefaults.objects?.rewardPool,
+]);
 
 const missingConfig: string[] = [];
 
