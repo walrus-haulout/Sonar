@@ -244,6 +244,11 @@ export function useSeal() {
         throw new Error('No active session. Please create a session first.');
       }
 
+    const packageId = CHAIN_CONFIG.packageId;
+    if (!packageId) {
+      throw new Error('Blockchain contracts not configured (missing packageId)');
+    }
+
       setError(null);
 
       try {
@@ -252,7 +257,7 @@ export function useSeal() {
           encryptedData,
           {
             sessionKey,
-            packageId: CHAIN_CONFIG.packageId ?? undefined,
+            packageId,
             identity,
             policyModule: 'purchase_policy', // Default policy
             suiClient: suiClient as SuiClient,
