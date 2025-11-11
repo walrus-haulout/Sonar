@@ -142,6 +142,11 @@ export function useSeal() {
       ttlMin?: number;
       signMessage: (message: Uint8Array) => Promise<{ signature: string }>;
     }) => {
+      const packageId = CHAIN_CONFIG.packageId;
+      if (!packageId) {
+        throw new Error('Blockchain contracts not configured (missing packageId)');
+      }
+
       if (!account?.address) {
         throw new Error('Wallet not connected');
       }
@@ -154,7 +159,7 @@ export function useSeal() {
       setError(null);
 
       try {
-        const session = await createSession(account.address, CHAIN_CONFIG.packageId ?? undefined, {
+        const session = await createSession(account.address, packageId, {
           ttlMin: options.ttlMin || 10,
           suiClient: suiClient as SuiClient,
           mvrName: 'SONAR',
