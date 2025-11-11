@@ -3,9 +3,8 @@
 import { useState, useCallback } from 'react';
 import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
 import type { Dataset } from '@/types/blockchain';
-import { useAuth } from '@/hooks/useAuth';
-import { requestAccessGrant } from '@/lib/api/client';
 import { useSealDecryption, type DecryptionProgress } from '@/hooks/useSeal';
+import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
 import { usePurchase } from '@/hooks/usePurchase';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { formatNumber } from '@/lib/utils';
@@ -30,7 +29,6 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
   const [downloadProgress, setDownloadProgress] = useState<DecryptionProgress | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const { token, isAuthenticated, isTokenValid } = useAuth();
   const currentAccount = useCurrentAccount();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const { purchaseDataset, state: purchaseState } = usePurchase();
@@ -42,6 +40,8 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
     createSession,
   } = useSealDecryption();
 
+  const { verifyOwnership, isVerifying, isConnected } = usePurchaseVerification();
+
   // Estimate file size based on duration and bitrate (assume 128kbps for mp3)
   const estimatedFileSize = Math.ceil((dataset.duration_seconds * 128 * 1024) / 8);
   const estimatedFileSizeMB = (estimatedFileSize / (1024 * 1024)).toFixed(1);
@@ -50,17 +50,6 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
    * Main download flow: decrypt and download
    */
   const handleDownload = useCallback(async () => {
-    if (!isAuthenticated || !isTokenValid() || !token) {
-      console.error('[DownloadDecrypted] User not authenticated');
-      setDownloadProgress({
-        stage: 'error',
-        progress: 0,
-        message: 'Authentication required',
-        error: 'Please log in to download audio',
-      });
-      return;
-    }
-
     console.log('[DownloadDecrypted] Starting download flow', {
       datasetId: dataset.id,
       hasSession,
@@ -69,12 +58,27 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
     setIsDownloading(true);
 
     try {
-      // Step 1: Create Seal session if needed
+      // Step 1: Verify purchase on blockchain
+      console.log('[DownloadDecrypted] Verifying purchase on blockchain');
+      setDownloadProgress({
+        stage: 'fetching',
+        progress: 5,
+        message: 'Verifying purchase on blockchain...',
+      });
+
+      const ownsDataset = await verifyOwnership(dataset.id);
+      if (!ownsDataset) {
+        throw new Error('Purchase required to download audio. Please purchase this dataset first.');
+      }
+
+      console.log('[DownloadDecrypted] Purchase verified on blockchain');
+
+      // Step 2: Create Seal session if needed
       if (!hasSession) {
         console.log('[DownloadDecrypted] Creating new Seal session');
         setDownloadProgress({
           stage: 'fetching',
-          progress: 5,
+          progress: 15,
           message: 'Creating secure session...',
         });
 
@@ -96,39 +100,28 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
         }
       }
 
-      // Step 2: Request access grant (verifies purchase)
-      console.log('[DownloadDecrypted] Requesting access grant');
-      setDownloadProgress({
-        stage: 'fetching',
-        progress: 10,
-        message: 'Verifying purchase and requesting access...',
-      });
+      // Step 3: Get blob_id and seal_policy_id from dataset metadata (on-chain)
+      const blobId = (dataset as any).blob_id || (dataset as any).walrus_blob_id;
+      const sealPolicyId = (dataset as any).seal_policy_id;
 
-      let grant;
-      try {
-        grant = await requestAccessGrant(dataset.id, token);
-        console.log('[DownloadDecrypted] Access grant received', {
-          blobId: grant.blob_id,
-          policyId: grant.seal_policy_id,
-        });
-      } catch (accessError) {
-        console.error('[DownloadDecrypted] Access grant denied:', accessError);
-        throw new Error(
-          accessError instanceof Error && accessError.message.includes('purchase')
-            ? 'Purchase required to download audio'
-            : 'Access denied. Please verify your purchase.'
-        );
+      if (!blobId || !sealPolicyId) {
+        throw new Error('Dataset metadata incomplete. Missing blob_id or seal_policy_id.');
       }
 
-      // Step 3: Decrypt the audio
+      console.log('[DownloadDecrypted] Using on-chain metadata', {
+        blobId,
+        sealPolicyId,
+      });
+
+      // Step 4: Decrypt the audio
       console.log('[DownloadDecrypted] Starting decryption', {
         policyModule: 'purchase_policy',
-        policyId: grant.seal_policy_id,
+        policyId: sealPolicyId,
       });
 
       const decryptedData = await decryptAudio({
-        blobId: grant.blob_id,
-        sealPolicyId: grant.seal_policy_id,
+        blobId,
+        sealPolicyId,
         policyModule: 'purchase_policy',
         onProgress: (progress) => {
           setDownloadProgress(progress);
@@ -205,15 +198,12 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
       setIsDownloading(false);
     }
   }, [
-    isAuthenticated,
-    isTokenValid,
-    token,
+    dataset,
     hasSession,
     createSession,
     signPersonalMessage,
-    dataset.id,
-    dataset.title,
     decryptAudio,
+    verifyOwnership,
   ]);
 
   /**
@@ -228,7 +218,7 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
     await purchaseDataset(dataset);
   }, [currentAccount, purchaseDataset, dataset]);
 
-  const canDownload = isAuthenticated && isTokenValid();
+  const canDownload = isConnected;
 
   return (
     <div className={`space-y-3 ${className}`}>

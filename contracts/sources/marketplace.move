@@ -84,6 +84,7 @@ module sonar::marketplace {
 
         // Walrus integration
         walrus_blob_id: String,              // Walrus blob ID for encrypted audio retrieval
+        preview_blob_id: String,             // Walrus blob ID for preview audio
         seal_policy_id: String,              // Mysten Seal policy for decryption
         preview_blob_hash: Option<vector<u8>>,  // Optional: hash for verification
 
@@ -178,6 +179,7 @@ module sonar::marketplace {
         uploader: address,
         seal_policy_id: String,        // ✅ Safe to emit for decryption requests
         walrus_blob_id: String,        // ✅ For backend authenticated delivery
+        preview_blob_id: String,       // ✅ For frontend preview streaming
         duration_seconds: u64,
         burn_fee_paid: u64,
         submitted_at_epoch: u64
@@ -382,6 +384,7 @@ module sonar::marketplace {
         marketplace: &mut QualityMarketplace,
         burn_fee: Coin<SONAR_TOKEN>,
         walrus_blob_id: String,
+        preview_blob_id: String,
         seal_policy_id: String,
         preview_blob_hash: Option<vector<u8>>,
         duration_seconds: u64,
@@ -422,6 +425,7 @@ module sonar::marketplace {
             id: submission_id,
             uploader,
             walrus_blob_id: walrus_blob_id,
+            preview_blob_id: preview_blob_id,
             seal_policy_id: seal_policy_id,
             preview_blob_hash,
             duration_seconds,
@@ -448,6 +452,7 @@ module sonar::marketplace {
             uploader,
             seal_policy_id: submission.seal_policy_id,
             walrus_blob_id: submission.walrus_blob_id,
+            preview_blob_id: submission.preview_blob_id,
             duration_seconds,
             burn_fee_paid: paid_fee,
             submitted_at_epoch: tx_context::epoch(ctx)

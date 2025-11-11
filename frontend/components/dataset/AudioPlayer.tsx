@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { useSignPersonalMessage } from '@mysten/dapp-kit';
+import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
 import { SonarButton } from '@/components/ui/SonarButton';
 import type { Dataset } from '@/types/blockchain';
 import { useWaveform } from '@/hooks/useWaveform';
-import { useAuth } from '@/hooks/useAuth';
-import { getStreamUrl, getPreviewUrl, requestAccessGrant } from '@/lib/api/client';
+import { getStreamUrl, getPreviewUrl } from '@/lib/api/client';
 import { useSealDecryption, type DecryptionProgress } from '@/hooks/useSeal';
-import type { AccessGrant } from '@/types/blockchain';
+import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
 
 interface AudioPlayerProps {
   dataset: Dataset;
@@ -24,11 +23,10 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
   const [volume, setVolume] = useState(1);
   const [mode, setMode] = useState<'preview' | 'stream' | 'decrypt'>('preview');
   const [decryptedAudioUrl, setDecryptedAudioUrl] = useState<string | null>(null);
-  const [accessGrant, setAccessGrant] = useState<AccessGrant | null>(null);
   const [decryptProgress, setDecryptProgress] = useState<DecryptionProgress | null>(null);
 
   const waveformRef = useRef<HTMLDivElement>(null);
-  const { token, isAuthenticated, isTokenValid } = useAuth();
+  const account = useCurrentAccount();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
   const {
@@ -39,29 +37,18 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
     createSession,
   } = useSealDecryption();
 
+  const { verifyOwnership, isVerifying, isConnected } = usePurchaseVerification();
+
   // Use direct preview URL if available, otherwise use backend endpoint
   const previewUrl = dataset.previewUrl || getPreviewUrl(dataset.id);
-
-  // Use stream URL (requires JWT) if user is authenticated (fallback mode)
-  const streamUrl = isAuthenticated && isTokenValid() ? getStreamUrl(dataset.id, token || '') : null;
-
-  // For authenticated users, pass Authorization header
-  const fetchOptions = streamUrl && token ? ({
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  } as RequestInit) : undefined;
 
   // Determine which audio source to use
   const audioSrc = useMemo(() => {
     if (mode === 'decrypt' && decryptedAudioUrl) {
       return decryptedAudioUrl;
     }
-    if (mode === 'stream' && streamUrl) {
-      return streamUrl;
-    }
     return previewUrl;
-  }, [mode, decryptedAudioUrl, streamUrl, previewUrl]);
+  }, [mode, decryptedAudioUrl, previewUrl]);
 
   // Initialize waveform hook for playback
   const waveform = useWaveform({
@@ -69,7 +56,6 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
     sliceCount: 50, // Match current bar count
     autoplay: false,
     preload: mode === 'preview', // Only preload preview
-    fetchOptions: mode === 'stream' ? fetchOptions : undefined,
   });
 
   /**
@@ -88,29 +74,33 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
    * Handle unlocking full audio with browser-side decryption
    */
   const handleUnlockAudio = useCallback(async () => {
-    if (!isAuthenticated || !isTokenValid() || !token) {
-      console.error('[AudioPlayer] User not authenticated');
-      setDecryptProgress({
-        stage: 'error',
-        progress: 0,
-        message: 'Authentication required',
-        error: 'Please log in to unlock full audio',
-      });
-      return;
-    }
-
     console.log('[AudioPlayer] Starting browser decryption flow', {
       datasetId: dataset.id,
       hasSession,
     });
 
     try {
-      // Step 1: Create Seal session if needed
+      // Step 1: Verify purchase on blockchain
+      console.log('[AudioPlayer] Verifying purchase on blockchain');
+      setDecryptProgress({
+        stage: 'fetching',
+        progress: 5,
+        message: 'Verifying purchase on blockchain...',
+      });
+
+      const ownsDataset = await verifyOwnership(dataset.id);
+      if (!ownsDataset) {
+        throw new Error('Purchase required to access full audio. Please purchase this dataset first.');
+      }
+
+      console.log('[AudioPlayer] Purchase verified on blockchain');
+
+      // Step 2: Create Seal session if needed
       if (!hasSession) {
         console.log('[AudioPlayer] Creating new Seal session');
         setDecryptProgress({
           stage: 'fetching',
-          progress: 5,
+          progress: 15,
           message: 'Creating secure session...',
         });
 
@@ -132,40 +122,30 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
         }
       }
 
-      // Step 2: Request access grant to get blob_id and seal_policy_id
-      console.log('[AudioPlayer] Requesting access grant');
-      setDecryptProgress({
-        stage: 'fetching',
-        progress: 10,
-        message: 'Verifying purchase and requesting access...',
-      });
+      // Step 3: Get blob_id and seal_policy_id from dataset metadata (on-chain)
+      // NOTE: In production, these would come from querying the on-chain AudioSubmission object
+      // For now, we assume the dataset object has these fields populated from events
+      const blobId = (dataset as any).blob_id || (dataset as any).walrus_blob_id;
+      const sealPolicyId = (dataset as any).seal_policy_id;
 
-      let grant: AccessGrant;
-      try {
-        grant = await requestAccessGrant(dataset.id, token);
-        setAccessGrant(grant);
-        console.log('[AudioPlayer] Access grant received', {
-          blobId: grant.blob_id,
-          policyId: grant.seal_policy_id,
-        });
-      } catch (accessError) {
-        console.error('[AudioPlayer] Access grant denied:', accessError);
-        throw new Error(
-          accessError instanceof Error && accessError.message.includes('purchase')
-            ? 'Purchase required to access full audio'
-            : 'Access denied. Please verify your purchase.'
-        );
+      if (!blobId || !sealPolicyId) {
+        throw new Error('Dataset metadata incomplete. Missing blob_id or seal_policy_id.');
       }
 
-      // Step 3: Decrypt the audio with policy verification
+      console.log('[AudioPlayer] Using on-chain metadata', {
+        blobId,
+        sealPolicyId,
+      });
+
+      // Step 4: Decrypt the audio with policy verification
       console.log('[AudioPlayer] Starting decryption', {
         policyModule: 'purchase_policy',
-        policyId: grant.seal_policy_id,
+        policyId: sealPolicyId,
       });
 
       const decryptedData = await decryptAudio({
-        blobId: grant.blob_id,
-        sealPolicyId: grant.seal_policy_id,
+        blobId,
+        sealPolicyId,
         policyModule: 'purchase_policy',
         onProgress: (progress) => {
           setDecryptProgress(progress);
@@ -214,14 +194,12 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
       });
     }
   }, [
-    isAuthenticated,
-    isTokenValid,
-    token,
+    dataset,
     hasSession,
     createSession,
     signPersonalMessage,
-    dataset.id,
     decryptAudio,
+    verifyOwnership,
     waveform,
   ]);
 
@@ -400,8 +378,8 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
         Available formats: {dataset.formats.join(', ')} • Sample rate: 44.1kHz • Bit depth: 16-bit
       </div>
 
-      {/* Unlock Full Audio Button (for authenticated users with purchase) */}
-      {isAuthenticated && isTokenValid() && mode === 'preview' && (
+      {/* Unlock Full Audio Button (for connected wallet users) */}
+      {isConnected && mode === 'preview' && (
         <div className="space-y-3">
           <SonarButton
             variant="primary"

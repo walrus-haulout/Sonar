@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from 'react';
 import type { Dataset } from '@/types/blockchain';
-import { useAuth } from '@/hooks/useAuth';
-import { requestAccessGrant } from '@/lib/api/client';
-import { toastError, toastSuccess, toastPromise } from '@/lib/toast';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { toastError, toastSuccess } from '@/lib/toast';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { DownloadProgress } from '@/components/ui/DownloadProgress';
 import { formatNumber } from '@/lib/utils';
+import { usePurchaseVerification } from '@/hooks/usePurchaseVerification';
 
 interface DownloadButtonProps {
   dataset: Dataset;
@@ -30,15 +30,16 @@ export function DownloadButton({
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
 
-  const { token, isAuthenticated, isTokenValid } = useAuth();
+  const account = useCurrentAccount();
+  const { verifyOwnership, isConnected } = usePurchaseVerification();
 
   // Estimate file size based on duration and bitrate (assume 128kbps for mp3)
   const estimatedFileSize = Math.ceil((dataset.duration_seconds * 128 * 1024) / 8);
   const estimatedFileSizeMB = (estimatedFileSize / (1024 * 1024)).toFixed(1);
 
   const handleDownload = useCallback(async () => {
-    if (!isAuthenticated || !isTokenValid() || !token) {
-      toastError('Authentication Required', 'Please log in to download audio');
+    if (!isConnected) {
+      toastError('Wallet Required', 'Please connect your wallet to download audio');
       return;
     }
 
@@ -46,30 +47,26 @@ export function DownloadButton({
     onDownloadStart?.();
 
     try {
-      // Step 1: Request access grant from backend
-      const accessGrant = await toastPromise(
-        requestAccessGrant(dataset.id, token),
-        {
-          loading: 'Requesting access to audio...',
-          success: 'Access granted, preparing download...',
-          error: 'Failed to get access to audio',
-        }
-      );
+      // Step 1: Verify purchase on blockchain
+      const ownsDataset = await verifyOwnership(dataset.id);
+      if (!ownsDataset) {
+        throw new Error('Purchase required. Please purchase this dataset first.');
+      }
 
-      // Step 2: Use the download URL provided by the backend
-      const streamUrl = accessGrant.download_url;
+      // Step 2: Get blob_id from dataset metadata
+      const blobId = (dataset as any).blob_id || (dataset as any).walrus_blob_id;
+      if (!blobId) {
+        throw new Error('Dataset metadata incomplete. Missing blob_id.');
+      }
 
-      // Step 3: Download the audio file
+      // Step 3: Download the audio file via edge proxy
+      const proxyUrl = `/api/edge/walrus/proxy/${blobId}`;
       let response: Response;
       try {
-        response = await fetch(streamUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        response = await fetch(proxyUrl);
       } catch (error) {
         if (error instanceof Error && error.message.includes('Failed to fetch')) {
-          throw new Error('Backend server is unavailable. Unable to download audio. Make sure the backend is running.');
+          throw new Error('Unable to download audio from Walrus. Please check your connection.');
         }
         throw error;
       }
@@ -126,7 +123,7 @@ export function DownloadButton({
       setProgress(0);
       setDownloadedBytes(0);
     }
-  }, [dataset, token, isAuthenticated, isTokenValid, onDownloadStart, onDownloadComplete, estimatedFileSize]);
+  }, [dataset, isConnected, onDownloadStart, onDownloadComplete, estimatedFileSize, verifyOwnership]);
 
   if (isDownloading) {
     return (
@@ -141,7 +138,7 @@ export function DownloadButton({
     );
   }
 
-  const canDownload = isAuthenticated && isTokenValid();
+  const canDownload = isConnected;
 
   return (
     <div className="space-y-3">
@@ -163,7 +160,7 @@ export function DownloadButton({
             <svg className="w-4 h-4 mr-2 inline" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 1C5.925 1 1 5.925 1 12s4.925 11 11 11 11-4.925 11-11S18.075 1 12 1m-1 16h2v2h-2v-2m0-10h2v10h-2V7z" />
             </svg>
-            Authenticate to Download
+            Connect Wallet to Download
           </>
         )}
       </SonarButton>
@@ -184,7 +181,7 @@ export function DownloadButton({
         </div>
         {canDownload && (
           <div className="pt-2 border-t border-sonar-signal/10 text-sonar-signal">
-            ✓ Ready to download (access granted)
+            ✓ Ready to download
           </div>
         )}
       </div>

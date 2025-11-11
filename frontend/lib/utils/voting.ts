@@ -1,4 +1,9 @@
-import type { VotingStats } from '@/types/blockchain';
+// Voting stats removed - feature not implemented yet
+interface VotingStats {
+  upvotes: number;
+  downvotes: number;
+  voters: string[]; // Array of addresses that have voted
+}
 
 /**
  * Format vote count for display
@@ -23,7 +28,7 @@ export function formatVoteCount(count: bigint): string {
  */
 export function calculateNetScore(stats: VotingStats): bigint {
   return stats.upvotes >= stats.downvotes
-    ? stats.upvotes - stats.downvotes
+    ? BigInt(stats.upvotes - stats.downvotes)
     : BigInt(0);
 }
 

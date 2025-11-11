@@ -64,7 +64,6 @@ export function parseDataset(raw: any): Dataset {
     verified,
     updated_at: raw.updated_at ? Number(raw.updated_at) : createdAt,
     previewUrl: raw.previewUrl, // Direct preview URL when available
-    voting_stats: raw.voting_stats, // Community voting data
   };
 }
 
