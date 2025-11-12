@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Coins, Wallet, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { Coins, Wallet, Loader2 } from 'lucide-react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { cn } from '@/lib/utils';
@@ -39,7 +38,7 @@ const UPLOAD_FEE_MIST = 1_000_000_000; // 1 SUI expressed in MIST (10^-9 SUI)
 
 /**
  * PublishStep Component
- * Handles blockchain submission with fixed upload fee
+ * Handles blockchain submission with SONAR burn requirement
  */
 export function PublishStep({
   walrusUpload,
@@ -52,6 +51,7 @@ export function PublishStep({
   const suiClient = useSuiClient();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
   const [publishState, setPublishState] = useState<'idle' | 'signing' | 'broadcasting' | 'confirming'>('idle');
+  const publishDisabled = isPending || publishState !== 'idle';
 
   const handlePublish = async () => {
     if (!account) {
@@ -73,8 +73,6 @@ export function PublishStep({
       // Build transaction
       const tx = new Transaction();
 
-      const uploadFee = UPLOAD_FEE_MIST;
-
       // Check if multi-file dataset
       const isMultiFile = walrusUpload.files && walrusUpload.files.length > 0;
 
@@ -85,13 +83,15 @@ export function PublishStep({
         const blobIds = files.map(f => f.blobId);
         const previewBlobIds = files.map(f => f.previewBlobId || '');
         const sealPolicyIds = files.map(f => f.seal_policy_id);
-        const durations = files.map(f => Math.floor(f.duration)); // Convert to u64
+        const durations = files.map(f => Math.max(1, Math.floor(f.duration))); // Convert to u64
+
+        const uploadFeeCoin = tx.splitCoins(tx.gas, [UPLOAD_FEE_MIST])[0];
 
         tx.moveCall({
           target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio_dataset`,
           arguments: [
             tx.object(CHAIN_CONFIG.marketplaceId),
-            tx.splitCoins(tx.gas, [uploadFee])[0], // upload_fee
+            uploadFeeCoin,
             tx.pure.vector('string', blobIds),
             tx.pure.vector('string', previewBlobIds),
             tx.pure.vector('string', sealPolicyIds),
@@ -101,15 +101,18 @@ export function PublishStep({
         });
       } else {
         // Single file: Call submit_audio (backwards compatibility)
+        const uploadFeeCoin = tx.splitCoins(tx.gas, [UPLOAD_FEE_MIST])[0];
+
         tx.moveCall({
           target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio`,
           arguments: [
             tx.object(CHAIN_CONFIG.marketplaceId),
+            uploadFeeCoin,
             tx.pure.string(walrusUpload.blobId),
+            tx.pure.string(walrusUpload.previewBlobId || ''),
             tx.pure.string(walrusUpload.seal_policy_id), // Seal policy ID for decryption
             tx.pure.option('vector<u8>', null), // preview_blob_hash (optional)
             tx.pure.u64(3600), // duration_seconds (placeholder - should come from audioFile)
-            tx.splitCoins(tx.gas, [uploadFee])[0], // upload_fee
           ],
         });
       }
@@ -172,26 +175,35 @@ export function PublishStep({
             // This maintains the recovery property while keeping keys secure
             try {
               // Prepare file metadata for all files
+              const fallbackDuration = Math.max(
+                1,
+                Math.floor(walrusUpload.files?.[0]?.duration ?? 3600)
+              );
+              const fallbackPreviewId = walrusUpload.previewBlobId ?? walrusUpload.files?.[0]?.previewBlobId ?? null;
+              const fallbackMime = walrusUpload.mimeType || walrusUpload.files?.[0]?.mimeType || 'audio/mpeg';
+              const fallbackPreviewMime =
+                walrusUpload.previewMimeType ?? walrusUpload.files?.[0]?.previewMimeType ?? null;
+
               const files = walrusUpload.files && walrusUpload.files.length > 0
                 ? walrusUpload.files.map(file => ({
                     file_index: file.file_index || 0,
                     seal_policy_id: file.seal_policy_id,
                     // backup_key: uint8ArrayToBase64(file.backupKey), // TODO: Add backupKey to FileUploadResult type
                     blob_id: file.blobId,
-                    preview_blob_id: file.previewBlobId,
-                    duration_seconds: Math.floor(file.duration),
-              mime_type: file.mimeType || walrusUpload.mimeType || 'audio/mpeg',
-              preview_mime_type: file.previewMimeType || walrusUpload.previewMimeType || null,
+                    preview_blob_id: file.previewBlobId ?? null,
+                    duration_seconds: Math.max(1, Math.floor(file.duration)),
+                    mime_type: file.mimeType || walrusUpload.mimeType || 'audio/mpeg',
+                    preview_mime_type: file.previewMimeType ?? walrusUpload.previewMimeType ?? null,
                   }))
                 : [{
                     file_index: 0,
                     seal_policy_id: walrusUpload.seal_policy_id,
                     // backup_key: uint8ArrayToBase64(walrusUpload.backupKey), // TODO: Add backupKey to WalrusUploadResult type
                     blob_id: walrusUpload.blobId,
-                    preview_blob_id: walrusUpload.previewBlobId,
-                    duration_seconds: 3600, // Placeholder for single-file backwards compat
-              mime_type: walrusUpload.mimeType || 'audio/mpeg',
-              preview_mime_type: walrusUpload.previewMimeType || null,
+                    preview_blob_id: fallbackPreviewId,
+                    duration_seconds: fallbackDuration,
+                    mime_type: fallbackMime,
+                    preview_mime_type: fallbackPreviewMime,
                   }];
 
               // Include verification metadata
@@ -380,7 +392,7 @@ export function PublishStep({
               <SonarButton
                 variant="primary"
                 onClick={handlePublish}
-                disabled={isPending}
+                disabled={publishDisabled}
                 className="w-full"
               >
                 Publish to Blockchain
