@@ -7,6 +7,7 @@ module sonar::admin_tests {
     use std::string;
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::coin;
+    use sui::sui::SUI;
     use sonar::sonar_token::{Self, SONAR_TOKEN};
     use sonar::marketplace::{
         Self,
@@ -111,17 +112,17 @@ module sonar::admin_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             // Should succeed now
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"admin_blob1"),
+                string::utf8(b"preview_blob1"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 60,
@@ -162,16 +163,16 @@ module sonar::admin_tests {
         ts::next_tx(&mut scenario, USER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"admin_blob2"),
+                string::utf8(b"preview_blob2"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 60,
@@ -195,16 +196,16 @@ module sonar::admin_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"admin_blob3"),
+                string::utf8(b"preview_blob3"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 120,
@@ -291,16 +292,16 @@ module sonar::admin_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"admin_blob4"),
+                string::utf8(b"preview_blob4"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 180,
@@ -402,16 +403,16 @@ module sonar::admin_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"admin_blob5"),
+                string::utf8(b"preview_blob5"),
                 string::utf8(b"seal"),
                 option::some(b"hash"),
                 180,

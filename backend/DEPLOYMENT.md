@@ -163,9 +163,17 @@ railway run bunx prisma generate
 # Check migration status
 railway run bunx prisma migrate status
 
+# If deployment failed before the baseline migration ran, mark it as applied
+railway run bunx prisma migrate resolve --applied 20241001_initial_schema
+
+# Re-run migrations after resolving the failed one
+railway run bunx prisma migrate deploy
+
 # Reset database (WARNING: deletes all data)
 railway run bunx prisma migrate reset --force
 ```
+
+If a deployment failed with `P3018`/`P3009` complaining that `DatasetBlob` (or other tables) do not exist, apply the resolve command above once. This records the baseline schema migration as applied, allowing `prisma migrate deploy` to continue running future migrations normally without data loss. Use `railway run bunx prisma migrate status` to confirm all migrations are up to date afterward.
 
 ## Monitoring
 

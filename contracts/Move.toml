@@ -6,12 +6,13 @@ license = "Apache-2.0"
 authors = ["SONAR Protocol <team@sonar.xyz>"]
 
 [dependencies]
-# Note: Sui framework auto-included by toolchain
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "bd272b07244d" }
 # Explicitly including Walrus dependencies for SONAR marketplace
 Walrus = { local = "./dependencies/walrus" }
 WAL = { local = "./dependencies/wal" }
 
 [addresses]
+sui = "0x2"
 sonar = "0x0"
 walrus = "0xfdc88f7d7cf30afab2f82e8380d11ee8f70efb90e863d1de8616fae1bb09ea77"
 # Note: Walrus Mainnet package address

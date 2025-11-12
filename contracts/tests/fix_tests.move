@@ -11,6 +11,7 @@ module sonar::fix_tests {
     use std::string;
     use sui::test_scenario::{Self as ts, Scenario};
     use sui::coin::{Self, Coin};
+    use sui::sui::SUI;
     use sonar::sonar_token::{Self, SONAR_TOKEN};
     use sonar::marketplace::{
         Self,
@@ -55,17 +56,16 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee_amount = (circulating * 1) / 100_000;
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                burn_fee_amount,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 blob_id,
+                string::utf8(b"preview_blob_xyz123"),
                 seal_policy,
                 option::some(b"preview_hash"),
                 300,
@@ -98,17 +98,17 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             // Submit with blob_id
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"blob_id_test"),
+                string::utf8(b"preview_blob_test"),
                 string::utf8(b"seal_policy"),
                 option::none(),
                 100,
@@ -216,16 +216,16 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, UPLOADER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let circulating = marketplace::get_circulating_supply(&marketplace);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                (circulating * 1) / 100_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 blob_id,
+                string::utf8(b"preview_blob_123"),
                 seal_policy,
                 option::none(),
                 300,
@@ -236,11 +236,11 @@ module sonar::fix_tests {
         };
 
         // Step 2: Finalize submission with quality score
-        ts::next_tx(&mut scenario, VALIDATOR);
+        ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
             let validator_cap = ts::take_from_sender<ValidatorCap>(&scenario);
-            let mut submission = ts::take_from_sender<AudioSubmission>(&scenario);
+            let mut submission = ts::take_from_address<AudioSubmission>(&scenario, UPLOADER);
 
             marketplace::finalize_submission(
                 &validator_cap,
@@ -250,7 +250,7 @@ module sonar::fix_tests {
                 ts::ctx(&mut scenario)
             );
 
-            ts::return_to_sender(&scenario, submission);
+            ts::return_to_address(UPLOADER, submission);
             ts::return_shared(marketplace);
             ts::return_to_sender(&scenario, validator_cap);
         };
@@ -273,7 +273,7 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, BUYER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let mut submission = ts::take_from_sender<AudioSubmission>(&scenario);
+            let mut submission = ts::take_from_address<AudioSubmission>(&scenario, UPLOADER);
             let payment = coin::mint_for_testing<SONAR_TOKEN>(
                 1_000_000,
                 ts::ctx(&mut scenario)
@@ -289,7 +289,7 @@ module sonar::fix_tests {
 
             // If purchase succeeded and vesting unlock worked, no errors
 
-            ts::return_to_sender(&scenario, submission);
+            ts::return_to_address(UPLOADER, submission);
             ts::return_shared(marketplace);
         };
 
@@ -306,15 +306,16 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, UPLOADER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                1_000_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"blob_id"),
+                string::utf8(b"preview_blob_id"),
                 string::utf8(b"seal_policy"),
                 option::none(),
                 100,
@@ -325,11 +326,11 @@ module sonar::fix_tests {
         };
 
         // Finalize
-        ts::next_tx(&mut scenario, VALIDATOR);
+        ts::next_tx(&mut scenario, ADMIN);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
             let validator_cap = ts::take_from_sender<ValidatorCap>(&scenario);
-            let mut submission = ts::take_from_sender<AudioSubmission>(&scenario);
+            let mut submission = ts::take_from_address<AudioSubmission>(&scenario, UPLOADER);
 
             marketplace::finalize_submission(
                 &validator_cap,
@@ -339,7 +340,7 @@ module sonar::fix_tests {
                 ts::ctx(&mut scenario)
             );
 
-            ts::return_to_sender(&scenario, submission);
+            ts::return_to_address(UPLOADER, submission);
             ts::return_shared(marketplace);
             ts::return_to_sender(&scenario, validator_cap);
         };
@@ -356,7 +357,7 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, BUYER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let mut submission = ts::take_from_sender<AudioSubmission>(&scenario);
+            let mut submission = ts::take_from_address<AudioSubmission>(&scenario, UPLOADER);
             let payment = coin::mint_for_testing<SONAR_TOKEN>(
                 500_000,
                 ts::ctx(&mut scenario)
@@ -369,7 +370,7 @@ module sonar::fix_tests {
                 payment,
                 ts::ctx(&mut scenario)
             );
-            ts::return_to_sender(&scenario, submission);
+            ts::return_to_address(UPLOADER, submission);
             ts::return_shared(marketplace);
         };
 
@@ -385,16 +386,17 @@ module sonar::fix_tests {
         ts::next_tx(&mut scenario, UPLOADER);
         {
             let mut marketplace = ts::take_shared<QualityMarketplace>(&scenario);
-            let burn_fee = coin::mint_for_testing<SONAR_TOKEN>(
-                2_000_000,
+            let submission_fee = coin::mint_for_testing<SUI>(
+                250_000_000, // 0.25 SUI
                 ts::ctx(&mut scenario)
             );
 
             // All parameters including blob_id
             marketplace::submit_audio(
                 &mut marketplace,
-                burn_fee,
+                submission_fee,
                 string::utf8(b"walrus://blob/abc123def456"),
+                string::utf8(b"walrus://preview/abc123def456"),
                 string::utf8(b"mylar://seal/xyz789"),
                 option::some(b"preview_hash_xyz"),
                 600,

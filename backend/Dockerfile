@@ -68,5 +68,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 WORKDIR /app/backend
 
-# Run migrations and start server
-CMD ["sh", "-c", "bunx prisma migrate deploy && bun run src/index.ts"]
+# Run migrations and start server with baseline resolve safeguard
+CMD ["sh", "-c", "bun run scripts/ensure-baseline-migration.ts && bunx prisma migrate deploy && bun run src/index.ts"]

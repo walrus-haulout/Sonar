@@ -8,6 +8,7 @@ module sonar::marketplace {
     use std::string::{Self, String};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::sui::SUI;
     use sui::event;
     use sui::object;
     use sui::transfer;
@@ -42,6 +43,15 @@ module sonar::marketplace {
 
     // Vesting errors (6000-6999)
     const E_NOTHING_TO_CLAIM: u64 = 6001;
+
+    // ========== Submission Fee Configuration ==========
+
+    /// Fixed fee (in MIST) required for audio submissions.
+    /// 0.25 SUI = 250_000_000 MIST (1 SUI = 1_000_000_000 MIST)
+    const SUBMISSION_FEE_SUI: u64 = 250_000_000;
+
+    /// Recipient of submission fees (protocol deployer).
+    const SUBMISSION_FEE_RECIPIENT: address = @0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39;
 
     // ========== Core Structs ==========
 
@@ -380,11 +390,11 @@ module sonar::marketplace {
     // ========== Submission Functions ==========
 
     /// Submit audio with Walrus metadata
-    /// Burns submission fee (0.001% of circulating supply)
+    /// Collects a fixed submission fee (0.25 SUI) that is forwarded to deployer
     /// Creates AudioSubmission object owned by uploader
     public entry fun submit_audio(
         marketplace: &mut QualityMarketplace,
-        burn_fee: Coin<SONAR_TOKEN>,
+        mut submission_fee: Coin<SUI>,
         walrus_blob_id: String,
         preview_blob_id: String,
         seal_policy_id: String,
@@ -398,22 +408,21 @@ module sonar::marketplace {
             E_CIRCUIT_BREAKER_ACTIVE
         );
 
-        // Calculate required burn fee based on circulating supply
-        let circulating = get_circulating_supply(marketplace);
-        let required_fee = economics::calculate_burn_fee(circulating);
-        let paid_fee = coin::value(&burn_fee);
+        let uploader = tx_context::sender(ctx);
+        let fee_paid = coin::value(&submission_fee);
+        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
 
-        assert!(paid_fee >= required_fee, E_INVALID_BURN_FEE);
+        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
+        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
 
-        // Burn the submission fee
-        let burn_balance = coin::into_balance(burn_fee);
-        balance::decrease_supply(
-            coin::supply_mut(&mut marketplace.treasury_cap),
-            burn_balance
-        );
-        marketplace.total_burned = marketplace.total_burned + paid_fee;
+        if (coin::value(&submission_fee) > 0) {
+            transfer::public_transfer(submission_fee, uploader);
+        } else {
+            coin::destroy_zero(submission_fee);
+        };
 
         // Check reward pool can cover minimum reward (30+ quality score)
+        let circulating = get_circulating_supply(marketplace);
         let min_reward = economics::calculate_reward(circulating, 30);
         let pool_balance = balance::value(&marketplace.reward_pool);
         assert!(pool_balance >= min_reward, E_REWARD_POOL_DEPLETED);
@@ -421,7 +430,6 @@ module sonar::marketplace {
         // Create submission object
         let submission_id = object::new(ctx);
         let submission_id_copy = object::uid_to_inner(&submission_id);
-        let uploader = tx_context::sender(ctx);
 
         let submission = AudioSubmission {
             id: submission_id,
@@ -456,7 +464,7 @@ module sonar::marketplace {
             walrus_blob_id: submission.walrus_blob_id,
             preview_blob_id: submission.preview_blob_id,
             duration_seconds,
-            burn_fee_paid: paid_fee,
+            burn_fee_paid: SUBMISSION_FEE_SUI,
             submitted_at_epoch: tx_context::epoch(ctx)
         });
 
@@ -465,10 +473,11 @@ module sonar::marketplace {
     }
 
     /// Submit multiple audio files as a dataset
+    /// Collects the fixed submission fee (0.25 SUI) and forwards it to deployer
     /// Creates a DatasetSubmission containing multiple audio files
     public entry fun submit_audio_dataset(
         marketplace: &mut QualityMarketplace,
-        burn_fee: Coin<SONAR_TOKEN>,
+        mut submission_fee: Coin<SUI>,
         blob_ids: vector<String>,
         preview_blob_ids: vector<String>,
         seal_policy_ids: vector<String>,
@@ -491,22 +500,21 @@ module sonar::marketplace {
         assert!(vector::length(&durations) == file_count, E_INVALID_PARAMETER);
         assert!(bundle_discount_bps <= 5000, E_INVALID_PARAMETER); // Max 50% discount
 
-        // Calculate required burn fee based on circulating supply
-        let circulating = get_circulating_supply(marketplace);
-        let required_fee = economics::calculate_burn_fee(circulating);
-        let paid_fee = coin::value(&burn_fee);
+        let uploader = tx_context::sender(ctx);
+        let fee_paid = coin::value(&submission_fee);
+        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
 
-        assert!(paid_fee >= required_fee, E_INVALID_BURN_FEE);
+        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
+        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
 
-        // Burn the submission fee
-        let burn_balance = coin::into_balance(burn_fee);
-        balance::decrease_supply(
-            coin::supply_mut(&mut marketplace.treasury_cap),
-            burn_balance
-        );
-        marketplace.total_burned = marketplace.total_burned + paid_fee;
+        if (coin::value(&submission_fee) > 0) {
+            transfer::public_transfer(submission_fee, uploader);
+        } else {
+            coin::destroy_zero(submission_fee);
+        };
 
         // Check reward pool can cover minimum reward (30+ quality score)
+        let circulating = get_circulating_supply(marketplace);
         let min_reward = economics::calculate_reward(circulating, 30);
         let pool_balance = balance::value(&marketplace.reward_pool);
         assert!(pool_balance >= min_reward, E_REWARD_POOL_DEPLETED);
@@ -531,7 +539,6 @@ module sonar::marketplace {
         // Create dataset submission object
         let submission_id = object::new(ctx);
         let submission_id_copy = object::uid_to_inner(&submission_id);
-        let uploader = tx_context::sender(ctx);
 
         let dataset = DatasetSubmission {
             id: submission_id,
@@ -564,7 +571,7 @@ module sonar::marketplace {
             file_count,
             total_duration,
             bundle_discount_bps,
-            burn_fee_paid: paid_fee,
+            burn_fee_paid: SUBMISSION_FEE_SUI,
             submitted_at_epoch: tx_context::epoch(ctx)
         });
 
@@ -1050,7 +1057,7 @@ module sonar::marketplace {
         session: &mut VerificationSession,
         session_registry: &mut SessionRegistry,
         lease_registry: &mut LeaseRegistry,
-        burn_fee: Coin<SONAR_TOKEN>,
+        mut submission_fee: Coin<SUI>,
         lease_duration_epochs: u64,
         dataset_price: u64,
         ctx: &mut TxContext
@@ -1077,21 +1084,20 @@ module sonar::marketplace {
         let duration_seconds = verification_session::duration_seconds(session);
         let capacity_bytes = verification_session::plaintext_size_bytes(session);
 
-        // Calculate required burn fee
-        let circulating = get_circulating_supply(marketplace);
-        let required_fee = economics::calculate_burn_fee(circulating);
-        let paid_fee = coin::value(&burn_fee);
-        assert!(paid_fee >= required_fee, E_INVALID_BURN_FEE);
+        let fee_paid = coin::value(&submission_fee);
+        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
 
-        // Burn submission fee
-        let burn_balance = coin::into_balance(burn_fee);
-        balance::decrease_supply(
-            coin::supply_mut(&mut marketplace.treasury_cap),
-            burn_balance
-        );
-        marketplace.total_burned = marketplace.total_burned + paid_fee;
+        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
+        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
+
+        if (coin::value(&submission_fee) > 0) {
+            transfer::public_transfer(submission_fee, uploader);
+        } else {
+            coin::destroy_zero(submission_fee);
+        };
 
         // Calculate quality reward
+        let circulating = get_circulating_supply(marketplace);
         let reward_amount = economics::calculate_reward(circulating, quality_score);
         let pool_balance = balance::value(&marketplace.reward_pool);
         assert!(pool_balance >= reward_amount, E_REWARD_POOL_DEPLETED);

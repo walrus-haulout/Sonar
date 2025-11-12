@@ -34,11 +34,11 @@ interface PublishStepProps {
   onError: (error: string) => void;
 }
 
-const UPLOAD_FEE_MIST = 1_000_000_000; // 1 SUI expressed in MIST (10^-9 SUI)
+const UPLOAD_FEE_MIST = 250_000_000; // 0.25 SUI expressed in MIST (1 SUI = 1_000_000_000 MIST)
 
 /**
  * PublishStep Component
- * Handles blockchain submission with SONAR burn requirement
+ * Handles blockchain submission with fixed SUI submission fee
  */
 export function PublishStep({
   walrusUpload,
