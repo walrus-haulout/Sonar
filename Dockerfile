@@ -1,55 +1,66 @@
-ARG SERVICE_DIR=seal-keyserver
+# Production Dockerfile for SONAR Backend (Railway deployment)
+# Optimized for monorepo with Prisma and workspace dependencies
 
-# =============================================================================
-# Build stage - compile MystenLabs SEAL binaries
-# =============================================================================
-FROM rust:1.83-bullseye AS builder
+# Stage 1: Dependencies
+FROM oven/bun:1.1-slim as deps
 
-WORKDIR /work
+WORKDIR /app
 
-# Clone SEAL repository and build required binaries
-RUN git clone https://github.com/MystenLabs/seal.git . && \
-    git checkout main
+# Copy workspace root files
+COPY package.json bun.lock ./
+COPY packages/shared/package.json ./packages/shared/
+COPY backend/package.json ./backend/
 
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-RUN cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true && \
-    cargo build --bin key-server --release --config net.git-fetch-with-cli=true
+# Install all dependencies (including dev deps for Prisma)
+RUN bun install --frozen-lockfile
 
-# =============================================================================
-# Runtime stage - package SONAR SEAL key server assets
-# =============================================================================
-FROM debian:bullseye-slim AS runtime
+# Stage 2: Build
+FROM oven/bun:1.1-slim as builder
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libpq5 \
-    libpq-dev \
-    curl \
-    python3 \
-    socat \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# Copy binaries from builder stage
-COPY --from=builder /work/target/release/key-server /opt/key-server/bin/key-server
-COPY --from=builder /work/target/release/seal-cli /opt/key-server/bin/seal-cli
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages ./packages
+COPY --from=deps /app/backend/node_modules ./backend/node_modules
 
-# Transfer SONAR key server assets
-ARG SERVICE_DIR
-RUN mkdir -p /app/config /app/scripts
-COPY ${SERVICE_DIR}/key-server-config.yaml.example /app/config/template.yaml
-COPY ${SERVICE_DIR}/key-server-config-open.yaml.example /app/config/template-open.yaml
-COPY ${SERVICE_DIR}/scripts/verify-config.sh /app/scripts/verify-config.sh
-COPY ${SERVICE_DIR}/start.sh /app/start.sh
-RUN chmod +x /app/start.sh /app/scripts/verify-config.sh
+# Copy source code
+COPY packages/shared ./packages/shared
+COPY backend ./backend
 
-# Expose ports
-EXPOSE 2024 9184
+# Generate Prisma Client
+WORKDIR /app/backend
+RUN bunx prisma generate
 
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:2024/health || exit 1
+# Stage 3: Production Runtime
+FROM oven/bun:1.1-slim
 
-# Start key server
-CMD ["/app/start.sh"]
+WORKDIR /app
 
+# Install production dependencies only
+COPY package.json bun.lock ./
+COPY packages/shared/package.json ./packages/shared/
+COPY backend/package.json ./backend/
+
+RUN bun install --frozen-lockfile --production
+
+# Copy built artifacts and source
+COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/backend ./backend
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Set production environment
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD bun run --eval "try { const r = await fetch('http://localhost:3001/health'); process.exit(r.ok ? 0 : 1); } catch { process.exit(1); }"
+
+WORKDIR /app/backend
+
+# Run migrations and start server
+CMD ["sh", "-c", "bunx prisma migrate deploy && bun run src/index.ts"]
