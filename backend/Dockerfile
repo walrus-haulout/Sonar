@@ -1,8 +1,17 @@
 # Production Dockerfile for SONAR Backend (Railway deployment)
 # Optimized for monorepo with Prisma and workspace dependencies
 
+# Stage 0: Base image with system dependencies
+FROM oven/bun:1.2-slim as base
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
 # Stage 1: Dependencies
-FROM oven/bun:1.2-slim as deps
+FROM base as deps
 
 WORKDIR /app
 
@@ -17,7 +26,7 @@ COPY backend/package.json ./backend/
 RUN bun install --frozen-lockfile
 
 # Stage 2: Build
-FROM oven/bun:1.2-slim as builder
+FROM base as builder
 
 WORKDIR /app
 
@@ -34,7 +43,7 @@ WORKDIR /app/backend
 RUN bunx prisma generate
 
 # Stage 3: Production Runtime
-FROM oven/bun:1.2-slim
+FROM base as runner
 
 WORKDIR /app
 
