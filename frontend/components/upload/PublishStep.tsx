@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { Coins, Wallet, Loader2 } from 'lucide-react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { cn } from '@/lib/utils';
-import {
+import type {
   WalrusUploadResult,
   DatasetMetadata,
   VerificationResult,
@@ -18,7 +17,7 @@ import { CHAIN_CONFIG } from '@/lib/sui/client';
 /**
  * Convert Uint8Array to base64 string (browser-safe)
  */
-function uint8ArrayToBase64(bytes: Uint8Array): string {
+function _uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
@@ -35,6 +34,30 @@ interface PublishStepProps {
 }
 
 const UPLOAD_FEE_MIST = 250_000_000; // 0.25 SUI expressed in MIST (1 SUI = 1_000_000_000 MIST)
+const MIST_PER_SUI = 1_000_000_000;
+
+type SharedOwner = {
+  Shared: {
+    initial_shared_version: string;
+    mutable: boolean;
+  };
+};
+
+function isSharedObjectOwner(owner: unknown): owner is SharedOwner {
+  return (
+    !!owner &&
+    typeof owner === 'object' &&
+    'Shared' in owner &&
+    typeof (owner as SharedOwner).Shared?.initial_shared_version !== 'undefined'
+  );
+}
+
+function formatMistToSui(mist: number) {
+  const value = mist / MIST_PER_SUI;
+  return Number(value.toFixed(9)).toString();
+}
+
+const UPLOAD_FEE_LABEL = `${formatMistToSui(UPLOAD_FEE_MIST)} SUI`;
 
 /**
  * PublishStep Component
@@ -72,6 +95,32 @@ export function PublishStep({
 
       // Build transaction
       const tx = new Transaction();
+      tx.setGasBudget(50_000_000); // 0.05 SUI
+
+      const marketplaceResponse = await suiClient.getObject({
+        id: CHAIN_CONFIG.marketplaceId,
+        options: { showOwner: true },
+      });
+
+      if (!marketplaceResponse.data) {
+        throw new Error('Unable to load marketplace data from the blockchain.');
+      }
+
+      const marketplaceOwner = marketplaceResponse.data.owner;
+
+      if (!isSharedObjectOwner(marketplaceOwner)) {
+        throw new Error('Marketplace contract is not shared or could not be resolved.');
+      }
+
+      if (!marketplaceOwner.Shared.mutable) {
+        throw new Error('Marketplace contract is not mutable. Please contact support.');
+      }
+
+      const marketplaceSharedRef = tx.sharedObjectRef({
+        objectId: CHAIN_CONFIG.marketplaceId,
+        initialSharedVersion: marketplaceOwner.Shared.initial_shared_version,
+        mutable: true,
+      });
 
       // Check if multi-file dataset
       const isMultiFile = walrusUpload.files && walrusUpload.files.length > 0;
@@ -90,7 +139,7 @@ export function PublishStep({
         tx.moveCall({
           target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio_dataset`,
           arguments: [
-            tx.object(CHAIN_CONFIG.marketplaceId),
+            marketplaceSharedRef,
             uploadFeeCoin,
             tx.pure.vector('string', blobIds),
             tx.pure.vector('string', previewBlobIds),
@@ -106,7 +155,7 @@ export function PublishStep({
         tx.moveCall({
           target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio`,
           arguments: [
-            tx.object(CHAIN_CONFIG.marketplaceId),
+            marketplaceSharedRef,
             uploadFeeCoin,
             tx.pure.string(walrusUpload.blobId),
             tx.pure.string(walrusUpload.previewBlobId || ''),
@@ -188,7 +237,7 @@ export function PublishStep({
                 ? walrusUpload.files.map(file => ({
                     file_index: file.file_index || 0,
                     seal_policy_id: file.seal_policy_id,
-                    // backup_key: uint8ArrayToBase64(file.backupKey), // TODO: Add backupKey to FileUploadResult type
+                    // backup_key: _uint8ArrayToBase64(file.backupKey), // TODO: Add backupKey to FileUploadResult type
                     blob_id: file.blobId,
                     preview_blob_id: file.previewBlobId ?? null,
                     duration_seconds: Math.max(1, Math.floor(file.duration)),
@@ -198,7 +247,7 @@ export function PublishStep({
                 : [{
                     file_index: 0,
                     seal_policy_id: walrusUpload.seal_policy_id,
-                    // backup_key: uint8ArrayToBase64(walrusUpload.backupKey), // TODO: Add backupKey to WalrusUploadResult type
+                    // backup_key: _uint8ArrayToBase64(walrusUpload.backupKey), // TODO: Add backupKey to WalrusUploadResult type
                     blob_id: walrusUpload.blobId,
                     preview_blob_id: fallbackPreviewId,
                     duration_seconds: fallbackDuration,
@@ -370,7 +419,7 @@ export function PublishStep({
                   Upload Fee Required
                 </h4>
                 <p className="text-sm text-sonar-highlight/80 mb-3">
-                  A fixed upload fee of <span className="text-sonar-signal font-mono">1&nbsp;SUI</span> is required to publish your dataset on mainnet. This helps prevent spam uploads while tokenomics launch is pending.
+                  A fixed upload fee of <span className="text-sonar-signal font-mono">{UPLOAD_FEE_LABEL}</span> is required to publish your dataset on mainnet. This helps prevent spam uploads while tokenomics launch is pending.
                 </p>
                 <div className="p-3 rounded-sonar bg-sonar-abyss/30">
                   <div className="flex justify-between items-center">
@@ -378,7 +427,7 @@ export function PublishStep({
                       Estimated Fee:
                     </span>
                     <span className="font-mono font-bold text-sonar-signal">
-                      1 SUI
+                      {UPLOAD_FEE_LABEL}
                     </span>
                   </div>
                 </div>
