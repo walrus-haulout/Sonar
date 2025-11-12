@@ -135,6 +135,26 @@ async function ensureBaselineApplied() {
       return;
     }
 
+    const failedMigrations = await client.query<{ migration_name: string }>(
+      `
+        SELECT DISTINCT "migration_name"
+        FROM "_prisma_migrations"
+        WHERE "finished_at" IS NULL
+          AND "rolled_back_at" IS NULL
+      `,
+    );
+
+    if (failedMigrations.rows.length > 0) {
+      const names = failedMigrations.rows.map((row) => row.migration_name);
+      console.log(`[migrate] Found failed migrations (${names.join(', ')}); marking as rolled back.`);
+
+      for (const name of names) {
+        execSync(`bunx prisma migrate resolve --rolled-back ${name}`, {
+          stdio: 'inherit',
+        });
+      }
+    }
+
     const applied = await client.query<{ exists: boolean }>(
       `
         SELECT EXISTS(
