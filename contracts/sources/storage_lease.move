@@ -6,7 +6,7 @@
 module sonar::storage_lease {
     use std::string::String;
     use std::vector;
-    use sui::balance::{Self, Balance};
+    use sui::balance::Self;
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::event;
     use sui::object::{Self, UID, ID};
@@ -157,6 +157,7 @@ module sonar::storage_lease {
     /// Create a new storage lease for a submission
     /// Called by marketplace after submission fee has been burned
     /// No additional payment required - submission fee covers storage
+    #[allow(lint(self_transfer))]
     public fun create_lease(
         registry: &mut LeaseRegistry,
         submission_id: ID,
@@ -228,6 +229,7 @@ module sonar::storage_lease {
     /// Renew an existing lease
     /// Can be called by lease owner anytime before or slightly after expiry
     /// Burns 0.001% of circulating supply for renewal
+    #[allow(lint(self_transfer))]
     public fun renew_lease(
         registry: &mut LeaseRegistry,
         lease: &mut StorageLease,

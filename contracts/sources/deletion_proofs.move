@@ -372,7 +372,7 @@ module sonar::deletion_proofs {
     ): vector<u8> {
         // Concatenate inputs
         let mut data = vector::empty<u8>();
-        vector::append(&mut data, *string::bytes(&plaintext_cid));
+        vector::append(&mut data, *string::as_bytes(&plaintext_cid));
         vector::append(&mut data, bcs::to_bytes(&walrus_deletion_timestamp));
         vector::append(&mut data, bcs::to_bytes(&session_id));
 

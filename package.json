@@ -29,5 +29,9 @@
     "next": "^16.0.1",
     "prettier": "^3.1.1",
     "typescript-eslint": "^8.13.0"
+  },
+  "dependencies": {
+    "backend": "^0.0.0",
+    "pg": "^8.16.3"
   }
 }

@@ -2,7 +2,7 @@
 ///
 /// The core protocol contract managing audio submissions, quality rewards,
 /// dynamic economics, and dataset purchases.
-#[allow(unused_const, duplicate_alias, lint(self_transfer, public_entry))]
+#[allow(unused_const, duplicate_alias, lint(self_transfer))]
 module sonar::marketplace {
     use std::option::Option;
     use std::string::{Self, String};

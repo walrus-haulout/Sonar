@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { execSync } from 'node:child_process';
+import { Client } from 'pg';
 
 const migrationName = '20241001_initial_schema';
 
@@ -85,15 +85,26 @@ const baselineStatements = [
 ];
 
 async function ensureBaselineApplied() {
-  const prisma = new PrismaClient();
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (!databaseUrl) {
+    console.error('[migrate] DATABASE_URL is not set. Unable to ensure baseline migration.');
+    process.exit(1);
+  }
+
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
 
   try {
-    const tables = await prisma.$queryRaw<Array<{ name: string | null }>>`
+    const tablesResult = await client.query<{
+      name: string | null;
+    }>(`
       SELECT tablename AS name
       FROM pg_catalog.pg_tables
       WHERE schemaname = 'public'
         AND tablename IN ('Dataset', 'DatasetBlob', 'Purchase', 'AccessLog')
-    `;
+    `);
+    const tables = tablesResult.rows;
 
     const expectedTables = ['Dataset', 'DatasetBlob', 'Purchase', 'AccessLog'];
     const missingTables = expectedTables.filter(
@@ -105,7 +116,7 @@ async function ensureBaselineApplied() {
       console.log(`[migrate] Missing tables detected (${missingTables.join(', ')}); applying baseline schema SQL.`);
 
       for (const statement of baselineStatements) {
-        await prisma.$executeRawUnsafe(statement);
+        await client.query(statement);
       }
 
       console.log('[migrate] Baseline schema statements executed successfully.');
@@ -113,29 +124,30 @@ async function ensureBaselineApplied() {
       console.log('[migrate] Core tables present; baseline schema already exists.');
     }
 
-    const tableCheck = await prisma.$queryRaw<
-      Array<{ exists: boolean }>
-    >`SELECT to_regclass('_prisma_migrations') IS NOT NULL AS "exists"`;
+    const tableCheck = await client.query<{ exists: boolean }>(
+      `SELECT to_regclass('_prisma_migrations') IS NOT NULL AS "exists"`,
+    );
 
-    const migrationsTableExists = tableCheck[0]?.exists ?? false;
+    const migrationsTableExists = tableCheck.rows[0]?.exists ?? false;
 
     if (!migrationsTableExists) {
       console.log(`[migrate] "_prisma_migrations" table missing; Prisma will create it during deploy.`);
       return;
     }
 
-    const applied = await prisma.$queryRaw<
-      Array<{ exists: boolean }>
-    >`
-      SELECT EXISTS(
-        SELECT 1
-        FROM "_prisma_migrations"
-        WHERE "migration_name" = ${migrationName}
-          AND "finished_at" IS NOT NULL
-      ) AS "exists"
-    `;
+    const applied = await client.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM "_prisma_migrations"
+          WHERE "migration_name" = $1
+            AND "finished_at" IS NOT NULL
+        ) AS "exists"
+      `,
+      [migrationName],
+    );
 
-    const alreadyApplied = applied[0]?.exists ?? false;
+    const alreadyApplied = applied.rows[0]?.exists ?? false;
 
     if (alreadyApplied) {
       console.log(`[migrate] Baseline migration ${migrationName} already recorded. Skipping resolve.`);
@@ -150,7 +162,7 @@ async function ensureBaselineApplied() {
     console.error('[migrate] Failed to ensure baseline migration state:', error);
     throw error;
   } finally {
-    await prisma.$disconnect();
+    await client.end();
   }
 }
 
