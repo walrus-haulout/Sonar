@@ -8,7 +8,9 @@ WORKDIR /app
 
 # Copy workspace root files
 COPY package.json bun.lock ./
+COPY frontend/package.json ./frontend/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/seal/package.json ./packages/seal/
 COPY backend/package.json ./backend/
 
 # Install all dependencies (including dev deps for Prisma)
