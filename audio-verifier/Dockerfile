@@ -53,7 +53,7 @@ RUN mkdir -p /etc/nix && \
 # Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
 # bash is required for start.sh script execution
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash nixpkgs.gawk
 
 # Install gcc.cc.lib separately to ensure libstdc++ is available
 # This is the runtime library package for GCC's C++ standard library
@@ -71,23 +71,23 @@ RUN LIBSTDCPP_FILE="" && \
     if [ -n "$GCC_BIN" ]; then \
         GCC_PKG=$(nix-store -q "$GCC_BIN" 2>/dev/null | head -1 || echo ""); \
         if [ -n "$GCC_PKG" ]; then \
-            LIBSTDCPP_FILE=$(find "$GCC_PKG" -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+            LIBSTDCPP_FILE=$(find "$GCC_PKG" -name "libstdc++.so.6" 2>/dev/null | head -1); \
         fi; \
     fi && \
     # Strategy 2: Find in gcc.cc.lib package if installed
     if [ -z "$LIBSTDCPP_FILE" ]; then \
         GCC_LIB_PKG=$(nix-env -q --out-path 2>/dev/null | grep -E 'gcc.*cc.*lib' | head -1 | awk '{print $NF}' || echo ""); \
         if [ -n "$GCC_LIB_PKG" ] && [ -d "$GCC_LIB_PKG" ]; then \
-            LIBSTDCPP_FILE=$(find "$GCC_LIB_PKG" -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+            LIBSTDCPP_FILE=$(find "$GCC_LIB_PKG" -name "libstdc++.so.6" 2>/dev/null | head -1); \
         fi; \
     fi && \
     # Strategy 3: General search in Nix store
     if [ -z "$LIBSTDCPP_FILE" ]; then \
-        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1); \
     fi && \
-    # Strategy 4: Find any version of libstdc++.so
+    # Strategy 4: Find any versioned libstdc++.so file (e.g., libstdc++.so.6.0.33)
     if [ -z "$LIBSTDCPP_FILE" ]; then \
-        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so*" -type f 2>/dev/null | grep -E 'libstdc\+\+\.so\.[0-9]+$' | head -1); \
+        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so*" -type f 2>/dev/null | grep -E 'libstdc\+\+\.so\.[0-9]' | head -1); \
     fi && \
     # Error handling with debug info
     if [ -z "$LIBSTDCPP_FILE" ]; then \
