@@ -52,7 +52,8 @@ RUN mkdir -p /etc/nix && \
 # Install runtime dependencies using nix-env
 # Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib
+# bash is required for start.sh script execution
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
 
 # Create directory for application
 WORKDIR /app
@@ -71,6 +72,16 @@ RUN python3.13 -m venv /app/.venv && \
 # Create temp directory for audio processing with proper permissions
 # Used by verification pipeline for Gemini uploads
 RUN mkdir -p /tmp/audio-verifier && chmod 1777 /tmp/audio-verifier
+
+# Create /bin/bash symlink for start.sh script execution
+# NixOS minimal image doesn't have /bin/bash by default
+RUN mkdir -p /bin && \
+    BASH_PATH=$(which bash || echo "") && \
+    if [ -n "$BASH_PATH" ]; then \
+        ln -sf "$BASH_PATH" /bin/bash || cp "$BASH_PATH" /bin/bash; \
+    else \
+        echo "❌ Error: bash not found after installation" && exit 1; \
+    fi
 
 # Copy user setup script and start script
 COPY setup_user.py /tmp/setup_user.py

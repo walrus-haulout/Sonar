@@ -87,7 +87,8 @@ RUN mkdir -p /etc/nix && \
 # These match the libraries the binaries were built against
 # shadow provides useradd/userdel/etc for user management
 # coreutils provides /bin/false and other standard utilities
-RUN nix-env -iA nixpkgs.cacert nixpkgs.postgresql.lib nixpkgs.curl nixpkgs.python3 nixpkgs.socat nixpkgs.shadow nixpkgs.coreutils
+# bash is required for start.sh script execution
+RUN nix-env -iA nixpkgs.cacert nixpkgs.postgresql.lib nixpkgs.curl nixpkgs.python3 nixpkgs.socat nixpkgs.shadow nixpkgs.coreutils nixpkgs.bash
 
 # Create directory for binaries
 RUN mkdir -p /opt/key-server/bin
@@ -124,12 +125,19 @@ RUN python3 /app/scripts/setup.py
 # Initialize system files needed for useradd (NixOS minimal image doesn't have them)
 # Find where 'false' is located (coreutils installs it in /nix/store/...)
 # Create /bin/false symlink so useradd can find it
+# Also create /bin/bash symlink for start.sh script execution
 RUN mkdir -p /etc /bin && \
     FALSE_PATH=$(which false || echo "") && \
     if [ -n "$FALSE_PATH" ]; then \
         ln -sf "$FALSE_PATH" /bin/false || cp "$FALSE_PATH" /bin/false; \
     else \
         echo "#!/bin/sh" > /bin/false && echo "exit 1" >> /bin/false && chmod +x /bin/false; \
+    fi && \
+    BASH_PATH=$(which bash || echo "") && \
+    if [ -n "$BASH_PATH" ]; then \
+        ln -sf "$BASH_PATH" /bin/bash || cp "$BASH_PATH" /bin/bash; \
+    else \
+        echo "❌ Error: bash not found after installation" && exit 1; \
     fi
 
 # Initialize system files for manual user creation
