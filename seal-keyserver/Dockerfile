@@ -74,18 +74,19 @@ RUN echo "=== Verifying built binaries ===" && \
 # Verify binaries were built using Python script
 RUN python3 scripts/build.py seal/target/release
 
-# Stage 2: Runtime image (minimal)
-FROM debian:bullseye-slim AS runtime
+# Stage 2: Runtime image (NixOS-based for library compatibility)
+FROM nixos/nix:latest AS runtime
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    libpq5 \
-    libssl1.1 \
-    curl \
-    python3 \
-    socat \
-    && rm -rf /var/lib/apt/lists/*
+# Enable Nix flakes and configure cache (same as builder stage)
+RUN mkdir -p /etc/nix && \
+    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && \
+    echo "auto-optimise-store = true" >> /etc/nix/nix.conf && \
+    echo "sandbox = false" >> /etc/nix/nix.conf
+
+# Install runtime dependencies using nix-env
+# These match the libraries the binaries were built against
+# shadow provides useradd/userdel/etc for user management
+RUN nix-env -iA nixpkgs.cacert nixpkgs.postgresql.lib nixpkgs.curl nixpkgs.python3 nixpkgs.socat nixpkgs.shadow
 
 # Create directory for binaries
 RUN mkdir -p /opt/key-server/bin
@@ -119,7 +120,8 @@ COPY scripts/setup.py /app/scripts/setup.py
 RUN python3 /app/scripts/setup.py
 
 # Create non-root user for runtime
-RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 keyserver && \
+# Use /bin/false as shell (more portable than /usr/sbin/nologin in NixOS)
+RUN useradd --create-home --shell /bin/false --uid 10001 keyserver && \
     chown -R keyserver:root /app /opt/key-server && \
     chmod 755 /app/config
 
