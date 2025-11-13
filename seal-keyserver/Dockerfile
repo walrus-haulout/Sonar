@@ -122,7 +122,15 @@ RUN python3 /app/scripts/setup.py
 
 # Create non-root user for runtime
 # Initialize system files needed for useradd (NixOS minimal image doesn't have them)
-RUN mkdir -p /etc && \
+# Find where 'false' is located (coreutils installs it in /nix/store/...)
+# Create /bin/false symlink so useradd can find it
+RUN mkdir -p /etc /bin && \
+    FALSE_PATH=$(which false || echo "") && \
+    if [ -n "$FALSE_PATH" ]; then \
+        ln -sf "$FALSE_PATH" /bin/false || cp "$FALSE_PATH" /bin/false; \
+    else \
+        echo "#!/bin/sh" > /bin/false && echo "exit 1" >> /bin/false && chmod +x /bin/false; \
+    fi && \
     touch /etc/passwd /etc/group /etc/shadow /etc/gshadow && \
     chmod 644 /etc/passwd /etc/group && \
     chmod 600 /etc/shadow /etc/gshadow && \
