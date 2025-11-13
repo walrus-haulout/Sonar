@@ -1,6 +1,68 @@
 #!/bin/bash
 set -e
 
+# ============================================================================
+# Environment Setup (Docker & Nixpacks compatibility)
+# ============================================================================
+
+echo "🔧 Initializing environment..."
+
+# Create required directories
+mkdir -p /app/config
+mkdir -p /opt/key-server/bin
+
+# Determine base directory (current working directory)
+BASE_DIR="$(pwd)"
+echo "   Base directory: ${BASE_DIR}"
+
+# Copy template files if they exist in the current directory
+if [ -f "${BASE_DIR}/key-server-config.yaml.example" ]; then
+  echo "   Copying config templates..."
+  cp "${BASE_DIR}/key-server-config.yaml.example" /app/config/template.yaml
+  cp "${BASE_DIR}/key-server-config-open.yaml.example" /app/config/template-open.yaml 2>/dev/null || true
+  
+  # Copy scripts if they exist
+  if [ -d "${BASE_DIR}/scripts" ]; then
+    mkdir -p /app/scripts
+    cp -r "${BASE_DIR}/scripts/"* /app/scripts/ 2>/dev/null || true
+    chmod +x /app/scripts/*.sh 2>/dev/null || true
+  fi
+fi
+
+# Check if Rust binaries need to be built
+if [ ! -f "/opt/key-server/bin/key-server" ] || [ ! -f "/opt/key-server/bin/seal-cli" ]; then
+  echo "⚠️  Rust binaries not found - building from source..."
+  
+  if [ -d "${BASE_DIR}/seal" ]; then
+    echo "   Found SEAL source directory, building..."
+    cd "${BASE_DIR}/seal"
+    
+    # Build the binaries
+    export CARGO_NET_GIT_FETCH_WITH_CLI=true
+    cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true
+    cargo build --bin key-server --release --config net.git-fetch-with-cli=true
+    
+    # Copy to expected location
+    cp target/release/key-server /opt/key-server/bin/
+    cp target/release/seal-cli /opt/key-server/bin/
+    
+    echo "   ✅ Binaries built successfully"
+    cd "${BASE_DIR}"
+  else
+    echo "❌ Error: SEAL source directory not found and binaries don't exist"
+    echo "   Expected: ${BASE_DIR}/seal/"
+    exit 1
+  fi
+else
+  echo "   ✅ Rust binaries found"
+fi
+
+# Verify binaries are executable
+chmod +x /opt/key-server/bin/key-server /opt/key-server/bin/seal-cli
+
+echo "✅ Environment initialized"
+echo ""
+
 echo ""
 echo "========================================================================"
 echo "🔐 SEAL Key Server"
@@ -229,5 +291,8 @@ echo "🎯 Executing key-server binary..."
 echo "   This may take 30-60s to connect to Sui Mainnet and initialize"
 echo "   Health checks will start after initialization completes"
 echo ""
+
+# Change to /app directory for runtime
+cd /app
 
 exec /opt/key-server/bin/key-server

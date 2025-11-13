@@ -2,7 +2,7 @@
 # Railway will use this to build the Rust project
 
 [phases.setup]
-nixPkgs = ["rustc", "cargo", "openssl", "pkg-config", "libpq", "python3"]
+nixPkgs = ["rustc", "cargo", "openssl", "pkg-config", "libpq", "python3", "socat", "curl"]
 
 [phases.build]
 cmds = [
