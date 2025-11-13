@@ -35,6 +35,14 @@ if [ ! -f "/opt/key-server/bin/key-server" ] || [ ! -f "/opt/key-server/bin/seal
   
   if [ -d "${BASE_DIR}/seal" ]; then
     echo "   Found SEAL source directory, building..."
+
+    if ! command -v cargo >/dev/null 2>&1; then
+      echo "❌ Error: cargo is not available in the runtime environment"
+      echo "   The Nixpacks build phase must compile the Rust binaries"
+      echo "   Verify that nixpacks.toml build commands executed successfully"
+      exit 1
+    fi
+
     cd "${BASE_DIR}/seal"
     
     # Build the binaries
