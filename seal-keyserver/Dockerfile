@@ -140,9 +140,12 @@ RUN touch /etc/passwd /etc/group /etc/shadow /etc/gshadow && \
     echo "root:x:0:" >> /etc/group && \
     test -f /etc/passwd && test -f /etc/group && echo "System files initialized"
 
-# Create user and set permissions
-RUN useradd --create-home --shell /bin/false --uid 10001 keyserver && \
-    chown -R keyserver:root /app /opt/key-server && \
+# Create user manually (useradd has issues in NixOS minimal image)
+# Add user entry to /etc/passwd and /etc/group
+RUN echo "keyserver:x:10001:0:keyserver user:/home/keyserver:/bin/false" >> /etc/passwd && \
+    echo "keyserver:x:10001:" >> /etc/group && \
+    mkdir -p /home/keyserver && \
+    chown -R keyserver:root /home/keyserver /app /opt/key-server && \
     chmod 755 /app/config
 
 USER keyserver
