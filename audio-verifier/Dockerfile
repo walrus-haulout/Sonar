@@ -26,15 +26,18 @@ RUN nix-env -iA nixpkgs.python314 nixpkgs.uv nixpkgs.gcc nixpkgs.rustc nixpkgs.c
 COPY pyproject.toml .
 COPY *.py .
 
-# Install Python dependencies using UV
-# This will compile pysui-fastcrypto and other packages that need build tools
-RUN uv pip install --system .
+# Create virtual environment and install Python dependencies using UV
+# Nix-managed Python is immutable, so we must use a venv
+RUN uv venv /build/.venv && \
+    . /build/.venv/bin/activate && \
+    uv pip install .
 
 # Verify installation
-RUN python3.14 -c "import main; print('✓ Application installed successfully')" && \
-    python3.14 -c "import fastapi; print('✓ FastAPI available')" && \
-    python3.14 -c "import librosa; print('✓ Librosa available')" && \
-    python3.14 -c "import pysui; print('✓ PySui available')"
+RUN . /build/.venv/bin/activate && \
+    python -c "import main; print('✓ Application installed successfully')" && \
+    python -c "import fastapi; print('✓ FastAPI available')" && \
+    python -c "import librosa; print('✓ Librosa available')" && \
+    python -c "import pysui; print('✓ PySui available')"
 
 # Stage 2: Runtime image (NixOS-based for library compatibility)
 FROM nixos/nix:latest AS runtime
@@ -56,10 +59,11 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY *.py .
 
-# Install Python dependencies in runtime stage
-# UV will use cached wheels from pip cache if available, but will reinstall
-# This ensures all paths are correct for the runtime environment
-RUN uv pip install --system .
+# Create virtual environment and install Python dependencies in runtime stage
+# Nix-managed Python is immutable, so we must use a venv
+RUN uv venv /app/.venv && \
+    . /app/.venv/bin/activate && \
+    uv pip install .
 
 # Create temp directory for audio processing with proper permissions
 # Used by verification pipeline for Gemini uploads
@@ -84,9 +88,9 @@ WORKDIR /app
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check (using venv Python)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python3.14 -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5.0)"
+  CMD /app/.venv/bin/python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5.0)"
 
-# Start server with 2 workers for production
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Start server with 2 workers for production (using venv Python)
+CMD ["/app/.venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
