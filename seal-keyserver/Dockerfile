@@ -132,7 +132,7 @@ RUN mkdir -p /etc /bin && \
         echo "#!/bin/sh" > /bin/false && echo "exit 1" >> /bin/false && chmod +x /bin/false; \
     fi
 
-# Initialize system files for useradd
+# Initialize system files for manual user creation
 RUN touch /etc/passwd /etc/group /etc/shadow /etc/gshadow && \
     chmod 644 /etc/passwd /etc/group && \
     chmod 600 /etc/shadow /etc/gshadow && \
@@ -145,7 +145,7 @@ RUN touch /etc/passwd /etc/group /etc/shadow /etc/gshadow && \
 RUN echo "keyserver:x:10001:0:keyserver user:/home/keyserver:/bin/false" >> /etc/passwd && \
     echo "keyserver:x:10001:" >> /etc/group && \
     mkdir -p /home/keyserver && \
-    chown -R keyserver:root /home/keyserver /app /opt/key-server && \
+    chown -R 10001:0 /home/keyserver /app /opt/key-server && \
     chmod 755 /app/config
 
 USER keyserver
