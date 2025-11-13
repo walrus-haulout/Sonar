@@ -6,17 +6,16 @@ nixPkgs = ["rustc", "cargo", "openssl", "pkg-config", "libpq", "python3", "socat
 
 [phases.build]
 commands = [
-  "cd seal",
-  "cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true",
-  "cargo build --bin key-server --release --config net.git-fetch-with-cli=true"
+  "bash -lc 'cd seal && cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true'",
+  "bash -lc 'cd seal && cargo build --bin key-server --release --config net.git-fetch-with-cli=true'"
 ]
 cacheDirectories = ["seal/target"]
 
 [phases.install]
 commands = [
-  "mkdir -p /opt/key-server/bin",
-  "cp seal/target/release/key-server /opt/key-server/bin/",
-  "cp seal/target/release/seal-cli /opt/key-server/bin/"
+  "bash -lc 'cd seal && mkdir -p /opt/key-server/bin'",
+  "bash -lc 'cp seal/target/release/key-server /opt/key-server/bin/'",
+  "bash -lc 'cp seal/target/release/seal-cli /opt/key-server/bin/'"
 ]
 
 [start]
