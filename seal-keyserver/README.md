@@ -93,6 +93,15 @@ Rebuild the Docker image after changes.
 - **Kubernetes** - Apply provided manifests
 - **VPS** - Any server with Docker installed
 
+### Railway deployment
+
+- Railway uses [`railway.json`](railway.json) in this folder to build with `seal-keyserver/Dockerfile`, so keep the project root unchanged.
+- Each Railway service **must** set its own secrets before the container leaves setup mode:
+  - `MASTER_KEY` – 64-hex seed for the cluster (shared across services you want to manage the same key tree).
+  - `KEY_SERVER_OBJECT_ID` – mainnet object registered for that specific keyserver instance. Missing or malformed values keep `/health` in `"setup"` state and cause Railway to cycle the build.
+  - Optional: `DERIVATION_INDEX` if you run multiple keyservers from the same master key and need distinct derivations. The default is `0`.
+- After setting secrets, redeploy so `/health` returns `"status": "ready"` and the key server starts handling requests on port `2024`.
+
 See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed platform-specific instructions.
 
 ## Health Check
