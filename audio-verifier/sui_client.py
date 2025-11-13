@@ -5,13 +5,14 @@ Replaces Vercel KV with on-chain verification session management.
 All state transitions are recorded on Sui blockchain for transparency and auditability.
 """
 
+import asyncio
 import json
 import logging
 from typing import Dict, Any, Optional
+from threading import Lock
 from pysui import SuiConfig, SyncClient
 from pysui.sui.sui_types.scalars import ObjectID, SuiString
 from pysui.sui.sui_txn import SyncTransaction
-from pysui.sui.sui_builders.exec_builders import MoveCall
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,8 @@ class SuiVerificationClient:
         # Get validator address
         self.validator_address = self.config.active_address
 
+        self._client_lock = Lock()
+
         logger.info(f"Initialized Sui client on {network} network")
         logger.info(f"Validator address: {self.validator_address}")
         logger.info(f"Package ID: {package_id}")
@@ -120,53 +123,53 @@ class SuiVerificationClient:
             Session object ID if successful, None otherwise
         """
         try:
-            plaintext_cid = initial_data.get("plaintext_cid", "")
-            plaintext_size_bytes = initial_data.get("plaintext_size_bytes", 0)
-            duration_seconds = initial_data.get("duration_seconds", 0)
-            file_format = initial_data.get("file_format", "audio/wav")
-
-            # Build transaction
-            txn = SyncTransaction(client=self.client)
-
-            # Call verification_session::create_session
-            txn.move_call(
-                target=f"{self.package_id}::verification_session::create_session",
-                arguments=[
-                    ObjectID(self.session_registry_id),  # registry: &mut SessionRegistry
-                    SuiString(plaintext_cid),             # plaintext_cid: String
-                    plaintext_size_bytes,                 # plaintext_size_bytes: u64
-                    duration_seconds,                     # duration_seconds: u64
-                    SuiString(file_format),               # file_format: String
-                ],
+            return await asyncio.to_thread(
+                self._create_session_sync,
+                verification_id,
+                initial_data,
             )
-
-            # Execute transaction
-            result = txn.execute(gas_budget="10000000")
-
-            if result.is_ok():
-                # Extract created session object ID from transaction effects
-                effects = result.result_data.effects
-                created_objects = effects.created if hasattr(effects, 'created') else []
-
-                session_id = None
-                for obj in created_objects:
-                    # VerificationSession is owned object transferred to sender
-                    if hasattr(obj, 'reference') and hasattr(obj.reference, 'objectId'):
-                        session_id = str(obj.reference.objectId)
-                        break
-
-                logger.info(
-                    f"Created verification session on-chain: {verification_id} "
-                    f"(object ID: {session_id})"
-                )
-                return session_id
-            else:
-                logger.error(f"Failed to create session: {result.result_string}")
-                return None
-
         except Exception as e:
             logger.error(f"Error creating session on blockchain: {e}", exc_info=True)
             return None
+
+    def _create_session_sync(self, verification_id: str, initial_data: Dict[str, Any]) -> Optional[str]:
+        plaintext_cid = initial_data.get("plaintext_cid", "")
+        plaintext_size_bytes = initial_data.get("plaintext_size_bytes", 0)
+        duration_seconds = initial_data.get("duration_seconds", 0)
+        file_format = initial_data.get("file_format", "audio/wav")
+
+        with self._client_lock:
+            txn = SyncTransaction(client=self.client)
+            txn.move_call(
+                target=f"{self.package_id}::verification_session::create_session",
+                arguments=[
+                    ObjectID(self.session_registry_id),
+                    SuiString(plaintext_cid),
+                    plaintext_size_bytes,
+                    duration_seconds,
+                    SuiString(file_format),
+                ],
+            )
+            result = txn.execute(gas_budget="10000000")
+
+        if result.is_ok():
+            effects = result.result_data.effects
+            created_objects = effects.created if hasattr(effects, 'created') else []
+
+            session_id = None
+            for obj in created_objects:
+                if hasattr(obj, 'reference') and hasattr(obj.reference, 'objectId'):
+                    session_id = str(obj.reference.objectId)
+                    break
+
+            logger.info(
+                f"Created verification session on-chain: {verification_id} "
+                f"(object ID: {session_id})"
+            )
+            return session_id
+
+        logger.error(f"Failed to create session: {result.result_string}")
+        return None
 
     async def update_stage(
         self,
@@ -188,50 +191,50 @@ class SuiVerificationClient:
             True if successful, False otherwise
         """
         try:
-            # Extract stage and progress
-            stage = updates.get("stage")
-            progress_percent = int(updates.get("progress", 0) * 100)  # Convert 0.0-1.0 to 0-100
-
-            # Convert stage name to number if needed
-            if isinstance(stage, str):
-                stage_num = STAGE_NAMES.get(stage.lower())
-                if stage_num is None:
-                    logger.warning(f"Unknown stage name: {stage}, skipping update")
-                    return False
-            else:
-                stage_num = stage
-
-            # Build transaction
-            txn = SyncTransaction(client=self.client)
-
-            # Call verification_session::update_stage
-            txn.move_call(
-                target=f"{self.package_id}::verification_session::update_stage",
-                arguments=[
-                    ObjectID(self.validator_cap_id),      # _cap: &ValidatorCap
-                    ObjectID(session_object_id),          # session: &mut VerificationSession
-                    ObjectID(self.session_registry_id),   # registry: &mut SessionRegistry
-                    stage_num,                            # new_stage: u8
-                    progress_percent,                     # progress_percent: u8
-                ],
+            return await asyncio.to_thread(
+                self._update_stage_sync,
+                session_object_id,
+                updates,
             )
-
-            # Execute transaction
-            result = txn.execute(gas_budget="10000000")
-
-            if result.is_ok():
-                logger.info(
-                    f"Updated session {session_object_id[:8]}... to stage {stage_num} "
-                    f"({progress_percent}%)"
-                )
-                return True
-            else:
-                logger.error(f"Failed to update stage: {result.result_string}")
-                return False
-
         except Exception as e:
             logger.error(f"Error updating stage on blockchain: {e}", exc_info=True)
             return False
+
+    def _update_stage_sync(self, session_object_id: str, updates: Dict[str, Any]) -> bool:
+        stage = updates.get("stage")
+        progress_percent = int(updates.get("progress", 0) * 100)
+
+        if isinstance(stage, str):
+            stage_num = STAGE_NAMES.get(stage.lower())
+            if stage_num is None:
+                logger.warning(f"Unknown stage name: {stage}, skipping update")
+                return False
+        else:
+            stage_num = stage
+
+        with self._client_lock:
+            txn = SyncTransaction(client=self.client)
+            txn.move_call(
+                target=f"{self.package_id}::verification_session::update_stage",
+                arguments=[
+                    ObjectID(self.validator_cap_id),
+                    ObjectID(session_object_id),
+                    ObjectID(self.session_registry_id),
+                    stage_num,
+                    progress_percent,
+                ],
+            )
+            result = txn.execute(gas_budget="10000000")
+
+        if result.is_ok():
+            logger.info(
+                f"Updated session {session_object_id[:8]}... to stage {stage_num} "
+                f"({progress_percent}%)"
+            )
+            return True
+
+        logger.error(f"Failed to update stage: {result.result_string}")
+        return False
 
     async def mark_completed(
         self,
@@ -255,60 +258,60 @@ class SuiVerificationClient:
             True if successful, False otherwise
         """
         try:
-            import hashlib
-
-            approved = bool(result_data.get("approved", False))
-            safety_passed = bool(result_data.get("safetyPassed", False))
-
-            # Extract quality score (0-100 scale from quality checker)
-            quality = result_data.get("quality") or {}
-            quality_score = max(0, min(100, int(quality.get("score", 0))))
-
-            # Generate hashes for transcript and quality metrics
-            transcript = result_data.get("transcript") or ""
-            transcript_preview = result_data.get("transcriptPreview")
-            transcript_hash = list(hashlib.sha256(transcript.encode()).digest())
-
-            quality_metrics_json = json.dumps(quality or {}, sort_keys=True).encode()
-            quality_metrics_hash = list(hashlib.sha256(quality_metrics_json).digest())
-
-            logger.info(
-                f"Finalizing session {session_object_id[:8]}... "
-                f"(approved: {approved}, quality: {quality_score}, safety: {safety_passed})"
+            return await asyncio.to_thread(
+                self._mark_completed_sync,
+                session_object_id,
+                result_data,
             )
-            if transcript_preview:
-                logger.debug("Transcript preview: %s", transcript_preview)
-
-            # Build transaction
-            txn = SyncTransaction(client=self.client)
-
-            # Call verification_session::finalize_verification
-            txn.move_call(
-                target=f"{self.package_id}::verification_session::finalize_verification",
-                arguments=[
-                    ObjectID(self.validator_cap_id),      # _cap: &ValidatorCap
-                    ObjectID(session_object_id),          # session: &mut VerificationSession
-                    quality_score,                        # quality_score: u8
-                    safety_passed,                        # safety_passed: bool
-                    approved,                             # approved: bool
-                    transcript_hash,                      # transcript_hash: vector<u8>
-                    quality_metrics_hash,                 # quality_metrics_hash: vector<u8>
-                ],
-            )
-
-            # Execute transaction
-            result = txn.execute(gas_budget="10000000")
-
-            if result.is_ok():
-                logger.info(f"Session {session_object_id[:8]}... finalized on-chain")
-                return True
-            else:
-                logger.error(f"Failed to finalize session: {result.result_string}")
-                return False
-
         except Exception as e:
             logger.error(f"Error finalizing session: {e}", exc_info=True)
             return False
+
+    def _mark_completed_sync(self, session_object_id: str, result_data: Dict[str, Any]) -> bool:
+        import hashlib
+
+        approved = bool(result_data.get("approved", False))
+        safety_passed = bool(result_data.get("safetyPassed", False))
+
+        quality = result_data.get("quality") or {}
+        quality_score = max(0, min(100, int(quality.get("score", 0))))
+
+        transcript = result_data.get("transcript") or ""
+        transcript_hash = list(hashlib.sha256(transcript.encode()).digest())
+
+        quality_metrics_json = json.dumps(quality or {}, sort_keys=True).encode()
+        quality_metrics_hash = list(hashlib.sha256(quality_metrics_json).digest())
+
+        logger.info(
+            f"Finalizing session {session_object_id[:8]}... "
+            f"(approved: {approved}, quality: {quality_score}, safety: {safety_passed})"
+        )
+        transcript_preview = result_data.get("transcriptPreview")
+        if transcript_preview:
+            logger.debug("Transcript preview: %s", transcript_preview)
+
+        with self._client_lock:
+            txn = SyncTransaction(client=self.client)
+            txn.move_call(
+                target=f"{self.package_id}::verification_session::finalize_verification",
+                arguments=[
+                    ObjectID(self.validator_cap_id),
+                    ObjectID(session_object_id),
+                    quality_score,
+                    safety_passed,
+                    approved,
+                    transcript_hash,
+                    quality_metrics_hash,
+                ],
+            )
+            result = txn.execute(gas_budget="10000000")
+
+        if result.is_ok():
+            logger.info(f"Session {session_object_id[:8]}... finalized on-chain")
+            return True
+
+        logger.error(f"Failed to finalize session: {result.result_string}")
+        return False
 
     async def mark_failed(
         self,
@@ -365,26 +368,26 @@ class SuiVerificationClient:
             Session data if found, None otherwise
         """
         try:
-            # Query object from blockchain
-            result = self.client.get_object(session_object_id)
-
-            if result.is_ok() and result.result_data:
-                obj_data = result.result_data
-                # Parse fields from Move object (simplified)
-                # Full parsing would require Move type deserialization
-                logger.debug(f"Retrieved session {session_object_id[:8]}... from blockchain")
-                return {
-                    "id": session_object_id,
-                    "on_chain": True,
-                    "object_data": obj_data
-                }
-            else:
-                logger.warning(f"Session not found on blockchain: {session_object_id}")
-                return None
-
+            return await asyncio.to_thread(self._get_session_sync, session_object_id)
         except Exception as e:
             logger.error(f"Error retrieving session: {e}", exc_info=True)
             return None
+
+    def _get_session_sync(self, session_object_id: str) -> Optional[Dict[str, Any]]:
+        with self._client_lock:
+            result = self.client.get_object(session_object_id)
+
+        if result.is_ok() and result.result_data:
+            obj_data = result.result_data
+            logger.debug(f"Retrieved session {session_object_id[:8]}... from blockchain")
+            return {
+                "id": session_object_id,
+                "on_chain": True,
+                "object_data": obj_data
+            }
+
+        logger.warning(f"Session not found on blockchain: {session_object_id}")
+        return None
 
     async def close(self) -> None:
         """Close the Sui client (no-op for SyncClient)."""

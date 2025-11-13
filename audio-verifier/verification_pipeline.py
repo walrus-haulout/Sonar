@@ -10,12 +10,12 @@ Six-stage pipeline:
 6. Finalization
 """
 
-import tempfile
-import os
 import json
 import logging
-from typing import Dict, Any, Tuple
+import os
+import tempfile
 from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional
 
 import google.generativeai as genai
 
@@ -38,7 +38,7 @@ class VerificationPipeline:
         self,
         sui_client: SuiVerificationClient,
         gemini_api_key: str,
-        acoustid_api_key: Optional[str] = None
+        acoustid_api_key: Optional[str] = None,
     ):
         """
         Initialize the verification pipeline.
@@ -153,7 +153,7 @@ class VerificationPipeline:
         try:
             # Stage 1: Quality Check
             logger.info(f"[{session_object_id}] Stage 1: Quality Check")
-            quality_result, audio_bytes = await self._stage_quality_check(
+            quality_result = await self._stage_quality_check(
                 session_object_id,
                 audio_file_path
             )
@@ -174,10 +174,8 @@ class VerificationPipeline:
             logger.info(f"[{session_object_id}] Stage 2: Copyright Check")
             copyright_result = await self._stage_copyright_check(
                 session_object_id,
-                audio_bytes
+                audio_file_path
             )
-            # Explicitly free large byte buffer before moving on
-            del audio_bytes
 
             # Stage 3: Transcription
             logger.info(f"[{session_object_id}] Stage 3: Transcription")
@@ -208,7 +206,7 @@ class VerificationPipeline:
 
             # Stage 6: Finalization
             logger.info(f"[{session_object_id}] Stage 6: Finalization")
-            completed = await self.sui.mark_completed(session_object_id, {
+            completion_payload = {
                 "approved": approved,
                 "quality": quality_result.get("quality"),
                 "copyright": copyright_result.get("copyright"),
@@ -216,15 +214,15 @@ class VerificationPipeline:
                 "transcriptPreview": transcript[:200],
                 "analysis": analysis_result,
                 "safetyPassed": analysis_result.get("safetyPassed", False)
-            })
+            }
+            completed = await self.sui.mark_completed(session_object_id, completion_payload)
 
             if not completed:
                 raise RuntimeError("Failed to finalize verification on-chain")
 
-                logger.info(
-                    f"[{session_object_id}] Pipeline completed. "
-                    f"Approved: {approved}"
-                )
+            logger.info(
+                f"[{session_object_id}] Pipeline completed approved={approved}"
+            )
 
         except Exception as e:
             logger.error(f"[{session_object_id}] Pipeline failed: {e}", exc_info=True)
@@ -239,7 +237,7 @@ class VerificationPipeline:
         self,
         session_object_id: str,
         audio_file_path: str
-    ) -> Tuple[Dict[str, Any], bytes]:
+    ) -> Dict[str, Any]:
         """
         Stage 1: Quality Check
 
@@ -247,9 +245,7 @@ class VerificationPipeline:
         """
         await self._update_stage(session_object_id, "quality", 0.15)
 
-        with open(audio_file_path, 'rb') as file_handle:
-            audio_bytes = file_handle.read()
-        result = await self.quality_checker.check_audio(audio_bytes)
+        result = await self.quality_checker.check_audio_file(audio_file_path)
 
         quality_info = result.get("quality")
         if quality_info:
@@ -257,12 +253,12 @@ class VerificationPipeline:
 
         await self._update_stage(session_object_id, "quality", 0.30)
 
-        return result, audio_bytes
+        return result
 
     async def _stage_copyright_check(
         self,
         session_object_id: str,
-        audio_bytes: bytes
+        audio_file_path: str
     ) -> Dict[str, Any]:
         """
         Stage 2: Copyright Check
@@ -270,7 +266,7 @@ class VerificationPipeline:
         Uses Chromaprint + AcoustID for copyright detection.
         """
         await self._update_stage(session_object_id, "copyright", 0.35)
-        result = await self.copyright_detector.check_copyright(audio_bytes)
+        result = await self.copyright_detector.check_copyright_from_path(audio_file_path)
 
         await self._update_stage(session_object_id, "copyright", 0.45)
 
@@ -484,7 +480,7 @@ Respond ONLY with the JSON object, no additional text."""
             logger.error(f"Raw response: {response_text}")
 
             # Return safe defaults if parsing fails
-            return {
+            fallback = {
                 "qualityScore": 0.5,
                 "safetyPassed": True,
                 "insights": [
@@ -493,6 +489,7 @@ Respond ONLY with the JSON object, no additional text."""
                 ],
                 "concerns": ["Unable to parse detailed analysis"]
             }
+            return fallback
 
     def _calculate_approval(
         self,
@@ -548,6 +545,12 @@ Respond ONLY with the JSON object, no additional text."""
         )
         if not success:
             raise RuntimeError(f"Failed to update stage '{stage_name}' for session {session_object_id[:8]}...")
+        logger.info(
+            "stage_update session=%s stage=%s progress=%.2f",
+            session_object_id[:8],
+            stage_name,
+            progress
+        )
 
     def _compute_quality_score(self, quality: Dict[str, Any]) -> int:
         """

@@ -56,6 +56,23 @@ ACOUSTID_API_KEY = os.getenv("ACOUSTID_API_KEY")
 WALRUS_UPLOAD_URL = os.getenv("WALRUS_UPLOAD_URL")
 WALRUS_UPLOAD_TOKEN = os.getenv("WALRUS_UPLOAD_TOKEN")
 
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY must be set for audio transcription and analysis")
+
+if not ACOUSTID_API_KEY:
+    raise RuntimeError("ACOUSTID_API_KEY must be set for copyright detection")
+
+if not VERIFIER_AUTH_TOKEN:
+    raise RuntimeError("VERIFIER_AUTH_TOKEN must be set for authenticated access")
+
+if not all([SUI_VALIDATOR_KEY, SUI_PACKAGE_ID, SUI_SESSION_REGISTRY_ID, SUI_VALIDATOR_CAP_ID]):
+    raise RuntimeError(
+        "Sui blockchain configuration missing; set SUI_VALIDATOR_KEY, "
+        "SUI_PACKAGE_ID, SUI_SESSION_REGISTRY_ID, and SUI_VALIDATOR_CAP_ID"
+    )
+
+if not WALRUS_UPLOAD_URL:
+    raise RuntimeError("WALRUS_UPLOAD_URL must be set for plaintext storage")
 # CORS middleware - explicit origins only
 app.add_middleware(
     CORSMiddleware,
@@ -190,10 +207,6 @@ async def verify_bearer_token(authorization: str = Header(None)):
     Verify bearer token for verification endpoints.
     Skips auth check if VERIFIER_AUTH_TOKEN is not set (development mode).
     """
-    if not VERIFIER_AUTH_TOKEN:
-        logger.warning("VERIFIER_AUTH_TOKEN not set - running in development mode without auth")
-        return
-
     expected = f"Bearer {VERIFIER_AUTH_TOKEN}"
     if authorization != expected:
         logger.warning(f"Invalid auth token: {authorization}")
@@ -221,9 +234,10 @@ async def root():
 async def health():
     """Health check endpoint"""
     config_status = {
-        "sui_configured": bool(SUI_VALIDATOR_KEY and SUI_PACKAGE_ID and SUI_SESSION_REGISTRY_ID and SUI_VALIDATOR_CAP_ID),
+        "sui_configured": True,
         "gemini_configured": bool(GEMINI_API_KEY),
         "acoustid_configured": bool(ACOUSTID_API_KEY),
+        "walrus_configured": bool(WALRUS_UPLOAD_URL),
         "auth_enabled": bool(VERIFIER_AUTH_TOKEN)
     }
     return {
@@ -251,6 +265,7 @@ async def create_verification(
     - estimatedTimeSeconds: Estimated completion time
     """
     temp_file_path = None
+    session_object_id: Optional[str] = None
 
     try:
         # Parse metadata
@@ -295,9 +310,10 @@ async def create_verification(
 
         # Get audio duration from file
         try:
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(temp_file_path)
-            duration_seconds = len(audio) / 1000.0  # Convert milliseconds to seconds
+            import soundfile as sf
+            with sf.SoundFile(temp_file_path) as sf_file:
+                frames = len(sf_file)
+                duration_seconds = frames / float(sf_file.samplerate) if sf_file.samplerate else 0.0
             logger.info(f"Audio duration: {duration_seconds:.2f}s")
         except Exception as e:
             logger.warning(f"Failed to extract audio duration: {e}")
@@ -350,7 +366,7 @@ async def create_verification(
             "status": "processing"
         })
 
-    except HTTPException:
+    except HTTPException as exc:
         # Clean up temp file on HTTP exceptions
         if temp_file_path and os.path.exists(temp_file_path):
             try:
@@ -416,9 +432,8 @@ async def cancel_verification(session_object_id: str):
     try:
         sui_client = get_sui_client()
         session = await sui_client.get_session(session_object_id)
-
         if not session:
-            raise HTTPException(status_code=404, detail="Session not found on blockchain")
+            raise HTTPException(status_code=404, detail="Session not found")
 
         # Mark as failed on blockchain (cancelled)
         await sui_client.mark_failed(session_object_id, {

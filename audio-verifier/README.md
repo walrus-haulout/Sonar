@@ -8,7 +8,7 @@ Comprehensive audio verification service for the SONAR Protocol. Verifies audio 
 - **Copyright Detection**: Chromaprint + AcoustID fingerprinting
 - **AI Transcription**: Google Gemini 2.0 Flash for speech-to-text
 - **Content Analysis**: AI-powered quality scoring and safety screening using Gemini
-- **Stateful Pipeline**: Progress tracking via Vercel KV
+- **Stateful Pipeline**: Progress tracking recorded directly on Sui blockchain
 - **Secure**: Bearer token authentication, CORS protection, file size limits
 
 ## Architecture
@@ -40,13 +40,21 @@ Copy `.env.example` to `.env` and fill in your credentials:
 cp .env.example .env
 ```
 
-Required environment variables:
-- `ACOUSTID_API_KEY` - Get free key at https://acoustid.org/api-key
-- `GEMINI_API_KEY` - Get at https://aistudio.google.com/app/apikey
-- `KV_REST_API_URL` - Vercel KV REST API URL
-- `KV_REST_API_TOKEN` - Vercel KV authentication token
-- `VERIFIER_AUTH_TOKEN` - Random 256-bit token (generate with `openssl rand -hex 32`)
-- `ALLOWED_ORIGINS` - Comma-separated list of allowed frontend origins
+Required environment variables (production):
+- `GEMINI_API_KEY` – Speech-to-text & analysis via Gemini
+- `ACOUSTID_API_KEY` – Chromaprint fingerprint lookup (https://acoustid.org/api-key)
+- `VERIFIER_AUTH_TOKEN` – Random 256-bit token for bearer auth (`openssl rand -hex 32`)
+- `ALLOWED_ORIGINS` – Comma-separated list of allowed frontend origins
+- `SUI_NETWORK` – `mainnet`, `testnet`, `devnet`, or `localnet`
+- `SUI_VALIDATOR_KEY` – Validator key string (`key_scheme://base64_key`)
+- `SUI_PACKAGE_ID` – Published SONAR Move package ID
+- `SUI_SESSION_REGISTRY_ID` – SessionRegistry object ID
+- `SUI_VALIDATOR_CAP_ID` – ValidatorCap object ID
+- `WALRUS_UPLOAD_URL` – Plaintext upload endpoint
+
+Recommended/optional:
+- `WALRUS_UPLOAD_TOKEN` – Bearer token for Walrus uploads
+- `MAX_FILE_SIZE_GB` – Override streaming upload limit (default 13)
 
 ### 3. Run Locally
 
@@ -102,15 +110,14 @@ Get verification status and results.
 **Response:**
 ```json
 {
-  "id": "uuid",
-  "state": "completed",
-  "stage": "analysis",
-  "progress": 1.0,
-  "approved": true,
-  "quality": { "passed": true, "sample_rate": 44100, ... },
-  "copyright": { "detected": false, ... },
-  "transcript": "Audio transcript...",
-  "analysis": { "qualityScore": 0.87, "safetyPassed": true, ... }
+  "id": "0x...session",
+  "on_chain": true,
+  "object_data": {
+    "data": {
+      "type": "0x...::verification_session::VerificationSession",
+      "fields": { "...": "Move object payload" }
+    }
+  }
 }
 ```
 
@@ -171,6 +178,14 @@ railway variables set KV_REST_API_URL=xxx
 railway variables set KV_REST_API_TOKEN=xxx
 railway variables set VERIFIER_AUTH_TOKEN=xxx
 railway variables set ACOUSTID_API_KEY=xxx
+railway variables set ALLOWED_ORIGINS=https://app.yourfrontend.com
+railway variables set SUI_NETWORK=testnet
+railway variables set SUI_VALIDATOR_KEY=key_scheme://base64
+railway variables set SUI_PACKAGE_ID=0x...
+railway variables set SUI_SESSION_REGISTRY_ID=0x...
+railway variables set SUI_VALIDATOR_CAP_ID=0x...
+railway variables set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
+railway variables set WALRUS_UPLOAD_TOKEN=secrettoken
 ```
 
 ### Fly.io
@@ -181,10 +196,16 @@ fly launch
 
 # Set secrets
 fly secrets set GEMINI_API_KEY=xxx
-fly secrets set KV_REST_API_URL=xxx
-fly secrets set KV_REST_API_TOKEN=xxx
 fly secrets set VERIFIER_AUTH_TOKEN=xxx
 fly secrets set ACOUSTID_API_KEY=xxx
+fly secrets set ALLOWED_ORIGINS=https://app.yourfrontend.com
+fly secrets set SUI_NETWORK=testnet
+fly secrets set SUI_VALIDATOR_KEY=key_scheme://base64
+fly secrets set SUI_PACKAGE_ID=0x...
+fly secrets set SUI_SESSION_REGISTRY_ID=0x...
+fly secrets set SUI_VALIDATOR_CAP_ID=0x...
+fly secrets set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
+fly secrets set WALRUS_UPLOAD_TOKEN=secrettoken
 
 # Deploy
 fly deploy
@@ -262,12 +283,15 @@ apt-get install libchromaprint-tools ffmpeg
 
 Run tests:
 ```bash
-pytest tests/
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+pytest
 ```
 
 Type checking:
 ```bash
-mypy main.py verification_pipeline.py kv_client.py
+mypy main.py verification_pipeline.py sui_client.py
 ```
 
 ## License
