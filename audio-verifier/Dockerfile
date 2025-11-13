@@ -55,6 +55,23 @@ RUN mkdir -p /etc/nix && \
 # bash is required for start.sh script execution
 RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
 
+# Set up library paths for runtime (needed for numpy C extensions)
+# Find gcc's libstdc++ and add to LD_LIBRARY_PATH
+RUN GCC_LIB_DIR=$(find /nix/store -name "libstdc++.so.6" -type f 2>/dev/null | head -1 | xargs dirname) && \
+    if [ -z "$GCC_LIB_DIR" ]; then \
+        echo "❌ Error: libstdc++.so.6 not found in Nix store" && exit 1; \
+    fi && \
+    echo "Found libstdc++ at: $GCC_LIB_DIR" && \
+    echo "$GCC_LIB_DIR" > /tmp/gcc_lib_dir.txt && \
+    chmod 644 /tmp/gcc_lib_dir.txt && \
+    echo "export LD_LIBRARY_PATH=\"$GCC_LIB_DIR:\${LD_LIBRARY_PATH:-}\"" >> /etc/profile.d/nix-libs.sh && \
+    chmod +x /etc/profile.d/nix-libs.sh
+
+# Set LD_LIBRARY_PATH for all processes using the found path
+# Read the path from the file we created and set it as an environment variable
+RUN GCC_LIB_DIR=$(cat /tmp/gcc_lib_dir.txt) && \
+    echo "export LD_LIBRARY_PATH=\"$GCC_LIB_DIR:\${LD_LIBRARY_PATH:-}\"" >> /etc/environment
+
 # Create directory for application
 WORKDIR /app
 
