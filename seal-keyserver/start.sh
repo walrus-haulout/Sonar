@@ -274,7 +274,21 @@ echo "   This may take 30-60s to connect to Sui Mainnet and initialize"
 echo "   Health checks will start after initialization completes"
 echo ""
 
+# Verify binary is actually executable and can be read
+echo "🔍 Verifying binary before execution..."
+if [ -x "/opt/key-server/bin/key-server" ]; then
+  echo "   ✓ Binary is executable"
+else
+  echo "   ❌ Binary is not executable, attempting to fix..."
+  chmod +x /opt/key-server/bin/key-server
+fi
+
+# Try to get binary info (this will fail if libraries are missing, but gives us info)
+echo "   Binary location: $(ls -lh /opt/key-server/bin/key-server)"
+echo "   Testing binary execution..."
+
 # Change to /app directory for runtime
 cd /app
 
+# Execute the binary
 exec /opt/key-server/bin/key-server

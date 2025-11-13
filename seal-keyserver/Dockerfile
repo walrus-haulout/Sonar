@@ -81,6 +81,7 @@ FROM debian:bullseye-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpq5 \
+    libssl1.1 \
     curl \
     python3 \
     socat \
@@ -93,12 +94,13 @@ RUN mkdir -p /opt/key-server/bin
 COPY --from=builder /build/seal/target/release/key-server /opt/key-server/bin/key-server
 COPY --from=builder /build/seal/target/release/seal-cli /opt/key-server/bin/seal-cli
 
-# Verify binaries were copied successfully
+# Verify binaries were copied successfully and set permissions
 RUN echo "=== Verifying copied binaries ===" && \
     ls -lah /opt/key-server/bin/ && \
     test -f /opt/key-server/bin/key-server && \
     test -f /opt/key-server/bin/seal-cli && \
-    echo "✅ Binaries copied and verified successfully" || \
+    chmod +x /opt/key-server/bin/key-server /opt/key-server/bin/seal-cli && \
+    echo "✅ Binaries copied and permissions set successfully" || \
     (echo "❌ Error: Binaries not found after COPY" && \
      echo "Contents of /opt/key-server/bin:" && \
      ls -la /opt/key-server/bin/ && \
