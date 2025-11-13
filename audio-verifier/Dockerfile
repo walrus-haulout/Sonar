@@ -53,7 +53,7 @@ RUN mkdir -p /etc/nix && \
 # Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
 # bash is required for start.sh script execution
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.gcc.cc.lib nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
 
 # Set up library paths for runtime (needed for numpy C extensions)
 # Find gcc's libstdc++ and add to LD_LIBRARY_PATH
