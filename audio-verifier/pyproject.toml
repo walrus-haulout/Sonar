@@ -2,7 +2,7 @@
 name = "sonar-audio-verifier"
 version = "2.0.0"
 description = "Comprehensive audio verification: quality, copyright, transcription, and AI analysis"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     # FastAPI server
     "fastapi>=0.104.0",

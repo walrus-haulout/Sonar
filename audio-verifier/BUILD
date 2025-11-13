@@ -10,7 +10,7 @@ genrule(
     ]),
     outs = ["deps-installed"],
     cmd = """
-        python3.14 -m venv .venv && \
+        python3.13 -m venv .venv && \
         . .venv/bin/activate && \
         pip install --upgrade pip && \
         pip install . && \
@@ -30,7 +30,7 @@ genrule(
     outs = ["app-installed"],
     tools = [":dependencies"],
     cmd = """
-        python3.14 -m venv .venv && \
+        python3.13 -m venv .venv && \
         . .venv/bin/activate && \
         pip install --upgrade pip && \
         pip install . && \

@@ -2,7 +2,7 @@
   description = "SONAR Audio Verifier development environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";  # Use unstable for Python 3.14 support
+        nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";  # Use unstable for Python 3.13 support
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -13,15 +13,15 @@
           inherit system;
         };
         
-        # Python 3.14 (latest stable)
-        # Note: Requires nixos-unstable or newer nixpkgs for python314
-        python314 = pkgs.python314;
+        # Python 3.13 (latest stable compatible with numba)
+        # Note: numba only supports Python >=3.10,<3.14
+        python313 = pkgs.python313;
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Python 3.14 with packages (pip is included by default)
-            (python314.withPackages (ps: with ps; [
+            # Python 3.13 with packages (pip is included by default)
+            (python313.withPackages (ps: with ps; [
               # Core packages available in nixpkgs
               fastapi
               uvicorn
@@ -63,7 +63,7 @@
           
           shellHook = ''
             echo "🔧 SONAR Audio Verifier development environment"
-            echo "Python version: $(python3.14 --version)"
+            echo "Python version: $(python3.13 --version)"
             echo "Bazel version: $(bazel --version)"
             echo ""
             echo "Available commands:"
@@ -76,12 +76,12 @@
         };
 
         # Build outputs using buildPythonApplication
-        packages.default = python314.pkgs.buildPythonApplication {
+        packages.default = python313.pkgs.buildPythonApplication {
           pname = "sonar-audio-verifier";
           version = "2.0.0";
           src = ./.;
           
-          propagatedBuildInputs = with python314.pkgs; [
+          propagatedBuildInputs = with python313.pkgs; [
             fastapi
             uvicorn
             httpx

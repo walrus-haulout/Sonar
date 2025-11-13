@@ -11,13 +11,13 @@ echo "🔨 Building Python application using ${BUILD_METHOD}..."
 case "$BUILD_METHOD" in
   pip)
     echo "Using pip build..."
-    if command -v python3.14 >/dev/null 2>&1; then
-      python3.14 -m venv .venv || true
+    if command -v python3.13 >/dev/null 2>&1; then
+      python3.13 -m venv .venv || true
       . .venv/bin/activate 2>/dev/null || true
       pip install --upgrade pip
       pip install .
     else
-      echo "❌ Error: python3.14 not found"
+      echo "❌ Error: python3.13 not found"
       exit 1
     fi
     ;;
@@ -53,6 +53,6 @@ esac
 
 echo "✅ Build complete"
 echo "Verifying installation..."
-python3.14 -c "import main; print('  ✓ main module found')" || (echo "  ✗ main module not found" && exit 1)
-python3.14 -c "import fastapi; print('  ✓ fastapi found')" || (echo "  ✗ fastapi not found" && exit 1)
+python3.13 -c "import main; print('  ✓ main module found')" || (echo "  ✗ main module not found" && exit 1)
+python3.13 -c "import fastapi; print('  ✓ fastapi found')" || (echo "  ✗ fastapi not found" && exit 1)
 

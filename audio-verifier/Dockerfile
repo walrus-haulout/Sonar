@@ -19,8 +19,8 @@ RUN mkdir -p /etc/nix && \
 
 WORKDIR /build
 
-# Install Python 3.14 (includes pip), build tools, and system dependencies via nix-env
-RUN nix-env -iA nixpkgs.python314 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.git nixpkgs.openssl nixpkgs.zlib
+# Install Python 3.13 (includes pip), build tools, and system dependencies via nix-env
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.git nixpkgs.openssl nixpkgs.zlib
 
 # Copy project files
 COPY pyproject.toml .
@@ -28,7 +28,7 @@ COPY *.py .
 
 # Create virtual environment and install Python dependencies using pip
 # Nix-managed Python is immutable, so we must use a venv
-RUN python3.14 -m venv /build/.venv && \
+RUN python3.13 -m venv /build/.venv && \
     . /build/.venv/bin/activate && \
     pip install --upgrade pip && \
     pip install .
@@ -50,9 +50,9 @@ RUN mkdir -p /etc/nix && \
     echo "sandbox = false" >> /etc/nix/nix.conf
 
 # Install runtime dependencies using nix-env
-# Python 3.14 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
-# Note: pip comes with python314, so we don't need to install it separately
-RUN nix-env -iA nixpkgs.python314 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib
+# Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
+# Note: pip comes with python313, so we don't need to install it separately
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib
 
 # Create directory for application
 WORKDIR /app
@@ -63,7 +63,7 @@ COPY *.py .
 
 # Create virtual environment and install Python dependencies in runtime stage
 # Nix-managed Python is immutable, so we must use a venv
-RUN python3.14 -m venv /app/.venv && \
+RUN python3.13 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --upgrade pip && \
     pip install .

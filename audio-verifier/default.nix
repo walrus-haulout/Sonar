@@ -1,5 +1,5 @@
 # Fallback default.nix for non-flake Nix usage
-# Provides Python 3.14 with pip and all build dependencies
+# Provides Python 3.13 with pip and all build dependencies
 
 let
   pkgs = import <nixpkgs> {};
@@ -7,8 +7,8 @@ in
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    # Python 3.14 with pip
-    (python314.withPackages (ps: with ps; [
+    # Python 3.13 with pip
+    (python313.withPackages (ps: with ps; [
       pip
       # Add packages available in nixpkgs here
     ]))
