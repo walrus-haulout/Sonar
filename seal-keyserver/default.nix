@@ -1,13 +1,19 @@
 # Fallback default.nix for non-flake Nix usage
-# Uses standard nixpkgs Rust (no rust-overlay needed)
+# Uses rust-overlay for Rust nightly to support unstable features
 
-{ pkgs ? import <nixpkgs> {} }:
+let
+  rust-overlay = import (builtins.fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz");
+  pkgs = import <nixpkgs> {
+    overlays = [ rust-overlay ];
+  };
+in
 
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    # Rust toolchain from nixpkgs
-    rustc
-    cargo
+    # Use Rust nightly for unstable features support (required by sui-sdk-types)
+    (rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {
+      extensions = [ "rust-src" ];
+    }))
     
     # System dependencies
     openssl
