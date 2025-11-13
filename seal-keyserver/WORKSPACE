@@ -1,0 +1,43 @@
+workspace(name = "seal_keyserver")
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# Rules Rust
+http_archive(
+    name = "rules_rust",
+    sha256 = "9d04e658593beee1c6b5a9ab1118ef9887d56d8d8c01f0f88cc09ca8f6f6a0a3",
+    urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.40.0/rules_rust-v0.40.0.tar.gz"],
+)
+
+load("@rules_rust//rust:repositories.bzl", "rust_repositories", "rust_repository_set")
+
+rust_repositories(
+    edition = "2021",
+    versions = [
+        "1.83.0",
+    ],
+)
+
+load("@rules_rust//rust:repositories.bzl", "rust_register_toolchains")
+
+rust_register_toolchains(
+    edition = "2021",
+    versions = ["1.83.0"],
+)
+
+# Rules Nixpkgs for Nix integration
+http_archive(
+    name = "io_tweag_rules_nixpkgs",
+    sha256 = "b1c69d72f36e6e5b1e5e7c4e0e7c4e0e7c4e0e7c4e0e7c4e0e7c4e0e7c4e0e7",
+    strip_prefix = "rules_nixpkgs-0.10.1",
+    urls = ["https://github.com/tweag/rules_nixpkgs/archive/v0.10.1.tar.gz"],
+)
+
+load("@io_tweag_rules_nixpkgs//nixpkgs:nixpkgs.bzl", "nixpkgs_git_repository", "nixpkgs_package")
+
+# Nixpkgs repository
+nixpkgs_git_repository(
+    name = "nixpkgs",
+    revision = "nixos-24.05",  # Pin to a stable NixOS version
+)
+

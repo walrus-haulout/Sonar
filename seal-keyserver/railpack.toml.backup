@@ -1,0 +1,47 @@
+# Railpack configuration for SEAL Key Server
+# Railway will use this to build the Rust project
+
+[phases.setup]
+nixPkgs = ["rustc", "cargo", "openssl", "pkg-config", "libpq", "python3", "socat", "curl"]
+cmds = [
+  "echo '📦 Creating root Cargo.toml for Railpack Rust detection...'",
+  "cat > Cargo.toml << 'EOFCARGO'",
+  "# Root Cargo.toml created by Railpack for Rust project detection",
+  "# The actual Rust workspace is in seal/Cargo.toml",
+  "[workspace]",
+  "members = [\"seal\"]",
+  "resolver = \"2\"",
+  "EOFCARGO",
+  "echo '✅ Root Cargo.toml created - Railpack will now detect Rust project'"
+]
+
+[phases.build]
+cmds = [
+  "cd seal",
+  "echo '🔨 Building Rust binaries...'",
+  "echo 'Building seal-cli...'",
+  "cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true",
+  "echo 'Building key-server...'",
+  "cargo build --bin key-server --release --config net.git-fetch-with-cli=true",
+  "echo '✅ Build complete'",
+  "echo 'Verifying binaries exist...'",
+  "test -f target/release/seal-cli && echo '  ✓ seal-cli found' || (echo '  ✗ seal-cli not found' && exit 1)",
+  "test -f target/release/key-server && echo '  ✓ key-server found' || (echo '  ✗ key-server not found' && exit 1)",
+  "cd .."
+]
+cacheDirectories = ["seal/target"]
+
+[phases.install]
+cmds = [
+  "mkdir -p /opt/key-server/bin",
+  "test -f seal/target/release/key-server || (echo '❌ key-server binary not found after build' && exit 1)",
+  "test -f seal/target/release/seal-cli || (echo '❌ seal-cli binary not found after build' && exit 1)",
+  "cp seal/target/release/key-server /opt/key-server/bin/key-server",
+  "cp seal/target/release/seal-cli /opt/key-server/bin/seal-cli",
+  "chmod +x /opt/key-server/bin/key-server /opt/key-server/bin/seal-cli",
+  "test -f /opt/key-server/bin/key-server && test -f /opt/key-server/bin/seal-cli && echo '✅ Binaries installed successfully' || (echo '❌ Binary installation failed' && exit 1)"
+]
+
+[start]
+cmd = "./start.sh"
+

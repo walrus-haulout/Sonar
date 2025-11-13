@@ -1,0 +1,21 @@
+# Bazel configuration for seal-keyserver
+
+# Use the default build platform
+build --platforms=@rules_rust//rust/platform:linux_x86_64
+
+# Enable remote caching (optional, for CI/CD)
+# build --remote_cache=...
+
+# Build with release optimizations
+build --compilation_mode=opt
+
+# Rust-specific settings
+build --@rules_rust//:extra_rustc_flags=-C opt-level=3
+build --@rules_rust//:extra_rustc_flags=-C lto=thin
+
+# Keep going on errors for better error reporting
+build --keep_going
+
+# Show more detailed output
+build --verbose_failures
+
