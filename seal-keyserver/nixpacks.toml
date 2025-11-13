@@ -1,0 +1,23 @@
+# Nixpacks configuration for SEAL Key Server
+# Railway will use this to build the Rust project
+
+[phases.setup]
+nixPkgs = ["rustc", "cargo", "openssl", "pkg-config", "libpq", "python3"]
+
+[phases.build]
+cmds = [
+  "cd seal",
+  "cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true",
+  "cargo build --bin key-server --release --config net.git-fetch-with-cli=true"
+]
+
+[phases.install]
+cmds = [
+  "mkdir -p /opt/key-server/bin",
+  "cp seal/target/release/key-server /opt/key-server/bin/",
+  "cp seal/target/release/seal-cli /opt/key-server/bin/"
+]
+
+[start]
+cmd = "./start.sh"
+

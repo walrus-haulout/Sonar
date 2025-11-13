@@ -12,9 +12,6 @@ key-server-config.yaml
 # Secrets directory
 secrets/
 
-# Local testing
-seal/
-
 # Build artifacts
 target/
 
