@@ -53,13 +53,52 @@ RUN mkdir -p /etc/nix && \
 # Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
 # bash is required for start.sh script execution
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.gcc.cc.lib nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash
+
+# Install gcc.cc.lib separately to ensure libstdc++ is available
+# This is the runtime library package for GCC's C++ standard library
+# Note: gcc.cc.lib is a nested attribute, so we use nix-env -i with an expression
+RUN nix-env -i -f '<nixpkgs>' -A gcc.cc.lib 2>/dev/null || \
+    nix-env -i -E 'with import <nixpkgs> {}; gcc.cc.lib' 2>/dev/null || \
+    echo "Note: gcc.cc.lib installation attempted (may not be needed if gcc includes it)"
 
 # Set up library paths for runtime (needed for numpy C extensions)
 # Find gcc's libstdc++ and add to LD_LIBRARY_PATH
-RUN LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so.6" -type f 2>/dev/null | head -1) && \
+# Try multiple search strategies to locate the library
+RUN LIBSTDCPP_FILE="" && \
+    # Strategy 1: Find in gcc package directory
+    GCC_BIN=$(which gcc 2>/dev/null || echo "") && \
+    if [ -n "$GCC_BIN" ]; then \
+        GCC_PKG=$(nix-store -q "$GCC_BIN" 2>/dev/null | head -1 || echo ""); \
+        if [ -n "$GCC_PKG" ]; then \
+            LIBSTDCPP_FILE=$(find "$GCC_PKG" -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+        fi; \
+    fi && \
+    # Strategy 2: Find in gcc.cc.lib package if installed
     if [ -z "$LIBSTDCPP_FILE" ]; then \
-        echo "❌ Error: libstdc++.so.6 not found in Nix store" && exit 1; \
+        GCC_LIB_PKG=$(nix-env -q --out-path 2>/dev/null | grep -E 'gcc.*cc.*lib' | head -1 | awk '{print $NF}' || echo ""); \
+        if [ -n "$GCC_LIB_PKG" ] && [ -d "$GCC_LIB_PKG" ]; then \
+            LIBSTDCPP_FILE=$(find "$GCC_LIB_PKG" -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+        fi; \
+    fi && \
+    # Strategy 3: General search in Nix store
+    if [ -z "$LIBSTDCPP_FILE" ]; then \
+        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so.6" -type f 2>/dev/null | head -1); \
+    fi && \
+    # Strategy 4: Find any version of libstdc++.so
+    if [ -z "$LIBSTDCPP_FILE" ]; then \
+        LIBSTDCPP_FILE=$(find /nix/store -name "libstdc++.so*" -type f 2>/dev/null | grep -E 'libstdc\+\+\.so\.[0-9]+$' | head -1); \
+    fi && \
+    # Error handling with debug info
+    if [ -z "$LIBSTDCPP_FILE" ]; then \
+        echo "❌ Error: libstdc++.so not found in Nix store" && \
+        echo "Debug: GCC binary location: $(which gcc)" && \
+        echo "Debug: GCC package: $(nix-store -q $(which gcc) 2>/dev/null | head -1)" && \
+        echo "Debug: Installed packages:" && \
+        nix-env -q 2>/dev/null | head -20 && \
+        echo "Debug: Searching for any libstdc++ files..." && \
+        find /nix/store -name "*libstdc++*" -type f 2>/dev/null | head -10 && \
+        exit 1; \
     fi && \
     GCC_LIB_DIR=$(dirname "$LIBSTDCPP_FILE") && \
     echo "Found libstdc++ at: $GCC_LIB_DIR" && \
