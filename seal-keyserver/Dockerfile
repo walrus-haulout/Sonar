@@ -23,7 +23,9 @@ RUN mkdir -p /etc/nix && \
 WORKDIR /build
 
 # Install Python 3 and git for script execution and repository cloning
-RUN nix-env -iA nixpkgs.python3 nixpkgs.git
+# Remove git-minimal first to avoid conflicts, then install full git
+RUN nix-env -e git-minimal 2>/dev/null || true && \
+    nix-env -iA nixpkgs.python3 nixpkgs.git
 
 # Copy Nix files first for better caching
 COPY flake.nix default.nix ./
