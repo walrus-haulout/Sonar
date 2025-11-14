@@ -23,7 +23,7 @@ WORKDIR /build
 # Remove git-minimal first to avoid conflicts, then install full git
 # Install glibc and other dependencies needed for rustup compatibility
 RUN nix-env -e git-minimal 2>/dev/null || true && \
-    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc && \
+    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | env RUSTUP_INIT_SKIP_PATH_CHECK=yes sh -s -- -y --default-toolchain nightly && \
     echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
 
