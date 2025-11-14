@@ -24,25 +24,18 @@ WORKDIR /build
 RUN nix-env -e git-minimal 2>/dev/null || true && \
     nix-env -iA nixpkgs.rustc nixpkgs.cargo nixpkgs.git nixpkgs.gcc nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib
 
-# Clone seal repository and build seal-cli (configure OpenSSL paths dynamically)
+# Clone seal repository and build seal-cli (configure OpenSSL paths via nix eval)
 RUN set -eux; \
     git clone https://github.com/MystenLabs/seal.git seal; \
     cd seal; \
-    git checkout main && \
-    OPENSSL_LIB_SO=$(find /root/.nix-profile -name "libssl.so*" -print -quit); \
-    test -n "$OPENSSL_LIB_SO"; \
-    OPENSSL_LIB_SO=$(readlink -f "$OPENSSL_LIB_SO"); \
-    OPENSSL_LIB_DIR=$(dirname "$OPENSSL_LIB_SO"); \
-    OPENSSL_DIR=$(dirname "$OPENSSL_LIB_DIR"); \
-    OPENSSL_INCLUDE_HEADER=$(find /root/.nix-profile -path "*/include/openssl/ssl.h" -print -quit); \
-    test -n "$OPENSSL_INCLUDE_HEADER"; \
-    OPENSSL_INCLUDE_DIR=$(dirname "$(dirname "$(readlink -f "$OPENSSL_INCLUDE_HEADER")")"); \
-    OPENSSL_PKGCONFIG=$(find /root/.nix-profile -path "*/pkgconfig/openssl.pc" -print -quit); \
-    test -n "$OPENSSL_PKGCONFIG"; \
-    PKG_CONFIG_DIR=$(dirname "$(readlink -f "$OPENSSL_PKGCONFIG")"); \
-    export OPENSSL_DIR OPENSSL_LIB_DIR OPENSSL_INCLUDE_DIR; \
-    export PKG_CONFIG_PATH="${PKG_CONFIG_DIR}:${PKG_CONFIG_PATH:-}"; \
-    export CARGO_NET_GIT_FETCH_WITH_CLI=true && \
+    git checkout main; \
+    OPENSSL_OUT=$(nix eval --raw nixpkgs.openssl.outPath); \
+    OPENSSL_DEV=$(nix eval --raw nixpkgs.openssl.dev.outPath); \
+    export OPENSSL_DIR="$OPENSSL_DEV"; \
+    export OPENSSL_LIB_DIR="$OPENSSL_OUT/lib"; \
+    export OPENSSL_INCLUDE_DIR="$OPENSSL_DEV/include"; \
+    export PKG_CONFIG_PATH="$OPENSSL_DEV/lib/pkgconfig:${PKG_CONFIG_PATH:-}"; \
+    export CARGO_NET_GIT_FETCH_WITH_CLI=true; \
     cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true
 
 # Verify seal-cli was built
