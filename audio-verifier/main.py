@@ -37,7 +37,10 @@ app = FastAPI(
 )
 
 # Environment configuration
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+# CORS origins - standardized to CORS_ORIGIN (matches backend naming)
+# Supports backwards compatibility with ALLOWED_ORIGINS
+CORS_ORIGIN = os.getenv("CORS_ORIGIN") or os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGIN.split(",")]
 VERIFIER_AUTH_TOKEN = os.getenv("VERIFIER_AUTH_TOKEN")
 MAX_FILE_SIZE_GB = int(os.getenv("MAX_FILE_SIZE_GB", "13"))
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_GB * 1024**3
@@ -99,7 +102,7 @@ if not WALRUS_UPLOAD_URL and not ENABLE_LEGACY_UPLOAD:
 # CORS middleware - explicit origins only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
