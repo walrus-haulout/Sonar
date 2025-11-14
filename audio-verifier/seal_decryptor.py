@@ -50,9 +50,9 @@ async def decrypt_encrypted_blob(
         raise ValueError("WALRUS_AGGREGATOR_URL not configured")
     if not SEAL_PACKAGE_ID:
         raise ValueError("SEAL_PACKAGE_ID not configured")
-    if len(SEAL_SECRET_KEYS) < SEAL_THRESHOLD:
+    if len(SEAL_KEY_SERVER_IDS) < SEAL_THRESHOLD:
         raise ValueError(
-            f"Not enough Seal secret keys: have {len(SEAL_SECRET_KEYS)}, need {SEAL_THRESHOLD}"
+            f"Not enough Seal key server IDs: have {len(SEAL_KEY_SERVER_IDS)}, need {SEAL_THRESHOLD}"
         )
     if not os.path.exists(SEAL_CLI_PATH):
         raise ValueError(f"seal-cli not found at {SEAL_CLI_PATH}")
@@ -200,23 +200,26 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str) -> bytes:
     Returns:
         Decrypted plaintext bytes
     """
-    # Use threshold number of secret keys
-    keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD]
+    # Use threshold number of key server IDs for decryption
     key_server_ids_to_use = SEAL_KEY_SERVER_IDS[:SEAL_THRESHOLD] if SEAL_KEY_SERVER_IDS else []
-
-    if len(keys_to_use) < SEAL_THRESHOLD:
-        raise ValueError(
-            f"Not enough secret keys: have {len(keys_to_use)}, need {SEAL_THRESHOLD}"
-        )
+    keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
 
     # Build seal-cli decrypt command
     # Format: seal-cli decrypt <encrypted_object_hex> <secret_key_1> <secret_key_2> ... [-- <key_server_id_1> <key_server_id_2> ...]
     # Note: With envelope encryption, encrypted_object_hex is small (~400 bytes), so no argument limit issues
-    cmd = [SEAL_CLI_PATH, "decrypt", encrypted_object_hex] + keys_to_use
+    cmd = [SEAL_CLI_PATH, "decrypt", encrypted_object_hex]
 
-    if key_server_ids_to_use and len(key_server_ids_to_use) == len(keys_to_use):
+    # Use secret keys if available, otherwise use key server IDs for on-demand key fetching
+    if keys_to_use:
+        cmd.extend(keys_to_use)
+        if key_server_ids_to_use and len(key_server_ids_to_use) == len(keys_to_use):
+            cmd.append("--")
+            cmd.extend(key_server_ids_to_use)
+    elif key_server_ids_to_use:
         cmd.append("--")
         cmd.extend(key_server_ids_to_use)
+    else:
+        raise ValueError("No secret keys or key server IDs configured for decryption")
 
     logger.debug(f"Running seal-cli decrypt with {len(keys_to_use)} keys for identity {identity[:16]}...")
 
