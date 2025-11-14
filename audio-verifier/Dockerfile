@@ -22,15 +22,21 @@ WORKDIR /build
 # Install dependencies for building seal-cli
 # Remove git-minimal first to avoid conflicts, then install full git
 # Install rustup from Nix (properly patched for NixOS) and other build dependencies
+# Also install patch utility for applying seal-cli modifications
 RUN nix-env -e git-minimal 2>/dev/null || true && \
-    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.rustup nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl && \
+    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.rustup nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl nixpkgs.patch && \
     rustup default nightly
 
-# Clone seal repository and build seal-cli (configure OpenSSL paths via nix eval)
+# Copy seal-cli patch file
+COPY seal-cli-file-input.patch /build/seal-cli-file-input.patch
+
+# Clone seal repository, apply patch for file input support, and build seal-cli
 RUN set -eux; \
     git clone https://github.com/MystenLabs/seal.git seal; \
     cd seal; \
     git checkout main; \
+    patch -p1 < /build/seal-cli-file-input.patch || \
+        (echo "⚠️  Patch failed, seal-cli may not support --encrypted-object-file flag" && exit 1); \
     export PATH="$HOME/.cargo/bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:$PATH"; \
     OPENSSL_DEV=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.dev.outPath'); \
     export PKG_CONFIG_PATH="$OPENSSL_DEV/lib/pkgconfig:${PKG_CONFIG_PATH:-}"; \

@@ -209,17 +209,26 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str) -> bytes:
             f"Not enough secret keys: have {len(keys_to_use)}, need {SEAL_THRESHOLD}"
         )
 
-    # Build seal-cli decrypt command
-    # Format: seal-cli decrypt <encrypted_object_hex> <secret_key_1> <secret_key_2> ... [-- <key_server_id_1> <key_server_id_2> ...]
-    cmd = [SEAL_CLI_PATH, "decrypt", encrypted_object_hex] + keys_to_use
-
-    if key_server_ids_to_use and len(key_server_ids_to_use) == len(keys_to_use):
-        cmd.append("--")
-        cmd.extend(key_server_ids_to_use)
-
-    logger.debug(f"Running seal-cli decrypt with {len(keys_to_use)} keys for identity {identity[:16]}...")
-
+    # Write encrypted object to temporary file to avoid "Argument list too long" error
+    # Large hex strings exceed command-line argument limits (~2MB on most systems)
+    temp_file = None
     try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.hex', delete=False) as f:
+            f.write(encrypted_object_hex)
+            temp_file = f.name
+
+        logger.debug(f"Wrote encrypted object to temp file: {temp_file}")
+
+        # Build seal-cli decrypt command with file input
+        # Format: seal-cli decrypt --encrypted-object-file <path> <secret_key_1> <secret_key_2> ... [-- <key_server_id_1> <key_server_id_2> ...]
+        cmd = [SEAL_CLI_PATH, "decrypt", "--encrypted-object-file", temp_file] + keys_to_use
+
+        if key_server_ids_to_use and len(key_server_ids_to_use) == len(keys_to_use):
+            cmd.append("--")
+            cmd.extend(key_server_ids_to_use)
+
+        logger.debug(f"Running seal-cli decrypt with {len(keys_to_use)} keys for identity {identity[:16]}...")
+
         # Run seal-cli
         result = subprocess.run(
             cmd,
@@ -274,6 +283,14 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str) -> bytes:
         raise RuntimeError(f"Seal decryption failed: {error_output}") from e
     except subprocess.TimeoutExpired:
         raise RuntimeError("Seal decryption timed out after 60 seconds") from None
+    finally:
+        # Clean up temporary file
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+                logger.debug(f"Cleaned up temp file: {temp_file}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {temp_file}: {e}")
 
 
 def _decrypt_aes(encrypted_data: bytes, aes_key: bytes) -> bytes:
