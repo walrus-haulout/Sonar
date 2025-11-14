@@ -42,9 +42,8 @@ VERIFIER_AUTH_TOKEN = os.getenv("VERIFIER_AUTH_TOKEN")
 MAX_FILE_SIZE_GB = int(os.getenv("MAX_FILE_SIZE_GB", "13"))
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_GB * 1024**3
 
-# Vercel KV configuration (for session storage)
-KV_REST_API_URL = os.getenv("KV_REST_API_URL")
-KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN")
+# PostgreSQL configuration (for session storage, same database as backend)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # OpenRouter API configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -80,8 +79,8 @@ if not ACOUSTID_API_KEY:
 if not VERIFIER_AUTH_TOKEN:
     raise RuntimeError("VERIFIER_AUTH_TOKEN must be set for authenticated access")
 
-if not KV_REST_API_URL or not KV_REST_API_TOKEN:
-    raise RuntimeError("KV_REST_API_URL and KV_REST_API_TOKEN must be set for session storage")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL must be set for session storage (Railway provides this automatically)")
 
 # Validate Seal configuration (required for encrypted blob flow)
 if not SEAL_PACKAGE_ID:
@@ -118,7 +117,7 @@ def get_session_store() -> SessionStore:
     global _session_store
     if _session_store is None:
         _session_store = SessionStore()
-        logger.info("Initialized Vercel KV session store")
+        logger.info("Initialized PostgreSQL session store")
     return _session_store
 
 
@@ -137,7 +136,7 @@ def get_verification_pipeline() -> VerificationPipeline:
             OPENROUTER_API_KEY,
             ACOUSTID_API_KEY
         )
-        logger.info("Initialized verification pipeline with Vercel KV backend")
+        logger.info("Initialized verification pipeline with PostgreSQL backend")
     return _verification_pipeline
 
 
@@ -255,8 +254,20 @@ async def root():
 @app.get("/health")
 async def health():
     """Health check endpoint"""
+    # Test database connection
+    db_connected = False
+    if DATABASE_URL:
+        try:
+            session_store = get_session_store()
+            # Try to get pool (will create table if needed)
+            await session_store._get_pool()
+            db_connected = True
+        except Exception as e:
+            logger.warning(f"Database connection test failed: {e}")
+    
     config_status = {
-        "kv_configured": bool(KV_REST_API_URL and KV_REST_API_TOKEN),
+        "database_configured": bool(DATABASE_URL),
+        "database_connected": db_connected,
         "openrouter_configured": bool(OPENROUTER_API_KEY),
         "acoustid_configured": bool(ACOUSTID_API_KEY),
         "walrus_upload_configured": bool(WALRUS_UPLOAD_URL),  # Legacy
@@ -373,7 +384,7 @@ async def create_verification(
                 logger.warning(f"Failed to extract audio duration: {e}")
                 duration_seconds = 0
 
-            # Create verification session in Vercel KV
+            # Create verification session in PostgreSQL
             session_store = get_session_store()
             session_object_id = await session_store.create_session(verification_id, {
                 "encrypted_cid": encrypted_request.walrusBlobId,  # Store encrypted blob ID
@@ -482,7 +493,7 @@ async def create_verification(
                 }
             )
 
-            # Create verification session in Vercel KV
+            # Create verification session in PostgreSQL
             session_store = get_session_store()
             session_object_id = await session_store.create_session(verification_id, {
                 "plaintext_cid": plaintext_cid,
@@ -562,7 +573,7 @@ def _run_pipeline_sync(
 @app.get("/verify/{session_object_id}", dependencies=[Depends(verify_bearer_token)])
 async def get_verification_status(session_object_id: str):
     """
-    Get verification status from Vercel KV.
+    Get verification status from PostgreSQL.
 
     Returns verification session data.
 
@@ -606,7 +617,7 @@ async def cancel_verification(session_object_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        # Mark as cancelled in KV
+        # Mark as cancelled in PostgreSQL
         await session_store.mark_failed(session_object_id, {
             "errors": ["Verification cancelled by user"],
             "cancelled": True

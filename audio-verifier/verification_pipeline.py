@@ -37,7 +37,7 @@ class VerificationPipeline:
     Orchestrates the full verification pipeline for audio datasets.
 
     Manages temp files and ensures cleanup even on failures.
-    All verification state is recorded in Vercel KV.
+    All verification state is recorded in PostgreSQL.
     """
 
     def __init__(
@@ -50,7 +50,7 @@ class VerificationPipeline:
         Initialize the verification pipeline.
 
         Args:
-            session_store: Session store for session state (Vercel KV)
+            session_store: Session store for session state (PostgreSQL)
             openrouter_api_key: OpenRouter API key for transcription and analysis
             acoustid_api_key: AcoustID API key for copyright detection
         """

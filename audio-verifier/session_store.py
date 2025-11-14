@@ -1,49 +1,90 @@
 """
-Vercel KV Session Store for Verification Sessions.
+PostgreSQL Session Store for Verification Sessions.
 
-Stores verification session data in Vercel KV (Redis-compatible).
-Replaces on-chain session tracking with simple key-value storage.
+Stores verification session data in Railway Postgres (same database as backend).
+Replaces Vercel KV with PostgreSQL for unified infrastructure.
 """
 
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
-import httpx
+import asyncpg
 
 logger = logging.getLogger(__name__)
 
-# Vercel KV REST API configuration
-KV_REST_API_URL = os.getenv("KV_REST_API_URL")
-KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN")
+# PostgreSQL configuration (same database as backend)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 class SessionStore:
     """
-    Vercel KV-based session storage for verification sessions.
+    PostgreSQL-based session storage for verification sessions.
     
-    Uses Vercel KV REST API to store and retrieve session data.
+    Uses asyncpg for async database operations. Stores sessions in the same
+    Railway Postgres database used by the backend.
     """
 
     def __init__(self):
-        """Initialize session store with Vercel KV credentials."""
-        if not KV_REST_API_URL:
-            raise RuntimeError("KV_REST_API_URL must be set for session storage")
-        if not KV_REST_API_TOKEN:
-            raise RuntimeError("KV_REST_API_TOKEN must be set for session storage")
+        """Initialize session store with PostgreSQL connection."""
+        if not DATABASE_URL:
+            raise RuntimeError("DATABASE_URL must be set for session storage")
         
-        self.kv_url = KV_REST_API_URL.rstrip('/')
-        self.kv_token = KV_REST_API_TOKEN
-        self.headers = {
-            "Authorization": f"Bearer {self.kv_token}",
-            "Content-Type": "application/json"
-        }
-        logger.info("Initialized Vercel KV session store")
+        self.database_url = DATABASE_URL
+        self._pool: Optional[asyncpg.Pool] = None
+        logger.info("Initialized PostgreSQL session store")
 
-    def _get_key(self, session_id: str) -> str:
-        """Get KV key for session ID."""
-        return f"session:{session_id}"
+    async def _get_pool(self) -> asyncpg.Pool:
+        """Get or create database connection pool."""
+        if self._pool is None:
+            self._pool = await asyncpg.create_pool(
+                self.database_url,
+                min_size=1,
+                max_size=10,
+                command_timeout=60
+            )
+            # Create table schema on first connection
+            await self._ensure_schema()
+        return self._pool
+
+    async def _ensure_schema(self):
+        """Create sessions table if it doesn't exist."""
+        if self._pool is None:
+            return
+        
+        async with self._pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS verification_sessions (
+                    id UUID PRIMARY KEY,
+                    verification_id VARCHAR(255) NOT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'processing',
+                    stage VARCHAR(50) NOT NULL DEFAULT 'queued',
+                    progress FLOAT NOT NULL DEFAULT 0.0,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    initial_data JSONB,
+                    results JSONB,
+                    error TEXT
+                );
+            """)
+            
+            # Create indexes if they don't exist
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_verification_id 
+                ON verification_sessions(verification_id);
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_status 
+                ON verification_sessions(status);
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_created_at 
+                ON verification_sessions(created_at);
+            """)
+            
+            logger.info("Verified verification_sessions table schema")
 
     async def create_session(
         self,
@@ -51,7 +92,7 @@ class SessionStore:
         initial_data: Dict[str, Any]
     ) -> str:
         """
-        Create a new verification session in KV.
+        Create a new verification session in PostgreSQL.
         
         Args:
             verification_id: Unique verification identifier
@@ -64,42 +105,32 @@ class SessionStore:
         Returns:
             Session ID (UUID)
         """
-        import uuid
         session_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        
-        session_data = {
-            "id": session_id,
-            "verification_id": verification_id,
-            "status": "processing",
-            "stage": "queued",
-            "progress": 0.0,
-            "created_at": now,
-            "updated_at": now,
-            "initial_data": initial_data,
-            "results": None,
-            "error": None
-        }
+        now = datetime.now(timezone.utc)
         
         try:
-            # Store session in Vercel KV using REST API (Upstash format)
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Upstash REST API format: POST /set with {"key": "...", "value": "..."}
-                response = await client.post(
-                    f"{self.kv_url}/set",
-                    json={
-                        "key": self._get_key(session_id),
-                        "value": json.dumps(session_data)
-                    },
-                    headers=self.headers
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO verification_sessions 
+                    (id, verification_id, status, stage, progress, created_at, updated_at, initial_data)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """,
+                    session_id,
+                    verification_id,
+                    "processing",
+                    "queued",
+                    0.0,
+                    now,
+                    now,
+                    json.dumps(initial_data)
                 )
-                response.raise_for_status()
             
-            logger.info(f"Created session {session_id[:8]}... in Vercel KV")
+            logger.info(f"Created session {session_id[:8]}... in PostgreSQL")
             return session_id
             
         except Exception as e:
-            logger.error(f"Failed to create session in KV: {e}", exc_info=True)
+            logger.error(f"Failed to create session in PostgreSQL: {e}", exc_info=True)
             raise RuntimeError(f"Failed to create session: {str(e)}")
 
     async def update_session(
@@ -108,12 +139,12 @@ class SessionStore:
         updates: Dict[str, Any]
     ) -> bool:
         """
-        Update verification session data in KV.
+        Update verification session data in PostgreSQL.
         
         Args:
             session_id: Session ID
             updates: Dictionary with updates:
-                - stage: Stage name (str) or stage number (int)
+                - stage: Stage name (str)
                 - progress: Progress percentage (0.0-1.0)
                 - status: Optional status update
                 - results: Optional results data
@@ -123,43 +154,72 @@ class SessionStore:
             True if successful, False otherwise
         """
         try:
-            # Fetch current session
-            session = await self.get_session(session_id)
-            if not session:
-                logger.warning(f"Session {session_id[:8]}... not found for update")
+            pool = await self._get_pool()
+            
+            # Build UPDATE query dynamically based on provided updates
+            update_fields = []
+            update_values = []
+            param_num = 1
+            
+            if "stage" in updates:
+                update_fields.append(f"stage = ${param_num}")
+                update_values.append(str(updates["stage"]))
+                param_num += 1
+            
+            if "progress" in updates:
+                update_fields.append(f"progress = ${param_num}")
+                update_values.append(float(updates["progress"]))
+                param_num += 1
+            
+            if "status" in updates:
+                update_fields.append(f"status = ${param_num}")
+                update_values.append(str(updates["status"]))
+                param_num += 1
+            
+            if "results" in updates:
+                update_fields.append(f"results = ${param_num}")
+                update_values.append(json.dumps(updates["results"]))
+                param_num += 1
+            
+            if "error" in updates:
+                error_value = updates["error"]
+                if isinstance(error_value, list):
+                    error_value = ", ".join(str(e) for e in error_value)
+                update_fields.append(f"error = ${param_num}")
+                update_values.append(str(error_value))
+                param_num += 1
+            
+            # Always update updated_at
+            update_fields.append(f"updated_at = ${param_num}")
+            update_values.append(datetime.now(timezone.utc))
+            param_num += 1
+            
+            # Add session_id as last parameter
+            update_values.append(session_id)
+            
+            if not update_fields:
+                logger.warning(f"No fields to update for session {session_id[:8]}...")
                 return False
             
-            # Apply updates
-            if "stage" in updates:
-                session["stage"] = updates["stage"]
-            if "progress" in updates:
-                session["progress"] = float(updates["progress"])
-            if "status" in updates:
-                session["status"] = updates["status"]
-            if "results" in updates:
-                session["results"] = updates["results"]
-            if "error" in updates:
-                session["error"] = updates["error"]
+            query = f"""
+                UPDATE verification_sessions 
+                SET {', '.join(update_fields)}
+                WHERE id = ${param_num}
+            """
             
-            session["updated_at"] = datetime.now(timezone.utc).isoformat()
+            async with pool.acquire() as conn:
+                result = await conn.execute(query, *update_values)
+                
+                # Check if any rows were updated
+                if "0" in result:  # asyncpg returns "UPDATE 0" if no rows affected
+                    logger.warning(f"Session {session_id[:8]}... not found for update")
+                    return False
             
-            # Update in KV (Upstash REST API format)
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.kv_url}/set",
-                    json={
-                        "key": self._get_key(session_id),
-                        "value": json.dumps(session)
-                    },
-                    headers=self.headers
-                )
-                response.raise_for_status()
-            
-            logger.debug(f"Updated session {session_id[:8]}... stage={session.get('stage')} progress={session.get('progress')}")
+            logger.debug(f"Updated session {session_id[:8]}... stage={updates.get('stage')} progress={updates.get('progress')}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to update session in KV: {e}", exc_info=True)
+            logger.error(f"Failed to update session in PostgreSQL: {e}", exc_info=True)
             return False
 
     async def mark_completed(
@@ -168,7 +228,7 @@ class SessionStore:
         result_data: Dict[str, Any]
     ) -> bool:
         """
-        Mark verification as completed in KV.
+        Mark verification as completed in PostgreSQL.
         
         Args:
             session_id: Session ID
@@ -203,7 +263,7 @@ class SessionStore:
         error_data: Dict[str, Any]
     ) -> bool:
         """
-        Mark verification as failed in KV.
+        Mark verification as failed in PostgreSQL.
         
         Args:
             session_id: Session ID
@@ -217,11 +277,13 @@ class SessionStore:
         """
         try:
             status = "cancelled" if error_data.get("cancelled") else "failed"
+            error_value = error_data.get("errors", [error_data.get("stage_failed", "unknown")])
+            
             updates = {
                 "status": status,
                 "stage": "failed",
                 "progress": 0.0,
-                "error": error_data.get("errors", [error_data.get("stage_failed", "unknown")])
+                "error": error_value
             }
             return await self.update_session(session_id, updates)
             
@@ -231,7 +293,7 @@ class SessionStore:
 
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get verification session from KV.
+        Get verification session from PostgreSQL.
         
         Args:
             session_id: Session ID
@@ -240,35 +302,36 @@ class SessionStore:
             Session data if found, None otherwise
         """
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Upstash REST API format: GET /get/{key}
-                response = await client.get(
-                    f"{self.kv_url}/get/{self._get_key(session_id)}",
-                    headers=self.headers
-                )
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow("""
+                    SELECT id, verification_id, status, stage, progress, 
+                           created_at, updated_at, initial_data, results, error
+                    FROM verification_sessions
+                    WHERE id = $1
+                """, session_id)
                 
-                if response.status_code == 404:
-                    logger.warning(f"Session {session_id[:8]}... not found in KV")
+                if not row:
+                    logger.warning(f"Session {session_id[:8]}... not found in PostgreSQL")
                     return None
                 
-                response.raise_for_status()
-                result = response.json()
+                # Convert row to dict
+                session_data = {
+                    "id": str(row["id"]),
+                    "verification_id": row["verification_id"],
+                    "status": row["status"],
+                    "stage": row["stage"],
+                    "progress": float(row["progress"]),
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                    "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
+                    "results": json.loads(row["results"]) if row["results"] else None,
+                    "error": row["error"]
+                }
                 
-                # Upstash returns {"result": "value"} format, where value is a JSON string
-                if "result" in result:
-                    session_data = json.loads(result["result"])
-                else:
-                    # Fallback: try parsing directly
-                    session_data = result if isinstance(result, dict) else json.loads(result)
-                
-                logger.debug(f"Retrieved session {session_id[:8]}... from KV")
+                logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")
                 return session_data
                 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                return None
-            logger.error(f"Failed to get session from KV: {e}", exc_info=True)
-            return None
         except Exception as e:
             logger.error(f"Error retrieving session: {e}", exc_info=True)
             return None
@@ -297,3 +360,9 @@ class SessionStore:
             "progress": progress
         })
 
+    async def close(self):
+        """Close database connection pool."""
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+            logger.info("Closed PostgreSQL connection pool")

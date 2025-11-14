@@ -161,7 +161,7 @@ The service runs a 6-stage pipeline:
      ```
 
 6. **Finalization** (100% progress)
-   - Store results in Vercel KV
+   - Store results in PostgreSQL
    - Return to frontend
 
 ## Deployment
@@ -174,8 +174,7 @@ railway up
 
 # Set environment variables in Railway dashboard
 railway variables set OPENROUTER_API_KEY=xxx
-railway variables set KV_REST_API_URL=xxx
-railway variables set KV_REST_API_TOKEN=xxx
+railway variables set DATABASE_URL=xxx  # Railway provides this automatically when Postgres is linked
 railway variables set VERIFIER_AUTH_TOKEN=xxx
 railway variables set ACOUSTID_API_KEY=xxx
 railway variables set ALLOWED_ORIGINS=https://app.yourfrontend.com
@@ -267,11 +266,11 @@ apt-get install libchromaprint-tools ffmpeg
 - Verify API quota hasn't been exceeded
 - Check file is a supported audio format (WAV, MP3, M4A, etc.)
 
-### Vercel KV connection errors
+### PostgreSQL connection errors
 
-- Confirm `KV_REST_API_URL` and `KV_REST_API_TOKEN` are correct
-- Verify KV instance is active and not rate-limited
-- Check network connectivity from deployment environment
+- Confirm `DATABASE_URL` is set (Railway provides this automatically when Postgres is linked)
+- Verify Postgres database is accessible from deployment environment
+- Check database connection pool limits if experiencing connection errors
 
 ### Large file uploads timeout
 
