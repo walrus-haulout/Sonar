@@ -9,6 +9,9 @@ import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
  * with the auth token.
  */
 
+// Explicitly set Node.js runtime for server-side operations
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
@@ -39,8 +42,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Failed to proxy verification request:', error);
+    
+    // Provide more detailed error information
+    const errorMessage = error.message || 'Failed to start verification';
+    const errorDetails = error.cause ? { cause: error.cause } : {};
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to start verification' },
+      { 
+        error: errorMessage,
+        detail: errorMessage,
+        ...errorDetails
+      },
       { status: 500 }
     );
   }

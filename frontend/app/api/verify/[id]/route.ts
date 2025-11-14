@@ -7,6 +7,9 @@ import { buildVerifierUrl } from '@/lib/config/verifier';
  * SECURITY: Keeps VERIFIER_AUTH_TOKEN server-side.
  */
 
+// Explicitly set Node.js runtime for server-side operations
+export const runtime = 'nodejs';
+
 const VERIFIER_AUTH_TOKEN = process.env.VERIFIER_AUTH_TOKEN;
 
 export async function GET(
@@ -43,8 +46,17 @@ export async function GET(
 
   } catch (error: any) {
     console.error('Failed to get verification status:', error);
+    
+    // Provide more detailed error information
+    const errorMessage = error.message || 'Failed to get verification status';
+    const errorDetails = error.cause ? { cause: error.cause } : {};
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to get verification status' },
+      { 
+        error: errorMessage,
+        detail: errorMessage,
+        ...errorDetails
+      },
       { status: 500 }
     );
   }
