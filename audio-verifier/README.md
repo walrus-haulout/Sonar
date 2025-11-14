@@ -164,6 +164,10 @@ The service runs a 6-stage pipeline:
    - Store results in PostgreSQL
    - Return to frontend
 
+## Dependencies
+
+The service requires `seal-cli` binary for decrypting encrypted audio blobs during verification. The Dockerfile automatically builds and installs `seal-cli` from the MystenLabs Seal repository. If deploying without Docker, ensure `seal-cli` is installed and available in your PATH or set the `SEAL_CLI_PATH` environment variable to point to the binary location.
+
 ## Deployment
 
 ### Railway
@@ -212,8 +216,10 @@ fly deploy
 
 ### Docker (Production)
 
+The Dockerfile automatically builds and installs `seal-cli` during the build process. The binary is installed to `/usr/local/bin/seal-cli` by default.
+
 ```bash
-# Build image
+# Build image (includes seal-cli build)
 docker build -t sonar-audio-verifier .
 
 # Run with environment file
@@ -221,6 +227,11 @@ docker run -p 8000:8000 \
   --env-file .env \
   sonar-audio-verifier
 ```
+
+**Note**: The Docker build includes a multi-stage build that:
+1. Builds `seal-cli` from the MystenLabs Seal repository
+2. Copies the binary to the runtime image at `/usr/local/bin/seal-cli`
+3. Makes it executable and verifies installation
 
 ## Frontend Integration
 
@@ -271,6 +282,12 @@ apt-get install libchromaprint-tools ffmpeg
 - Confirm `DATABASE_URL` is set (Railway provides this automatically when Postgres is linked)
 - Verify Postgres database is accessible from deployment environment
 - Check database connection pool limits if experiencing connection errors
+
+### seal-cli not found errors
+
+- **Docker deployments**: The Dockerfile automatically installs `seal-cli`. If you see this error, rebuild the image.
+- **Non-Docker deployments**: Install `seal-cli` manually or set `SEAL_CLI_PATH` environment variable to point to the binary location.
+- Verify installation: `seal-cli --version` should work from the command line.
 
 ### Large file uploads timeout
 

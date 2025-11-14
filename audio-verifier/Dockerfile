@@ -8,7 +8,33 @@
 # - AI transcription (Gemini)
 # - Content safety & quality analysis (Gemini)
 
-# Stage 1: Nix-based builder
+# Stage 1: Build seal-cli binary
+FROM nixos/nix:latest AS seal-cli-builder
+
+# Enable Nix flakes and configure cache
+RUN mkdir -p /etc/nix && \
+    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && \
+    echo "auto-optimise-store = true" >> /etc/nix/nix.conf && \
+    echo "sandbox = false" >> /etc/nix/nix.conf
+
+WORKDIR /build
+
+# Install Rust/Cargo and git for building seal-cli
+RUN nix-env -iA nixpkgs.rustc nixpkgs.cargo nixpkgs.git nixpkgs.pkg-config nixpkgs.openssl nixpkgs.zlib
+
+# Clone seal repository and build seal-cli
+RUN git clone https://github.com/MystenLabs/seal.git seal && \
+    cd seal && \
+    git checkout main && \
+    export CARGO_NET_GIT_FETCH_WITH_CLI=true && \
+    cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true
+
+# Verify seal-cli was built
+RUN test -f /build/seal/target/release/seal-cli && \
+    echo "✓ seal-cli built successfully" || \
+    (echo "✗ seal-cli build failed" && exit 1)
+
+# Stage 2: Nix-based builder for Python app
 FROM nixos/nix:latest AS builder
 
 # Enable Nix flakes and configure cache
@@ -40,7 +66,7 @@ RUN . /build/.venv/bin/activate && \
     python -c "import librosa; print('✓ Librosa available')" && \
     python -c "import pysui; print('✓ PySui available')"
 
-# Stage 2: Runtime image (NixOS-based for library compatibility)
+# Stage 3: Runtime image (NixOS-based for library compatibility)
 FROM nixos/nix:latest AS runtime
 
 # Enable Nix flakes and configure cache (same as builder stage)
@@ -140,6 +166,21 @@ RUN mkdir -p /bin && \
     else \
         echo "❌ Error: bash not found after installation" && exit 1; \
     fi
+
+# Install seal-cli binary from seal-cli-builder stage
+# Create /usr/local/bin directory and copy seal-cli there
+RUN mkdir -p /usr/local/bin
+
+# Copy seal-cli binary from seal-cli-builder stage
+COPY --from=seal-cli-builder /build/seal/target/release/seal-cli /usr/local/bin/seal-cli
+
+# Verify seal-cli is installed and executable
+RUN test -f /usr/local/bin/seal-cli && \
+    chmod +x /usr/local/bin/seal-cli && \
+    /usr/local/bin/seal-cli --version > /dev/null 2>&1 && \
+    echo "✓ seal-cli installed successfully" || \
+    (echo "⚠️  Warning: seal-cli verification failed (may need runtime libraries)" && \
+     ls -lh /usr/local/bin/seal-cli || true)
 
 # Copy user setup script and start script
 COPY setup_user.py /tmp/setup_user.py
