@@ -168,6 +168,7 @@ export function FileUploadStep({
   };
 
   const processFiles = async (files: File[]) => {
+    console.log('[FileUploadStep] Processing files:', files.length);
     setValidationError(null);
     setIsProcessing(true);
 
@@ -176,6 +177,7 @@ export function FileUploadStep({
       if (multiFile) {
         const multiValidation = validateMultipleFiles(files, selectedFiles);
         if (multiValidation) {
+          console.error('[FileUploadStep] Validation error:', multiValidation);
           setValidationError(multiValidation);
           setIsProcessing(false);
           return;
@@ -223,13 +225,16 @@ export function FileUploadStep({
       // Update state
       if (multiFile && onFilesSelected) {
         const newFiles = [...selectedFiles, ...processedFiles];
+        console.log('[FileUploadStep] Files processed successfully:', newFiles.length);
         setSelectedFiles(newFiles);
         onFilesSelected(newFiles);
       } else if (!multiFile && processedFiles.length > 0) {
         // Single file mode - backwards compatibility
+        console.log('[FileUploadStep] Single file processed successfully:', processedFiles[0].file.name);
         onFileSelected(processedFiles[0]);
       }
     } catch (err) {
+      console.error('[FileUploadStep] Error processing files:', err);
       setValidationError(
         err instanceof Error ? err.message : 'Failed to process audio files'
       );
@@ -272,15 +277,18 @@ export function FileUploadStep({
   );
 
   const handleBrowseClick = () => {
+    console.log('[FileUploadStep] Add More button clicked');
     fileInputRef.current?.click();
   };
 
   const handleRemoveFile = (fileId: string) => {
+    console.log('[FileUploadStep] Removing file:', fileId);
     const fileToRemove = selectedFiles.find((f) => f.id === fileId);
     if (fileToRemove?.preview) {
       URL.revokeObjectURL(fileToRemove.preview);
     }
     const newFiles = selectedFiles.filter((f) => f.id !== fileId);
+    console.log('[FileUploadStep] Files after removal:', newFiles.length);
     setSelectedFiles(newFiles);
     if (onFilesSelected) {
       onFilesSelected(newFiles);
@@ -489,7 +497,10 @@ export function FileUploadStep({
             <div className="flex justify-end mt-4">
               <SonarButton
                 variant="primary"
-                onClick={onContinue}
+                onClick={() => {
+                  console.log('[FileUploadStep] Continue button clicked with', selectedFiles.length, 'files');
+                  onContinue();
+                }}
                 disabled={isProcessing}
               >
                 Continue with {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}

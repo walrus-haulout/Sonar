@@ -84,12 +84,14 @@ export function VerificationStep({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startVerification = async () => {
+    console.log('[VerificationStep] Starting verification...');
     setVerificationState('running');
     setErrorMessage(null);
     setErrorDetails(null);
 
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(walrusUpload || (walrusBlobId && sealIdentity && encryptedObjectBcsHex));
+    console.log('[VerificationStep] Using encrypted flow:', useEncryptedFlow, { walrusUpload, walrusBlobId, sealIdentity, hasEncryptedHex: !!encryptedObjectBcsHex });
 
     if (useEncryptedFlow) {
       // New encrypted blob flow
@@ -100,11 +102,15 @@ export function VerificationStep({
       // Validate that encryptedObjectBcsHex is present and not empty
       if (!encryptedObjectHex || encryptedObjectHex.trim().length === 0) {
         const errorMsg = 'Missing encrypted object data. Please try encrypting again.';
+        console.error('[VerificationStep] Validation failed:', errorMsg);
+        console.error('[VerificationStep] State:', { blobId, identity, encryptedObjectHex: encryptedObjectHex ? 'present' : 'missing' });
         setErrorMessage(errorMsg);
         setVerificationState('failed');
         onError(errorMsg);
         return;
       }
+
+      console.log('[VerificationStep] Validation passed. Starting encrypted blob verification...');
 
       setTotalFiles(1);
       setCurrentFileIndex(0);

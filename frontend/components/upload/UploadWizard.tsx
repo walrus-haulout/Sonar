@@ -70,9 +70,11 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
       blobId: walrusUpload.blobId,
       previewBlobId: walrusUpload.previewBlobId,
       seal_policy_id: walrusUpload.seal_policy_id,
+      encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex,
       bundleDiscountBps: walrusUpload.bundleDiscountBps,
       mimeType: walrusUpload.mimeType,
       previewMimeType: walrusUpload.previewMimeType,
+      files: walrusUpload.files,
     };
   };
 
