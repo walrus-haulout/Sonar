@@ -10,6 +10,10 @@ import { buildVerifierUrl } from '@/lib/config/verifier';
 // Explicitly set Node.js runtime for server-side operations
 export const runtime = 'nodejs';
 
+// Force dynamic rendering to ensure route is always treated as a serverless function
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const VERIFIER_AUTH_TOKEN = process.env.VERIFIER_AUTH_TOKEN;
 
 export async function GET(

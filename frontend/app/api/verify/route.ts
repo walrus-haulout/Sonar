@@ -12,6 +12,10 @@ import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
 // Explicitly set Node.js runtime for server-side operations
 export const runtime = 'nodejs';
 
+// Force dynamic rendering to ensure route is always treated as a serverless function
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
