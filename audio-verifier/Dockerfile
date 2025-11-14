@@ -21,18 +21,16 @@ WORKDIR /build
 
 # Install dependencies for building seal-cli
 # Remove git-minimal first to avoid conflicts, then install full git
-# Install glibc and other dependencies needed for rustup compatibility
+# Install Rust toolchain and build dependencies via Nix (avoids rustup compatibility issues)
 RUN nix-env -e git-minimal 2>/dev/null || true && \
-    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | env RUSTUP_INIT_SKIP_PATH_CHECK=yes sh -s -- -y --default-toolchain nightly && \
-    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl
 
 # Clone seal repository and build seal-cli (configure OpenSSL paths via nix eval)
 RUN set -eux; \
     git clone https://github.com/MystenLabs/seal.git seal; \
     cd seal; \
     git checkout main; \
-    export PATH="$HOME/.cargo/bin:$PATH"; \
+    export PATH="$HOME/.cargo/bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin"; \
     OPENSSL_DEV=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.dev.outPath'); \
     export PKG_CONFIG_PATH="$OPENSSL_DEV/lib/pkgconfig:${PKG_CONFIG_PATH:-}"; \
     export OPENSSL_NO_VENDOR=1; \
