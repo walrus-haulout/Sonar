@@ -29,10 +29,10 @@ RUN set -eux; \
     git clone https://github.com/MystenLabs/seal.git seal; \
     cd seal; \
     git checkout main; \
-    OPENSSL_LIB=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.lib.outPath'); \
+    OPENSSL_OUT=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.out.outPath'); \
     OPENSSL_DEV=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.dev.outPath'); \
     export OPENSSL_DIR="$OPENSSL_DEV"; \
-    export OPENSSL_LIB_DIR="$OPENSSL_LIB/lib"; \
+    export OPENSSL_LIB_DIR="$OPENSSL_OUT/lib"; \
     export OPENSSL_INCLUDE_DIR="$OPENSSL_DEV/include"; \
     export PKG_CONFIG_PATH="$OPENSSL_DEV/lib/pkgconfig:${PKG_CONFIG_PATH:-}"; \
     export CARGO_NET_GIT_FETCH_WITH_CLI=true; \
