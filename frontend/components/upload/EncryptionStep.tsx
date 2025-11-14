@@ -134,6 +134,7 @@ export function EncryptionStep({
           {
             accessPolicy: 'purchase',
             packageId: CHAIN_CONFIG.packageId ?? undefined,
+            useEnvelope: true, // Force envelope encryption for all files to keep encrypted object small
           },
           (progressPercent) => {
             const fileProgress = (index + progressPercent / 100) / totalFiles;
