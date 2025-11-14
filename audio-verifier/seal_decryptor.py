@@ -126,18 +126,55 @@ def _decrypt_sync(
 
 
 def _fetch_walrus_blob(blob_id: str) -> bytes:
-    """Fetch encrypted blob from Walrus aggregator."""
+    """Fetch encrypted blob from Walrus aggregator with retry logic for propagation delays."""
+    import time
+
     url = f"{WALRUS_AGGREGATOR_URL.rstrip('/')}/blob/{blob_id}"
 
     headers = {}
     if WALRUS_AGGREGATOR_TOKEN:
         headers["Authorization"] = f"Bearer {WALRUS_AGGREGATOR_TOKEN}"
 
-    # Use synchronous httpx client in thread
+    # Wait 15 seconds after upload for initial blob propagation
+    logger.info(f"Waiting 15 seconds for blob {blob_id[:16]}... to propagate...")
+    time.sleep(15)
+
+    # Retry up to 10 times with 30-second delays
+    max_retries = 10
+    retry_delay = 30
+
     with httpx.Client(timeout=300.0) as client:
-        response = client.get(url, headers=headers)
-        response.raise_for_status()
-        return response.content
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.debug(f"Fetching blob {blob_id[:16]}... (attempt {attempt}/{max_retries})")
+                response = client.get(url, headers=headers)
+                response.raise_for_status()
+                logger.info(f"Successfully fetched blob {blob_id[:16]}... on attempt {attempt}")
+                return response.content
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"Blob {blob_id[:16]}... not found (404), "
+                            f"retrying in {retry_delay}s (attempt {attempt}/{max_retries})"
+                        )
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        logger.error(f"Blob {blob_id[:16]}... still not found after {max_retries} attempts")
+                        raise
+                else:
+                    # Don't retry on other HTTP errors
+                    logger.error(f"HTTP error {e.response.status_code} fetching blob {blob_id[:16]}...")
+                    raise
+            except Exception as e:
+                # Don't retry on network errors or other exceptions
+                logger.error(f"Error fetching blob {blob_id[:16]}...: {e}")
+                raise
+
+        # Should never reach here due to raise in the loop, but just in case
+        raise RuntimeError(f"Failed to fetch blob {blob_id} after {max_retries} attempts")
 
 
 def _is_envelope_format(data: bytes) -> bool:
