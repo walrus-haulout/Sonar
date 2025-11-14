@@ -147,25 +147,65 @@ export function PublishStep({
                 options: {
                   showObjectChanges: true,
                   showEffects: true,
+                  showEvents: true,
                 },
               });
 
               // Extract dataset ID from objectChanges
               // Check for both AudioSubmission (single-file) and DatasetSubmission (multi-file)
               if (txDetails.objectChanges) {
+                // Debug: log all object changes to understand structure
+                console.log('Transaction objectChanges:', txDetails.objectChanges);
+                
                 for (const change of txDetails.objectChanges) {
-                  if (change.type === 'created' &&
-                      change.objectType &&
-                      (change.objectType.includes('::marketplace::AudioSubmission') ||
-                       change.objectType.includes('::marketplace::DatasetSubmission'))) {
-                    datasetId = change.objectId;
+                  // Check if this is a created object
+                  if (change.type === 'created') {
+                    const objectType = change.objectType || (change as any).objectType;
+                    const objectId = change.objectId || (change as any).objectId;
+                    
+                    // Log each created object for debugging
+                    console.log('Checking created object:', { type: change.type, objectType, objectId });
+                    
+                    // Check for both AudioSubmission and DatasetSubmission types
+                    // The objectType might be the full package path like "0x...::marketplace::AudioSubmission"
+                    if (objectType &&
+                        (objectType.includes('::marketplace::AudioSubmission') ||
+                         objectType.includes('::marketplace::DatasetSubmission'))) {
+                      datasetId = objectId;
+                      console.log('Found dataset ID from objectChanges:', datasetId);
+                      break;
+                    }
+                  }
+                }
+              }
+
+              // Fallback: Extract from events if objectChanges didn't work
+              // The contract emits SubmissionCreated or DatasetSubmissionCreated events with submission_id
+              if (!datasetId && txDetails.events && CHAIN_CONFIG.packageId) {
+                console.log('Trying to extract dataset ID from events:', txDetails.events);
+                
+                for (const event of txDetails.events) {
+                  const eventType = event.type;
+                  const parsedJson = event.parsedJson as any;
+                  
+                  // Check for SubmissionCreated or DatasetSubmissionCreated events
+                  if (eventType &&
+                      (eventType.includes('::marketplace::SubmissionCreated') ||
+                       eventType.includes('::marketplace::DatasetSubmissionCreated')) &&
+                      parsedJson?.submission_id) {
+                    datasetId = parsedJson.submission_id;
+                    console.log('Found dataset ID from events:', datasetId);
                     break;
                   }
                 }
               }
 
               if (!datasetId) {
-                console.error('Failed to extract dataset ID from transaction', txDetails);
+                console.error('Failed to extract dataset ID from transaction', {
+                  objectChanges: txDetails.objectChanges,
+                  events: txDetails.events,
+                  effects: txDetails.effects,
+                });
                 onError('Failed to extract dataset ID from blockchain transaction. Please try again.');
                 setPublishState('idle');
                 return;
