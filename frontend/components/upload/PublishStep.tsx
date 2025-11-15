@@ -365,8 +365,8 @@ export function PublishStep({
                 languages: metadata.languages,
                 tags: metadata.tags,
                 per_file_metadata: metadata.perFileMetadata,
-                audio_quality: metadata.audioQuality,
-                speakers: metadata.speakers,
+                audio_quality: metadata.audioQuality || null, // Optional - null if not provided
+                speakers: metadata.speakers || null, // Optional - null if not provided
                 categorization: metadata.categorization,
               };
 

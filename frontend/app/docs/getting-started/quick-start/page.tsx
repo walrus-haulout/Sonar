@@ -22,9 +22,11 @@ export default function QuickStartPage() {
         <DocList>
           <DocListItem>A wallet address (Sui network)</DocListItem>
           <DocListItem>One or more audio files in MP3, WAV, M4A, FLAC, or OGG format</DocListItem>
-          <DocListItem>Basic information about your audio (title, description, languages, tags)</DocListItem>
-          <DocListItem>Detailed metadata: audio quality specs, speaker information, content categorization</DocListItem>
-          <DocListItem>Knowledge of your audio file details: sample rate, number of channels, recording quality</DocListItem>
+          <DocListItem><strong>Required:</strong> Basic information about your dataset (title, description, languages, tags)</DocListItem>
+          <DocListItem><strong>Required:</strong> Content categorization (use case, content type, domain)</DocListItem>
+          <DocListItem><strong>Required:</strong> Individual title and description for each audio file</DocListItem>
+          <DocListItem><strong>Optional but recommended:</strong> Technical audio specs (sample rate, channels, codec, bit depth)</DocListItem>
+          <DocListItem><strong>Optional but recommended:</strong> Speaker demographics (count, age, gender, accent)</DocListItem>
         </DocList>
       </DocSection>
 
@@ -80,45 +82,59 @@ export default function QuickStartPage() {
           </DocCard>
 
           <DocCard variant="success">
-            <p className="font-mono text-sonar-signal mb-2">Audio Quality</p>
+            <p className="font-mono text-sonar-signal mb-2">Audio Quality (Optional - +10% Bonus)</p>
             <p className="text-sm text-sonar-highlight-bright/80 mb-2">
-              Specify technical details about your audio:
+              Specify technical details about your audio if you know them:
             </p>
             <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
               <li><strong>Sample Rate:</strong> Hz (e.g., 44100, 48000, 96000)</li>
               <li><strong>Channels:</strong> Mono (1), Stereo (2), or Multichannel</li>
               <li><strong>Codec:</strong> MP3, AAC, FLAC, WAV, etc.</li>
-              <li><strong>Bit Depth:</strong> Optional (16, 24, 32 bit)</li>
-              <li><strong>Recording Quality:</strong> Professional, High, Medium, or Low</li>
+              <li><strong>Bit Depth:</strong> 16, 24, or 32 bit</li>
+              <li><strong>Recording Quality:</strong> Professional, High, Medium, Low, or "I Don't Know"</li>
             </ul>
+            <p className="text-xs text-sonar-signal mt-2">Accurate specs earn you a 10% points bonus!</p>
           </DocCard>
 
           <DocCard variant="warning">
-            <p className="font-mono text-sonar-signal mb-2">Speaker Information</p>
+            <p className="font-mono text-sonar-signal mb-2">Speaker Information (Optional - +15% Bonus)</p>
             <p className="text-sm text-sonar-highlight-bright/80 mb-2">
-              Describe the speakers/participants in your audio:
+              Describe the speakers/participants if you want to:
             </p>
             <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
-              <li><strong>Speaker Count:</strong> Number of speakers (1-20)</li>
-              <li><strong>Per Speaker:</strong> Role, Age range, Gender, Accent</li>
+              <li><strong>Speaker Count:</strong> Number of speakers (1-20) - optional</li>
+              <li><strong>Per Speaker:</strong> Role, Age range, Gender, Accent - all optional</li>
+              <li><strong>Unknown Values:</strong> Select "Unknown" if you don't want to specify</li>
             </ul>
+            <p className="text-xs text-sonar-signal mt-2">Complete speaker data earns you a 15% points bonus!</p>
           </DocCard>
 
           <DocCard>
-            <p className="font-mono text-sonar-signal mb-2">Content Categorization</p>
+            <p className="font-mono text-sonar-signal mb-2">Content Categorization (Required)</p>
             <p className="text-sm text-sonar-highlight-bright/80 mb-2">
-              Categorize your audio content:
+              Categorize your audio content to help buyers find your data:
             </p>
             <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
-              <li><strong>Use Case:</strong> Training Data, Podcast, Music, Interview, Lecture, etc.</li>
-              <li><strong>Content Type:</strong> Conversational, Monologue, Music, Ambient/SFX, Mixed</li>
-              <li><strong>Domain:</strong> Technology, Healthcare, Education, Business, Science, etc.</li>
+              <li><strong>Use Case:</strong> Training Data, Podcast, Music, Interview, Lecture, etc. (required)</li>
+              <li><strong>Content Type:</strong> Conversational, Monologue, Music, Ambient/SFX, Mixed (required)</li>
+              <li><strong>Domain:</strong> Technology, Healthcare, Education, Business, Science, etc. (required)</li>
             </ul>
           </DocCard>
         </div>
 
+        <div className="p-3 rounded-sonar bg-sonar-blue/5 border border-sonar-blue/20 mt-4 space-y-2">
+          <p className="text-sm font-mono text-sonar-blue">✓ Required Fields:</p>
+          <p className="text-xs text-sonar-highlight/80">
+            Title, Description, Languages, Tags, Per-File Metadata, Content Categorization
+          </p>
+          <p className="text-sm font-mono text-sonar-signal mt-3">+ Optional but Recommended:</p>
+          <p className="text-xs text-sonar-highlight/80">
+            Audio Quality Details (+10% bonus) • Speaker Information (+15% bonus)
+          </p>
+        </div>
+
         <p className="text-sonar-highlight-bright/80 mt-4">
-          All fields are required to ensure your dataset is properly discoverable and valuable to buyers. Click "Continue"
+          Click "Continue" when you've filled in all required fields.
         </p>
       </DocSection>
 

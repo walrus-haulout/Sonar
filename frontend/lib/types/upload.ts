@@ -55,9 +55,9 @@ export interface SpeakerMetadata {
 }
 
 export interface ContentCategorization {
-  useCase: string; // training-data, podcast, music, ambient, interview, lecture, etc.
-  contentType: string; // conversational, monologue, music, ambient, mixed
-  domain?: string; // technology, healthcare, education, entertainment, etc.
+  useCase: string; // training-data, podcast, music, ambient, interview, lecture, etc. (required)
+  contentType: string; // conversational, monologue, music, ambient, mixed (required)
+  domain: string; // technology, healthcare, education, entertainment, etc. (now required)
 }
 
 export interface DatasetMetadata {
@@ -66,11 +66,11 @@ export interface DatasetMetadata {
   languages: string[];
   tags: string[];
   consent: boolean;
-  // New required labeling fields
-  perFileMetadata: PerFileMetadata[]; // One per file
-  audioQuality: AudioQualityMetadata;
-  speakers: SpeakerMetadata;
-  categorization: ContentCategorization;
+  // Labeling fields - per-file and categorization required, quality/speakers optional
+  perFileMetadata: PerFileMetadata[]; // Required - one per file
+  audioQuality?: AudioQualityMetadata; // Optional - but earns +10% points bonus
+  speakers?: SpeakerMetadata; // Optional - but earns +15% points bonus
+  categorization: ContentCategorization; // Required - including domain
 }
 
 export interface EncryptionResult {

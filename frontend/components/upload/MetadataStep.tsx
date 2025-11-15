@@ -32,6 +32,7 @@ const AVAILABLE_LANGUAGES = [
   { code: 'ko', name: 'Korean' },
   { code: 'ar', name: 'Arabic' },
   { code: 'hi', name: 'Hindi' },
+  { code: 'other', name: 'Other' },
 ];
 
 const SUGGESTED_TAGS = [
@@ -54,6 +55,7 @@ const RECORDING_QUALITY_OPTIONS = [
   { value: 'high', label: 'High' },
   { value: 'medium', label: 'Medium' },
   { value: 'low', label: 'Low' },
+  { value: 'unknown', label: "I Don't Know" },
 ];
 
 const USE_CASE_OPTIONS = [
@@ -95,6 +97,7 @@ const AGE_RANGE_OPTIONS = [
   '26-35',
   '36-50',
   '50+',
+  'Unknown',
 ];
 
 const GENDER_OPTIONS = [
@@ -102,12 +105,14 @@ const GENDER_OPTIONS = [
   'Female',
   'Non-binary',
   'Prefer not to say',
+  'Unknown',
 ];
 
 const ACCENT_OPTIONS = [
   'Native',
   'Regional',
   'International',
+  'Unknown',
 ];
 
 const metadataSchema = z.object({
@@ -136,14 +141,14 @@ const metadataSchema = z.object({
     description: z.string().min(10, 'Description must be at least 10 characters').max(500),
   })).min(1, 'At least one file required'),
   audioQuality: z.object({
-    sampleRate: z.number().positive('Sample rate must be positive'),
+    sampleRate: z.number().positive().optional(),
     bitDepth: z.number().positive().optional(),
-    channels: z.number().int().min(1, 'At least 1 channel required'),
-    codec: z.string().min(1, 'Codec is required'),
-    recordingQuality: z.enum(['professional', 'high', 'medium', 'low']),
-  }),
+    channels: z.number().int().min(1).optional(),
+    codec: z.string().optional(),
+    recordingQuality: z.enum(['professional', 'high', 'medium', 'low', 'unknown']).optional(),
+  }).optional(),
   speakers: z.object({
-    speakerCount: z.number().int().min(1, 'At least 1 speaker').max(20, 'Maximum 20 speakers'),
+    speakerCount: z.number().int().min(1).max(20).optional(),
     speakers: z.array(z.object({
       id: z.string(),
       role: z.string().optional(),
@@ -151,11 +156,11 @@ const metadataSchema = z.object({
       gender: z.string().optional(),
       accent: z.string().optional(),
     })),
-  }),
+  }).optional(),
   categorization: z.object({
     useCase: z.string().min(1, 'Select a use case'),
     contentType: z.string().min(1, 'Select content type'),
-    domain: z.string().optional(),
+    domain: z.string().min(1, 'Select a domain'),
   }),
 });
 
@@ -175,8 +180,8 @@ export function MetadataStep({
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     perFile: true,
-    audioQuality: true,
-    speakers: true,
+    audioQuality: false, // Optional - start collapsed
+    speakers: false, // Optional - start collapsed
     categorization: true,
   });
 
@@ -187,22 +192,10 @@ export function MetadataStep({
     description: '',
   }));
 
-  const defaultAudioQuality = audioFiles.length > 0 ? {
-    sampleRate: audioFiles[0]?.extractedQuality?.sampleRate || 44100,
-    channels: audioFiles[0]?.extractedQuality?.channels || 2,
-    codec: audioFiles[0]?.extractedQuality?.codec || 'MP3',
-    recordingQuality: 'high' as const,
-  } : {
-    sampleRate: 44100,
-    channels: 2,
-    codec: 'MP3',
-    recordingQuality: 'high' as const,
-  };
+  // Audio quality is optional - initialize only if user opens the section
+  // This helps reduce friction for users who don't know technical details
 
-  const defaultSpeakers = {
-    speakerCount: 1,
-    speakers: [{ id: '1', role: '', ageRange: '', gender: '', accent: '' }],
-  };
+  // Speakers is optional - initialize only if user opens the section
 
   const {
     register,
@@ -220,8 +213,9 @@ export function MetadataStep({
       tags: [],
       consent: false,
       perFileMetadata: defaultPerFileMetadata,
-      audioQuality: defaultAudioQuality,
-      speakers: defaultSpeakers,
+      // Optional fields - not initialized by default
+      audioQuality: undefined,
+      speakers: undefined,
       categorization: {
         useCase: '',
         contentType: '',
@@ -478,14 +472,20 @@ export function MetadataStep({
 
       {/* AUDIO QUALITY SECTION */}
       <SectionCollapsible
-        title="Audio Quality"
+        title="Audio Quality (Optional - +10% Points Bonus)"
         isExpanded={expandedSections.audioQuality}
         onToggle={() => toggleSection('audioQuality')}
       >
+        <div className="p-3 rounded-sonar bg-sonar-signal/5 border border-sonar-signal/20 mb-3">
+          <p className="text-xs font-mono text-sonar-signal mb-1">💡 Accurate technical details help improve your rarity score</p>
+          <p className="text-xs text-sonar-highlight/70">
+            If you don't know these values, you can skip this section. Leave fields blank to indicate unknown values.
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Sample Rate (Hz) *
+              Sample Rate (Hz)
             </label>
             <select
               {...register('audioQuality.sampleRate', { valueAsNumber: true })}
@@ -509,7 +509,7 @@ export function MetadataStep({
 
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Channels *
+              Channels
             </label>
             <input
               type="number"
@@ -529,7 +529,7 @@ export function MetadataStep({
 
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Codec *
+              Codec
             </label>
             <input
               type="text"
@@ -568,7 +568,7 @@ export function MetadataStep({
 
         <div className="space-y-2 mt-3">
           <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-            Recording Quality *
+            Recording Quality
           </label>
           <div className="grid grid-cols-2 gap-2">
             {RECORDING_QUALITY_OPTIONS.map((option) => (
@@ -597,14 +597,20 @@ export function MetadataStep({
 
       {/* SPEAKER INFORMATION SECTION */}
       <SectionCollapsible
-        title="Speaker Information"
+        title="Speaker Information (Optional - +15% Points Bonus)"
         isExpanded={expandedSections.speakers}
         onToggle={() => toggleSection('speakers')}
       >
+        <div className="p-3 rounded-sonar bg-sonar-signal/5 border border-sonar-signal/20 mb-3">
+          <p className="text-xs font-mono text-sonar-signal mb-1">💡 Speaker demographics make your data more valuable for ML training</p>
+          <p className="text-xs text-sonar-highlight/70">
+            Fill in what you know. All fields are optional. Select "Unknown" if you prefer not to specify.
+          </p>
+        </div>
         <div className="space-y-3">
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Number of Speakers * (1-20)
+              Number of Speakers (1-20)
             </label>
             <input
               type="number"
