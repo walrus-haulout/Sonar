@@ -19,6 +19,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: '/', label: 'Home' },
+    { href: '/docs', label: 'Docs' },
     { href: '/marketplace', label: 'Marketplace' },
     { href: '/roadmap', label: 'Roadmap' },
     { href: '/tokenomics', label: 'Tokenomics' },
