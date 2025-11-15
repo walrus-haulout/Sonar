@@ -154,6 +154,7 @@ WORKDIR /app
 # Copy application source code
 COPY pyproject.toml .
 COPY *.py .
+COPY migrations/ ./migrations/
 
 # Create virtual environment and install Python dependencies in runtime stage
 # Nix-managed Python is immutable, so we must use a venv

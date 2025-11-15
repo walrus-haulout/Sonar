@@ -26,7 +26,7 @@ export async function GET(
 
   try {
     // Fetch from Walrus aggregator
-    const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/${blobId}`);
+    const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`);
 
     if (!response.ok) {
       console.error(`[WalrusProxy] Failed to fetch blob ${blobId}:`, response.statusText);

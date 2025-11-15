@@ -285,7 +285,7 @@ export function VerificationStep({
 
       console.log('[VerificationStep] Fetching encrypted blob from Walrus:', walrusBlobId);
 
-      // Stage 1: Fetch encrypted blob from Walrus
+      // Stage 1: Fetch encrypted blob from Walrus (via proxy endpoint)
       setStages((prev) =>
         prev.map((stage) =>
           stage.name === 'decryption'
@@ -294,10 +294,7 @@ export function VerificationStep({
         )
       );
 
-      const walrusAggregator =
-        process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
-        'https://aggregator.walrus-testnet.walrus.space';
-      const blobResponse = await fetch(`${walrusAggregator}/v1/blobs/${walrusBlobId}`);
+      const blobResponse = await fetch(`/api/edge/walrus/proxy/${walrusBlobId}`);
 
       if (!blobResponse.ok) {
         throw new Error(

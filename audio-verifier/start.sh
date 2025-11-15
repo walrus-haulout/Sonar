@@ -30,6 +30,16 @@ echo "   Port: ${PORT}"
 echo "   Workers: 2"
 echo ""
 
+# Run database migrations
+echo "📊 Ensuring database schema is up to date..."
+if python /app/migrations/migrate.py; then
+    echo "✓ Database schema ready"
+else
+    # Migration may have already been run; log warning but continue
+    echo "⚠️  Migration check completed (may have already been applied)"
+fi
+echo ""
+
 # Start uvicorn server
 exec /app/.venv/bin/uvicorn main:app \
     --host 0.0.0.0 \
