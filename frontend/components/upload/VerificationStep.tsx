@@ -360,7 +360,7 @@ export function VerificationStep({
       // Stage 3: Send decrypted audio to backend for verification
       console.log('[VerificationStep] Sending decrypted audio to backend for verification');
 
-      const decryptedBlob = new Blob([decryptionResult.data], {
+      const decryptedBlob = new Blob([new Uint8Array(decryptionResult.data)], {
         type: 'audio/mpeg',
       });
 
