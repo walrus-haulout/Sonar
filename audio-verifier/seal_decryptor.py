@@ -40,8 +40,18 @@ def is_valid_seal_key(key: str) -> bool:
 SEAL_SECRET_KEYS = [k.strip() for k in os.getenv("SEAL_SECRET_KEYS", "").split(",") if k.strip() and is_valid_seal_key(k.strip())]
 SEAL_KEY_SERVER_IDS = [k.strip() for k in os.getenv("SEAL_KEY_SERVER_IDS", "").split(",") if k.strip()]
 
+# Validate key configuration at startup
 if not SEAL_SECRET_KEYS and os.getenv("SEAL_SECRET_KEYS"):
-    logger.info("All SEAL_SECRET_KEYS were filtered out (likely placeholder values). Will use SEAL_KEY_SERVER_IDS.")
+    logger.warning(
+        "All SEAL_SECRET_KEYS were filtered out (likely placeholder values). "
+        "Please set SEAL_SECRET_KEYS environment variable with real seal secret keys."
+    )
+if not SEAL_SECRET_KEYS and not SEAL_KEY_SERVER_IDS:
+    logger.warning(
+        "WARNING: No SEAL_SECRET_KEYS configured. "
+        "Set SEAL_SECRET_KEYS environment variable with comma-separated seal secret keys (each 32+ chars). "
+        "Expected format: 0x... (hex string). Decryption will fail without valid keys."
+    )
 
 
 async def decrypt_encrypted_blob(
@@ -223,22 +233,25 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str) -> bytes:
     key_server_ids_to_use = SEAL_KEY_SERVER_IDS[:SEAL_THRESHOLD] if SEAL_KEY_SERVER_IDS else []
     keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
 
+    # Secret keys are required for decryption
+    if not keys_to_use:
+        raise ValueError(
+            "No valid SEAL_SECRET_KEYS configured. "
+            "Set the SEAL_SECRET_KEYS environment variable with comma-separated hex-encoded keys (each 32+ chars). "
+            "Example: SEAL_SECRET_KEYS=0x123abc...,0x456def... "
+            "Do not use placeholder values like 'key1', 'key2', etc."
+        )
+
     # Build seal-cli decrypt command
     # Format: seal-cli decrypt <encrypted_object_hex> <secret_key_1> <secret_key_2> ... [-- <key_server_id_1> <key_server_id_2> ...]
     # Note: With envelope encryption, encrypted_object_hex is small (~400 bytes), so no argument limit issues
     cmd = [SEAL_CLI_PATH, "decrypt", encrypted_object_hex]
+    cmd.extend(keys_to_use)
 
-    # Use secret keys if available, otherwise use key server IDs for on-demand key fetching
-    if keys_to_use:
-        cmd.extend(keys_to_use)
-        if key_server_ids_to_use and len(key_server_ids_to_use) == len(keys_to_use):
-            cmd.append("--")
-            cmd.extend(key_server_ids_to_use)
-    elif key_server_ids_to_use:
+    # Optionally add key server IDs if available (for verification)
+    if key_server_ids_to_use and len(key_server_ids_to_use) >= len(keys_to_use):
         cmd.append("--")
-        cmd.extend(key_server_ids_to_use)
-    else:
-        raise ValueError("No secret keys or key server IDs configured for decryption")
+        cmd.extend(key_server_ids_to_use[:len(keys_to_use)])
 
     logger.debug(f"Running seal-cli decrypt with {len(keys_to_use)} keys for identity {identity[:16]}...")
 

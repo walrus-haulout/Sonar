@@ -168,6 +168,59 @@ The service runs a 6-stage pipeline:
 
 The service requires `seal-cli` binary for decrypting encrypted audio blobs during verification. The Dockerfile automatically builds and installs `seal-cli` from the MystenLabs Seal repository. If deploying without Docker, ensure `seal-cli` is installed and available in your PATH or set the `SEAL_CLI_PATH` environment variable to point to the binary location.
 
+## Seal Encrypted Blob Configuration (Production)
+
+This service can verify encrypted audio blobs that are stored on Walrus and encrypted with Seal. Proper configuration of Seal keys is **critical** for production deployments.
+
+### Understanding the Issue
+
+If you see errors like `seal-cli decrypt failed: Error: InvalidInput`, it usually means:
+1. **Placeholder keys are configured** - `SEAL_SECRET_KEYS=key1,key2,key3` (these are filtered out)
+2. **No real secret keys are set** - seal-cli requires actual encryption keys to decrypt blobs
+3. **Environment variable not set in deployment** - The key was in `.env` but not passed to the runtime
+
+### Setting Up Seal Keys
+
+1. **Get Your Keys from Seal Keyservers**
+   - Contact your Seal deployment operator or access your keyserver instances (e.g., seal-4, seal-5, seal-6)
+   - Extract the `CLIENT_MASTER_KEY` from each keyserver's configuration
+   - You typically need at least 2 keys (configured by `SEAL_THRESHOLD`)
+
+2. **Format the Keys**
+   - Keys should be hex-encoded, 32+ characters, starting with `0x`
+   - Join multiple keys with commas (no spaces)
+   - Example: `0x1d0792389049f3a6960b5fc15dfde2f4681e7f50318aa5b0b38fa7f020f40728,0x1f45de951368b56b8323cd7320612ebd2d84127ac760cc580ee7ec25c14a53c5`
+
+3. **Set in Your Deployment Environment (NOT in .env)**
+   - **Vercel**: Project Settings → Environment Variables → Add `SEAL_SECRET_KEYS`
+   - **Railway**: Railway Dashboard → Variables → Add `SEAL_SECRET_KEYS`
+   - **Fly.io**: `fly secrets set SEAL_SECRET_KEYS=...`
+   - **Docker**: Pass with `-e SEAL_SECRET_KEYS=...` flag
+   - **Local Testing**: `export SEAL_SECRET_KEYS=your_keys_here` before running
+
+4. **Optional: Seal Key Server IDs**
+   - For verification against the blockchain, optionally set `SEAL_KEY_SERVER_IDS`
+   - These are object IDs from your Seal keyserver instances on-chain
+   - Format: Comma-separated hex values (same format as secret keys)
+
+5. **Verify Configuration**
+   - The service will log warnings at startup if keys are missing or invalid
+   - Look for: `WARNING: No SEAL_SECRET_KEYS configured` in logs
+   - Health check endpoint: `GET /health` shows configuration status
+
+### Troubleshooting Seal Errors
+
+**Error: `seal-cli decrypt failed: Error: InvalidInput`**
+- ✓ Check that `SEAL_SECRET_KEYS` is set in your deployment environment
+- ✓ Verify keys are NOT placeholder values (key1, key2, key3)
+- ✓ Ensure keys are properly formatted (hex, 32+ chars, comma-separated)
+- ✓ Check that blob ID and encrypted data are valid
+
+**Error: `No valid SEAL_SECRET_KEYS configured`**
+- ✓ Environment variable `SEAL_SECRET_KEYS` is not set in your runtime
+- ✓ Or all configured keys were filtered as placeholders
+- ✓ Set real keys in your deployment platform's secrets/environment section
+
 ## Deployment
 
 ### Railway
@@ -189,6 +242,13 @@ railway variables set SUI_SESSION_REGISTRY_ID=0x...
 railway variables set SUI_VALIDATOR_CAP_ID=0x...
 railway variables set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
 railway variables set WALRUS_UPLOAD_TOKEN=secrettoken
+
+# SEAL ENCRYPTED BLOB CONFIGURATION (CRITICAL - see "Seal Encrypted Blob Configuration" section above)
+railway variables set SEAL_SECRET_KEYS=0x...,0x...  # Comma-separated hex-encoded keys
+railway variables set SEAL_KEY_SERVER_IDS=0x...,0x... # Optional
+railway variables set SEAL_THRESHOLD=2
+railway variables set SEAL_PACKAGE_ID=0x...
+railway variables set WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443
 ```
 
 ### Fly.io
@@ -210,6 +270,13 @@ fly secrets set SUI_VALIDATOR_CAP_ID=0x...
 fly secrets set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
 fly secrets set WALRUS_UPLOAD_TOKEN=secrettoken
 
+# SEAL ENCRYPTED BLOB CONFIGURATION (CRITICAL - see "Seal Encrypted Blob Configuration" section)
+fly secrets set SEAL_SECRET_KEYS=0x...,0x...  # Comma-separated hex-encoded keys
+fly secrets set SEAL_KEY_SERVER_IDS=0x...,0x... # Optional
+fly secrets set SEAL_THRESHOLD=2
+fly secrets set SEAL_PACKAGE_ID=0x...
+fly secrets set WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443
+
 # Deploy
 fly deploy
 ```
@@ -226,12 +293,26 @@ docker build -t sonar-audio-verifier .
 docker run -p 8000:8000 \
   --env-file .env \
   sonar-audio-verifier
+
+# Or run with individual environment variables (recommended for production)
+docker run -p 8000:8000 \
+  -e SEAL_SECRET_KEYS=0x...,0x... \
+  -e SEAL_KEY_SERVER_IDS=0x...,0x... \
+  -e SEAL_THRESHOLD=2 \
+  -e SEAL_PACKAGE_ID=0x... \
+  -e WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443 \
+  -e OPENROUTER_API_KEY=xxx \
+  -e ACOUSTID_API_KEY=xxx \
+  -e VERIFIER_AUTH_TOKEN=xxx \
+  sonar-audio-verifier
 ```
 
 **Note**: The Docker build includes a multi-stage build that:
 1. Builds `seal-cli` from the MystenLabs Seal repository
 2. Copies the binary to the runtime image at `/usr/local/bin/seal-cli`
 3. Makes it executable and verifies installation
+
+**Important**: For encrypted blob support, ensure `SEAL_SECRET_KEYS` is set in your Docker environment. Do NOT put real keys in `.env` file - use Docker secrets or environment variables instead.
 
 ## Frontend Integration
 
