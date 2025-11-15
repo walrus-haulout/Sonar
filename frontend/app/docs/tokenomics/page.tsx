@@ -73,27 +73,6 @@ export default function TokenomicsPage() {
       </DocSection>
 
       <DocSection>
-        <DocHeading level={2}>Creator Rewards</DocHeading>
-        
-        <div className="border-l-2 border-sonar-signal/40 pl-4 py-2 mt-4 mb-4">
-          <h4 className="font-mono text-sonar-highlight mb-2">Initial Allocation</h4>
-          <p className="text-sonar-highlight-bright/80 text-sm">
-            When you publish a dataset, you receive an initial allocation based on rarity and quality. Typical amounts: Low rarity (~100 SONAR), Medium (~1,000 SONAR), High (~10,000 SONAR), Critical (50,000+ SONAR).
-          </p>
-          <p className="text-sonar-highlight-bright/80 text-sm mt-2">
-            Vesting: Unlocked over 90 days (claimable starting day 30)
-          </p>
-        </div>
-
-        <div className="border-l-2 border-sonar-signal/40 pl-4 py-2">
-          <h4 className="font-mono text-sonar-highlight mb-2">Purchase Revenue</h4>
-          <p className="text-sonar-highlight-bright/80 text-sm">
-            When someone purchases your dataset: 50-80% goes to you (depending on supply levels). Vesting: Unlocked daily over 30 days.
-          </p>
-        </div>
-      </DocSection>
-
-      <DocSection>
         <DocHeading level={2}>Long-Term Sustainability</DocHeading>
         <DocParagraph>
           SONAR targets an equilibrium at 50M SONAR:
