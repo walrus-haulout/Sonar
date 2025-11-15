@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/audio-verifier/fingerprint.py
+# hypothesis_version: 6.148.0
+
+[0.0, 0.8, '.tmp', 'Unknown', 'artist', 'checked', 'confidence', 'copyright', 'detected', 'error', 'matches', 'passed', 'recording_id', 'test', 'title']

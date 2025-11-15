@@ -15,9 +15,6 @@ import asyncpg
 
 logger = logging.getLogger(__name__)
 
-# PostgreSQL configuration (same database as backend)
-DATABASE_URL = os.getenv("DATABASE_URL")
-
 
 class SessionStore:
     """
@@ -29,10 +26,11 @@ class SessionStore:
 
     def __init__(self):
         """Initialize session store with PostgreSQL connection."""
-        if not DATABASE_URL:
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
             raise RuntimeError("DATABASE_URL must be set for session storage")
-        
-        self.database_url = DATABASE_URL
+
+        self.database_url = database_url
         self._pool: Optional[asyncpg.Pool] = None
         logger.info("Initialized PostgreSQL session store")
 

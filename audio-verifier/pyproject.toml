@@ -2,7 +2,7 @@
 name = "sonar-audio-verifier"
 version = "2.0.0"
 description = "Comprehensive audio verification: quality, copyright, transcription, and AI analysis"
-requires-python = ">=3.13"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     # FastAPI server
     "fastapi>=0.104.0",
@@ -38,7 +38,6 @@ dev = [
     "pytest-timeout>=2.1.0",
     "pytest-cov>=4.1.0",
     "hypothesis>=6.80.0",
-    "httpx-mock>=0.15.0",
 ]
 
 [build-system]

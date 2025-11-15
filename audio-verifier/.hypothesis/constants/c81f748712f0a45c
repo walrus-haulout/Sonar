@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/audio-verifier/verification_pipeline.py
+# hypothesis_version: 6.148.0
+
+[0.0, 0.15, 0.3, 0.35, 0.45, 0.5, 0.55, 0.65, 0.75, 0.8, 0.85, 0.95, 1.0, 100, 200, 2000, 2048, 4096, '...', '.flac', '.m4a', '.mp3', '.wav', '.webm', '/tmp/audio-verifier', 'ANALYSIS', 'HTTP-Referer', 'TRANSCRIPTION', 'X-Title', '```', '```json', 'analysis', 'approved', 'audio/flac', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/webm', 'clipping', 'concerns', 'confidence', 'content', 'copyright', 'detected', 'duration', 'errors', 'finalizing', 'input_audio', 'insights', 'passed', 'quality', 'qualityScore', 'rb', 'recommendations', 'role', 'safetyPassed', 'sample_rate', 'score', 'silence_percent', 'stage_failed', 'system', 'text', 'transcript', 'transcriptPreview', 'transcription', 'type', 'user', 'utf-8', 'verify_', 'volume_ok']

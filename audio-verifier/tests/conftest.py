@@ -83,21 +83,20 @@ def long_audio_file(tmp_path):
     """Generate too-long audio (>3600s)."""
     sample_rate = 16000
     duration = 3601  # 1 hour 1 second
-    # Create in chunks to avoid memory issues
-    chunk_size = 30  # 30 second chunks
+    # Create waveform in chunks to avoid memory issues, then write once
     audio_path = tmp_path / "long.wav"
-    
+    chunk_size = 30  # 30 second chunks
+    waveforms = []
+
     for i in range(0, duration, chunk_size):
         chunk_duration = min(chunk_size, duration - i)
         t = np.linspace(0, chunk_duration, int(sample_rate * chunk_duration), endpoint=False)
         waveform = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
-        sf.write(
-            audio_path,
-            waveform,
-            sample_rate,
-            subtype="PCM_16",
-            append=i > 0
-        )
+        waveforms.append(waveform)
+
+    # Concatenate all chunks and write once
+    full_waveform = np.concatenate(waveforms)
+    sf.write(audio_path, full_waveform, sample_rate, subtype="PCM_16")
     return audio_path
 
 

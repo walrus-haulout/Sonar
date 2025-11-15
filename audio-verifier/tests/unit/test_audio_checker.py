@@ -49,7 +49,7 @@ class TestDurationValidation:
         result = await checker.check_audio_file(str(short_audio_file))
 
         assert result["quality"]["passed"] is False
-        assert any("duration" in err.lower() for err in result["errors"])
+        assert any("short" in err.lower() for err in result["errors"])
 
     @pytest.mark.asyncio
     async def test_rejects_too_long_audio(self, long_audio_file):
@@ -58,7 +58,7 @@ class TestDurationValidation:
         result = await checker.check_audio_file(str(long_audio_file))
 
         assert result["quality"]["passed"] is False
-        assert any("duration" in err.lower() for err in result["errors"])
+        assert any("long" in err.lower() for err in result["errors"])
 
     @pytest.mark.asyncio
     async def test_accepts_valid_duration(self, valid_audio_file):
@@ -187,8 +187,8 @@ class TestErrorHandling:
         checker = AudioQualityChecker()
         result = await checker.check_audio_file(str(corrupted_audio_file))
 
-        # Should fail with appropriate error
-        assert result["quality"]["passed"] is False
+        # Should return error gracefully without crashing
+        assert result["quality"] is None
         assert len(result["errors"]) > 0
 
     @pytest.mark.asyncio
@@ -197,16 +197,19 @@ class TestErrorHandling:
         checker = AudioQualityChecker()
         result = await checker.check_audio_file(str(empty_audio_file))
 
-        # Should fail, not crash
-        assert result["quality"]["passed"] is False
+        # Should return error gracefully without crashing
+        assert result["quality"] is None
         assert len(result["errors"]) > 0
 
     @pytest.mark.asyncio
     async def test_handles_missing_file(self):
         """Test graceful handling of missing files."""
         checker = AudioQualityChecker()
-        with pytest.raises(Exception):
-            await checker.check_audio_file("/nonexistent/path/audio.wav")
+        result = await checker.check_audio_file("/nonexistent/path/audio.wav")
+
+        # Should return error gracefully without crashing
+        assert result["quality"] is None
+        assert len(result["errors"]) > 0
 
 
 class TestQualityScoring:

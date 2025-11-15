@@ -13,13 +13,26 @@ from datetime import datetime, timezone
 from session_store import SessionStore
 
 
+def create_mock_pool(mock_conn=None):
+    """Helper to create properly configured mock pool and connection."""
+    if mock_conn is None:
+        mock_conn = AsyncMock()
+    mock_acquire = AsyncMock()
+    mock_acquire.__aenter__.return_value = mock_conn
+    mock_acquire.__aexit__.return_value = None
+    mock_pool = AsyncMock()
+    # Make acquire return the context manager directly (not async)
+    mock_pool.acquire = lambda: mock_acquire
+    return mock_pool, mock_conn
+
+
 class TestSessionStoreInit:
     """Test SessionStore initialization."""
 
     def test_init_requires_database_url(self, monkeypatch):
         """Test that DATABASE_URL environment variable is required."""
         monkeypatch.delenv("DATABASE_URL", raising=False)
-        
+
         with pytest.raises(RuntimeError, match="DATABASE_URL"):
             SessionStore()
 
@@ -27,7 +40,7 @@ class TestSessionStoreInit:
         """Test initialization with DATABASE_URL set."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
         store = SessionStore()
-        
+
         assert store.database_url == "postgresql://user:pass@localhost/db"
         assert store._pool is None
 
@@ -40,22 +53,19 @@ class TestCreateSession:
     async def test_create_session(self, mock_create_pool, monkeypatch):
         """Test creating a new verification session."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
+
         # Mock database pool and connection
-        mock_conn = AsyncMock()
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool  # Bypass _get_pool pool creation
-        
+
         session_id = await store.create_session(
             "verification-123",
             {"file_format": "audio/wav"}
         )
-        
+
         assert session_id
         assert mock_conn.execute.called
 
@@ -64,11 +74,8 @@ class TestCreateSession:
     async def test_create_session_returns_uuid(self, mock_create_pool, monkeypatch):
         """Test that create_session returns a valid UUID."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -85,11 +92,8 @@ class TestCreateSession:
     async def test_create_session_stores_initial_data(self, mock_create_pool, monkeypatch):
         """Test that initial data is stored correctly."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -116,22 +120,19 @@ class TestUpdateSession:
     async def test_update_session_stage(self, mock_create_pool, monkeypatch):
         """Test updating session stage."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"  # asyncpg returns "UPDATE N"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         result = await store.update_session("session-uuid", {
             "stage": "quality",
             "progress": 0.3
         })
-        
+
         assert result is True
         assert mock_conn.execute.called
 
@@ -140,12 +141,9 @@ class TestUpdateSession:
     async def test_update_session_with_results(self, mock_create_pool, monkeypatch):
         """Test updating session with results."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -168,12 +166,9 @@ class TestUpdateSession:
     async def test_update_session_not_found(self, mock_create_pool, monkeypatch):
         """Test update when session not found."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 0"  # No rows updated
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -190,12 +185,9 @@ class TestUpdateSession:
     async def test_update_session_always_updates_timestamp(self, mock_create_pool, monkeypatch):
         """Test that updated_at is always updated."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -216,12 +208,9 @@ class TestMarkCompleted:
     async def test_mark_completed(self, mock_create_pool, monkeypatch):
         """Test marking session as completed."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -243,12 +232,9 @@ class TestMarkCompleted:
     async def test_mark_completed_sets_progress_to_1(self, mock_create_pool, monkeypatch):
         """Test that progress is set to 1.0 when completed."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -269,12 +255,9 @@ class TestMarkFailed:
     async def test_mark_failed(self, mock_create_pool, monkeypatch):
         """Test marking session as failed."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -292,12 +275,9 @@ class TestMarkFailed:
     async def test_mark_cancelled(self, mock_create_pool, monkeypatch):
         """Test marking session as cancelled."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -315,12 +295,9 @@ class TestMarkFailed:
     async def test_mark_failed_status_is_failed_by_default(self, mock_create_pool, monkeypatch):
         """Test that status is 'failed' unless explicitly marked as cancelled."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -357,19 +334,16 @@ class TestGetSession:
             "results": None,
             "error": None
         }
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.fetchrow.return_value = mock_row
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         session = await store.get_session("session-123")
-        
+
         assert session is not None
         assert session["id"] == "session-123"
         assert session["status"] == "processing"
@@ -380,12 +354,8 @@ class TestGetSession:
     async def test_get_session_not_found(self, mock_create_pool, monkeypatch):
         """Test getting non-existent session."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow.return_value = None
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -400,10 +370,10 @@ class TestGetSession:
     async def test_get_session_parses_json_data(self, mock_create_pool, monkeypatch):
         """Test that JSON data is properly parsed."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
+
         initial_data = {"file_format": "audio/wav", "duration": 10.5}
         results_data = {"approved": True, "quality": {"score": 0.85}}
-        
+
         mock_row = {
             "id": "session-123",
             "verification_id": "v-456",
@@ -416,19 +386,16 @@ class TestGetSession:
             "results": json.dumps(results_data),
             "error": None
         }
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.fetchrow.return_value = mock_row
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         session = await store.get_session("session-123")
-        
+
         assert session["initial_data"] == initial_data
         assert session["results"] == results_data
 
@@ -441,12 +408,9 @@ class TestUpdateStage:
     async def test_update_stage_calls_update_session(self, mock_create_pool, monkeypatch):
         """Test that update_stage calls update_session correctly."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -462,12 +426,9 @@ class TestUpdateStage:
     async def test_update_stage_updates_both_stage_and_progress(self, mock_create_pool, monkeypatch):
         """Test that both stage and progress are updated."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.return_value = "UPDATE 1"
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -489,11 +450,9 @@ class TestConnectionPool:
     async def test_pool_created_on_first_get(self, mock_create_pool, monkeypatch):
         """Test that connection pool is created on first use."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
+
         mock_pool = AsyncMock()
-        mock_conn = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()
@@ -515,17 +474,15 @@ class TestConnectionPool:
     async def test_close_closes_pool(self, mock_create_pool, monkeypatch):
         """Test that close() properly closes the connection pool."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = AsyncMock()
-        mock_pool.acquire().__aexit__.return_value = None
+
+        mock_pool, _ = create_mock_pool()
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         await store.close()
-        
+
         assert mock_pool.close.called
         assert store._pool is None
 
@@ -550,17 +507,14 @@ class TestErrorHandling:
     async def test_create_session_error_handling(self, mock_create_pool, monkeypatch):
         """Test error handling in create_session."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.side_effect = Exception("Database error")
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         with pytest.raises(RuntimeError, match="Failed to create session"):
             await store.create_session("v-123", {})
 
@@ -569,19 +523,16 @@ class TestErrorHandling:
     async def test_update_session_returns_false_on_error(self, mock_create_pool, monkeypatch):
         """Test that update_session returns False on database error."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_conn.execute.side_effect = Exception("Database error")
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
         mock_create_pool.return_value = mock_pool
-        
+
         store = SessionStore()
         store._pool = mock_pool
-        
+
         result = await store.update_session("session-uuid", {"stage": "quality"})
-        
+
         assert result is False
 
     @pytest.mark.asyncio
@@ -589,12 +540,8 @@ class TestErrorHandling:
     async def test_get_session_returns_none_on_error(self, mock_create_pool, monkeypatch):
         """Test that get_session returns None on database error."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/db")
-        
-        mock_conn = AsyncMock()
-        mock_conn.fetchrow.side_effect = Exception("Database error")
-        mock_pool = AsyncMock()
-        mock_pool.acquire().__aenter__.return_value = mock_conn
-        mock_pool.acquire().__aexit__.return_value = None
+
+        mock_pool, mock_conn = create_mock_pool()
         mock_create_pool.return_value = mock_pool
         
         store = SessionStore()

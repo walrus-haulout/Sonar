@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/audio-verifier/audio_checker.py
+# hypothesis_version: 6.148.0
+
+[0.0, 1e-10, 0.2, 0.3, 0.5, 0.99, 1.0, 20.0, 100.0, 3600.0, 4096, 8000, 'DOUBLE', 'FLOAT', 'PCM_16', 'PCM_24', 'PCM_32', 'PCM_S8', 'PCM_U8', 'bit_depth', 'channels', 'clipping_detected', 'duration', 'errors', 'float32', 'passed', 'quality', 'quality_score', 'rms_db', 'sample_rate', 'silence_percent', 'volume_ok']

@@ -115,8 +115,9 @@ class AudioQualityChecker:
             "bit_depth": bit_depth,
             "volume_ok": volume_ok,
             "rms_db": round(rms_db, 2),
-            "clipping": clipping_detected,
+            "clipping_detected": clipping_detected,
             "silence_percent": round(silence_percent, 2),
+            "quality_score": self._calculate_quality_score(passed, volume_ok, clipping_detected, silence_percent),
             "passed": passed
         }
 
@@ -140,6 +141,20 @@ class AudioQualityChecker:
             "DOUBLE": 64
         }
         return mapping.get(subtype_upper, 0)
+
+    def _calculate_quality_score(self, passed: bool, volume_ok: bool, clipping_detected: bool, silence_percent: float) -> float:
+        """Calculate overall quality score from 0.0 to 1.0."""
+        if not passed:
+            return 0.0
+
+        score = 1.0
+        if not volume_ok:
+            score -= 0.2
+        if clipping_detected:
+            score -= 0.3
+        score -= (silence_percent / 100.0) * 0.5
+
+        return max(0.0, min(1.0, score))
 
     def _get_errors(
         self,

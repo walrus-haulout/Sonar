@@ -151,7 +151,7 @@ class TestAnalysisResponseParsing:
     """Test invariants in analysis response parsing."""
 
     @given(
-        quality_score=st.floats(min_value=-10.0, max_value=10.0, exclude_nan=True),
+        quality_score=st.floats(min_value=-10.0, max_value=10.0, allow_nan=False),
         safety_passed=st.booleans()
     )
     def test_quality_score_always_clamped_0_to_1(self, quality_score, safety_passed):
