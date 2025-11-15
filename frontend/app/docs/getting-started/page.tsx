@@ -103,12 +103,6 @@ export default function GettingStartedPage() {
             </p>
           </div>
 
-          <div className="border-l-2 border-sonar-signal/40 pl-4">
-            <h4 className="font-mono text-sonar-highlight mb-2">How much can I earn?</h4>
-            <p className="text-sonar-highlight-bright/80 text-sm">
-              Earnings depend on your audio's rarity tier, quality, specificity, and bulk size. A high-rarity, high-quality submission can earn anywhere from a few hundred to tens of thousands of SONAR tokens. Leaderboard leaders earn significantly more per submission.
-            </p>
-          </div>
         </div>
       </DocSection>
 
