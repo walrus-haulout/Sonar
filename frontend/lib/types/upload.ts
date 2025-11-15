@@ -13,11 +13,51 @@ export type UploadStep =
 
 export interface AudioFile {
   file: File;
+  id?: string; // Unique ID for tracking individual files in multi-file uploads
   duration: number;
   waveform?: number[];
   preview?: string;
-  id?: string; // Unique ID for tracking individual files in multi-file uploads
   mimeType: string;
+  // Auto-extracted quality metadata
+  extractedQuality?: {
+    sampleRate?: number;
+    channels?: number;
+    bitDepth?: number;
+    codec?: string;
+  };
+}
+
+export interface PerFileMetadata {
+  fileId: string; // Link to AudioFile
+  title: string; // Individual file title (3-100 chars)
+  description: string; // Individual file description (10-500 chars)
+}
+
+export interface AudioQualityMetadata {
+  sampleRate: number; // Hz (e.g., 44100, 48000)
+  bitDepth?: number; // bits (16, 24, 32)
+  channels: number; // 1 (mono), 2 (stereo), etc.
+  codec: string; // MP3, AAC, FLAC, etc.
+  recordingQuality: 'professional' | 'high' | 'medium' | 'low';
+}
+
+export interface SpeakerInfo {
+  id: string;
+  role?: string; // host, guest, interviewer, etc.
+  ageRange?: string; // 18-25, 26-35, 36-50, 50+
+  gender?: string; // male, female, non-binary, prefer-not-to-say
+  accent?: string; // native, regional, international
+}
+
+export interface SpeakerMetadata {
+  speakerCount: number; // 1-20
+  speakers: SpeakerInfo[];
+}
+
+export interface ContentCategorization {
+  useCase: string; // training-data, podcast, music, ambient, interview, lecture, etc.
+  contentType: string; // conversational, monologue, music, ambient, mixed
+  domain?: string; // technology, healthcare, education, entertainment, etc.
 }
 
 export interface DatasetMetadata {
@@ -26,6 +66,11 @@ export interface DatasetMetadata {
   languages: string[];
   tags: string[];
   consent: boolean;
+  // New required labeling fields
+  perFileMetadata: PerFileMetadata[]; // One per file
+  audioQuality: AudioQualityMetadata;
+  speakers: SpeakerMetadata;
+  categorization: ContentCategorization;
 }
 
 export interface EncryptionResult {

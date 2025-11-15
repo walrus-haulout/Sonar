@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Info, Tag, Globe, FileText } from 'lucide-react';
+import { Info, Tag, Globe, FileText, ChevronDown, Plus, X } from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { DatasetMetadata, AudioFile } from '@/lib/types/upload';
 import { SonarButton } from '@/components/ui/SonarButton';
@@ -46,6 +47,69 @@ const SUGGESTED_TAGS = [
   'technical',
 ];
 
+const SAMPLE_RATES = [8000, 16000, 22050, 44100, 48000, 96000];
+
+const RECORDING_QUALITY_OPTIONS = [
+  { value: 'professional', label: 'Professional' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+
+const USE_CASE_OPTIONS = [
+  'Training Data',
+  'Podcast',
+  'Music',
+  'Ambient',
+  'Interview',
+  'Lecture',
+  'Presentation',
+  'Call Recording',
+  'Field Recording',
+  'Other',
+];
+
+const CONTENT_TYPE_OPTIONS = [
+  'Conversational',
+  'Monologue',
+  'Music',
+  'Ambient/SFX',
+  'Mixed',
+];
+
+const DOMAIN_OPTIONS = [
+  'Technology',
+  'Healthcare',
+  'Education',
+  'Entertainment',
+  'Business',
+  'Science',
+  'Arts',
+  'News',
+  'Sports',
+  'Other',
+];
+
+const AGE_RANGE_OPTIONS = [
+  '18-25',
+  '26-35',
+  '36-50',
+  '50+',
+];
+
+const GENDER_OPTIONS = [
+  'Male',
+  'Female',
+  'Non-binary',
+  'Prefer not to say',
+];
+
+const ACCENT_OPTIONS = [
+  'Native',
+  'Regional',
+  'International',
+];
+
 const metadataSchema = z.object({
   title: z
     .string()
@@ -66,21 +130,80 @@ const metadataSchema = z.object({
   consent: z
     .boolean()
     .refine((val) => val === true, 'You must confirm consent and rights'),
+  perFileMetadata: z.array(z.object({
+    fileId: z.string(),
+    title: z.string().min(3, 'Title must be at least 3 characters').max(100),
+    description: z.string().min(10, 'Description must be at least 10 characters').max(500),
+  })).min(1, 'At least one file required'),
+  audioQuality: z.object({
+    sampleRate: z.number().positive('Sample rate must be positive'),
+    bitDepth: z.number().positive().optional(),
+    channels: z.number().int().min(1, 'At least 1 channel required'),
+    codec: z.string().min(1, 'Codec is required'),
+    recordingQuality: z.enum(['professional', 'high', 'medium', 'low']),
+  }),
+  speakers: z.object({
+    speakerCount: z.number().int().min(1, 'At least 1 speaker').max(20, 'Maximum 20 speakers'),
+    speakers: z.array(z.object({
+      id: z.string(),
+      role: z.string().optional(),
+      ageRange: z.string().optional(),
+      gender: z.string().optional(),
+      accent: z.string().optional(),
+    })),
+  }),
+  categorization: z.object({
+    useCase: z.string().min(1, 'Select a use case'),
+    contentType: z.string().min(1, 'Select content type'),
+    domain: z.string().optional(),
+  }),
 });
 
 type MetadataFormData = z.infer<typeof metadataSchema>;
 
 /**
  * MetadataStep Component
- * Form for dataset metadata with validation
+ * Enhanced form with per-file, audio quality, speaker, and content labeling
  */
 export function MetadataStep({
   metadata,
-  audioFiles,
+  audioFiles = [],
   onSubmit,
   onBack,
   error,
 }: MetadataStepProps) {
+  const [expandedSections, setExpandedSections] = useState({
+    basic: true,
+    perFile: true,
+    audioQuality: true,
+    speakers: true,
+    categorization: true,
+  });
+
+  // Initialize default values
+  const defaultPerFileMetadata = audioFiles.map((f) => ({
+    fileId: f.id || '',
+    title: f.file.name.replace(/\.[^.]+$/, ''),
+    description: '',
+  }));
+
+  const defaultAudioQuality = audioFiles.length > 0 ? {
+    sampleRate: audioFiles[0]?.extractedQuality?.sampleRate || 44100,
+    channels: audioFiles[0]?.extractedQuality?.channels || 2,
+    codec: audioFiles[0]?.extractedQuality?.codec || 'MP3',
+    recordingQuality: 'high' as const,
+  } : {
+    sampleRate: 44100,
+    channels: 2,
+    codec: 'MP3',
+    recordingQuality: 'high' as const,
+  };
+
+  const defaultSpeakers = {
+    speakerCount: 1,
+    speakers: [{ id: '1', role: '', ageRange: '', gender: '', accent: '' }],
+  };
+
   const {
     register,
     handleSubmit,
@@ -96,12 +219,29 @@ export function MetadataStep({
       languages: [],
       tags: [],
       consent: false,
+      perFileMetadata: defaultPerFileMetadata,
+      audioQuality: defaultAudioQuality,
+      speakers: defaultSpeakers,
+      categorization: {
+        useCase: '',
+        contentType: '',
+        domain: '',
+      },
     },
   });
 
   const selectedLanguages = watch('languages') || [];
   const selectedTags = watch('tags') || [];
   const consentChecked = watch('consent');
+  const speakerCount = watch('speakers.speakerCount');
+  const speakers = watch('speakers.speakers');
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
 
   const toggleLanguage = (code: string) => {
     const current = selectedLanguages;
@@ -133,144 +273,499 @@ export function MetadataStep({
     }
   };
 
+  const updateSpeakerCount = (count: number) => {
+    const newSpeakers = [];
+    for (let i = 0; i < count; i++) {
+      newSpeakers.push(
+        speakers?.[i] || { id: String(i + 1), role: '', ageRange: '', gender: '', accent: '' }
+      );
+    }
+    setValue('speakers.speakerCount', count);
+    setValue('speakers.speakers', newSpeakers);
+  };
+
   const handleFormSubmit = (data: MetadataFormData) => {
     onSubmit(data);
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      {/* Title */}
-      <div className="space-y-2">
-        <label
-          htmlFor="title"
-          className="block text-sm font-mono font-semibold text-sonar-highlight-bright"
-        >
-          Dataset Title *
-        </label>
-        <input
-          id="title"
-          type="text"
-          {...register('title')}
-          placeholder="e.g., Natural Conversations in English"
-          className={cn(
-            'w-full px-4 py-3 rounded-sonar',
-            'bg-sonar-abyss/50 border',
-            'text-sonar-highlight-bright font-mono',
-            'placeholder:text-sonar-highlight/30',
-            'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
-            errors.title
-              ? 'border-sonar-coral focus:ring-sonar-coral'
-              : 'border-sonar-blue/50'
-          )}
-        />
-        {errors.title && (
-          <p className="text-sm text-sonar-coral font-mono">
-            {errors.title.message}
-          </p>
-        )}
-      </div>
-
-      {/* Description */}
-      <div className="space-y-2">
-        <label
-          htmlFor="description"
-          className="block text-sm font-mono font-semibold text-sonar-highlight-bright"
-        >
-          Description *
-        </label>
-        <textarea
-          id="description"
-          {...register('description')}
-          rows={4}
-          placeholder="Describe your dataset, its contents, quality, and intended use cases..."
-          className={cn(
-            'w-full px-4 py-3 rounded-sonar',
-            'bg-sonar-abyss/50 border',
-            'text-sonar-highlight-bright font-mono',
-            'placeholder:text-sonar-highlight/30',
-            'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
-            'resize-none',
-            errors.description
-              ? 'border-sonar-coral focus:ring-sonar-coral'
-              : 'border-sonar-blue/50'
-          )}
-        />
-        {errors.description && (
-          <p className="text-sm text-sonar-coral font-mono">
-            {errors.description.message}
-          </p>
-        )}
-      </div>
-
-      {/* Languages */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2">
-          <Globe className="w-4 h-4 text-sonar-signal" />
-          <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-            Languages * (up to 5)
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+      {/* BASIC SECTION */}
+      <SectionCollapsible
+        title="Basic Information"
+        isExpanded={expandedSections.basic}
+        onToggle={() => toggleSection('basic')}
+      >
+        {/* Title */}
+        <div className="space-y-2">
+          <label
+            htmlFor="title"
+            className="block text-sm font-mono font-semibold text-sonar-highlight-bright"
+          >
+            Dataset Title *
           </label>
+          <input
+            id="title"
+            type="text"
+            {...register('title')}
+            placeholder="e.g., Natural Conversations in English"
+            className={cn(
+              'w-full px-4 py-3 rounded-sonar',
+              'bg-sonar-abyss/50 border',
+              'text-sonar-highlight-bright font-mono',
+              'placeholder:text-sonar-highlight/30',
+              'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+              errors.title
+                ? 'border-sonar-coral focus:ring-sonar-coral'
+                : 'border-sonar-blue/50'
+            )}
+          />
+          {errors.title && (
+            <p className="text-sm text-sonar-coral font-mono">
+              {errors.title.message}
+            </p>
+          )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {AVAILABLE_LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              type="button"
-              onClick={() => toggleLanguage(lang.code)}
-              className={cn(
-                'px-3 py-1.5 rounded-sonar text-sm font-mono',
-                'border transition-all duration-200',
-                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
-                selectedLanguages.includes(lang.code)
-                  ? 'bg-sonar-signal/20 border-sonar-signal text-sonar-highlight-bright'
-                  : 'bg-transparent border-sonar-blue/50 text-sonar-highlight/70 hover:border-sonar-signal/50'
-              )}
-            >
-              {lang.name}
-            </button>
+
+        {/* Description */}
+        <div className="space-y-2">
+          <label
+            htmlFor="description"
+            className="block text-sm font-mono font-semibold text-sonar-highlight-bright"
+          >
+            Description *
+          </label>
+          <textarea
+            id="description"
+            {...register('description')}
+            rows={4}
+            placeholder="Describe your dataset, its contents, quality, and intended use cases..."
+            className={cn(
+              'w-full px-4 py-3 rounded-sonar',
+              'bg-sonar-abyss/50 border',
+              'text-sonar-highlight-bright font-mono',
+              'placeholder:text-sonar-highlight/30',
+              'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+              'resize-none',
+              errors.description
+                ? 'border-sonar-coral focus:ring-sonar-coral'
+                : 'border-sonar-blue/50'
+            )}
+          />
+          {errors.description && (
+            <p className="text-sm text-sonar-coral font-mono">
+              {errors.description.message}
+            </p>
+          )}
+        </div>
+
+        {/* Languages */}
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Globe className="w-4 h-4 text-sonar-signal" />
+            <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Languages * (up to 5)
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {AVAILABLE_LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => toggleLanguage(lang.code)}
+                className={cn(
+                  'px-3 py-1.5 rounded-sonar text-sm font-mono',
+                  'border transition-all duration-200',
+                  'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                  selectedLanguages.includes(lang.code)
+                    ? 'bg-sonar-signal/20 border-sonar-signal text-sonar-highlight-bright'
+                    : 'bg-transparent border-sonar-blue/50 text-sonar-highlight/70 hover:border-sonar-signal/50'
+                )}
+              >
+                {lang.name}
+              </button>
+            ))}
+          </div>
+          {errors.languages && (
+            <p className="text-sm text-sonar-coral font-mono">
+              {errors.languages.message}
+            </p>
+          )}
+        </div>
+
+        {/* Tags */}
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Tag className="w-4 h-4 text-sonar-signal" />
+            <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Tags * (up to 10)
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {SUGGESTED_TAGS.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className={cn(
+                  'px-3 py-1.5 rounded-sonar text-sm font-mono',
+                  'border transition-all duration-200',
+                  'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                  selectedTags.includes(tag)
+                    ? 'bg-sonar-blue/20 border-sonar-blue text-sonar-highlight-bright'
+                    : 'bg-transparent border-sonar-blue/30 text-sonar-highlight/70 hover:border-sonar-blue/50'
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+          {errors.tags && (
+            <p className="text-sm text-sonar-coral font-mono">
+              {errors.tags.message}
+            </p>
+          )}
+        </div>
+      </SectionCollapsible>
+
+      {/* PER-FILE METADATA SECTION */}
+      <SectionCollapsible
+        title="Per-File Labels"
+        isExpanded={expandedSections.perFile}
+        onToggle={() => toggleSection('perFile')}
+      >
+        <p className="text-xs text-sonar-highlight/70 font-mono mb-3">
+          Provide individual title and description for each audio file
+        </p>
+        <div className="space-y-3">
+          {audioFiles.map((file, index) => (
+            <div key={file.id} className="space-y-2 p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20">
+              <p className="text-xs font-mono text-sonar-signal font-semibold">
+                {file.file.name}
+              </p>
+              <input
+                type="text"
+                {...register(`perFileMetadata.${index}.title`)}
+                placeholder="File title"
+                className={cn(
+                  'w-full px-3 py-2 rounded-sonar text-sm',
+                  'bg-sonar-abyss/50 border',
+                  'text-sonar-highlight-bright font-mono',
+                  'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                  errors.perFileMetadata?.[index]?.title
+                    ? 'border-sonar-coral'
+                    : 'border-sonar-blue/50'
+                )}
+              />
+              <textarea
+                {...register(`perFileMetadata.${index}.description`)}
+                placeholder="File description"
+                rows={2}
+                className={cn(
+                  'w-full px-3 py-2 rounded-sonar text-sm',
+                  'bg-sonar-abyss/50 border resize-none',
+                  'text-sonar-highlight-bright font-mono',
+                  'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                  errors.perFileMetadata?.[index]?.description
+                    ? 'border-sonar-coral'
+                    : 'border-sonar-blue/50'
+                )}
+              />
+            </div>
           ))}
         </div>
-        {errors.languages && (
-          <p className="text-sm text-sonar-coral font-mono">
-            {errors.languages.message}
-          </p>
-        )}
-      </div>
+      </SectionCollapsible>
 
-      {/* Tags */}
-      <div className="space-y-3">
-        <div className="flex items-center space-x-2">
-          <Tag className="w-4 h-4 text-sonar-signal" />
-          <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-            Tags * (up to 10)
-          </label>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {SUGGESTED_TAGS.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => toggleTag(tag)}
+      {/* AUDIO QUALITY SECTION */}
+      <SectionCollapsible
+        title="Audio Quality"
+        isExpanded={expandedSections.audioQuality}
+        onToggle={() => toggleSection('audioQuality')}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Sample Rate (Hz) *
+            </label>
+            <select
+              {...register('audioQuality.sampleRate', { valueAsNumber: true })}
               className={cn(
-                'px-3 py-1.5 rounded-sonar text-sm font-mono',
-                'border transition-all duration-200',
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
                 'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
-                selectedTags.includes(tag)
-                  ? 'bg-sonar-blue/20 border-sonar-blue text-sonar-highlight-bright'
-                  : 'bg-transparent border-sonar-blue/30 text-sonar-highlight/70 hover:border-sonar-blue/50'
+                errors.audioQuality?.sampleRate
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
               )}
             >
-              {tag}
-            </button>
-          ))}
-        </div>
-        {errors.tags && (
-          <p className="text-sm text-sonar-coral font-mono">
-            {errors.tags.message}
-          </p>
-        )}
-      </div>
+              {SAMPLE_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate} Hz
+                </option>
+              ))}
+            </select>
+          </div>
 
-      {/* Consent */}
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Channels *
+            </label>
+            <input
+              type="number"
+              min="1"
+              {...register('audioQuality.channels', { valueAsNumber: true })}
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                errors.audioQuality?.channels
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Codec *
+            </label>
+            <input
+              type="text"
+              {...register('audioQuality.codec')}
+              placeholder="e.g., MP3, AAC, FLAC"
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                errors.audioQuality?.codec
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Bit Depth (optional)
+            </label>
+            <input
+              type="number"
+              {...register('audioQuality.bitDepth', { valueAsNumber: true })}
+              placeholder="e.g., 16, 24, 32"
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                'border-sonar-blue/50'
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2 mt-3">
+          <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+            Recording Quality *
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {RECORDING_QUALITY_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  'p-2 rounded-sonar text-sm font-mono cursor-pointer',
+                  'border transition-all duration-200',
+                  watch('audioQuality.recordingQuality') === option.value
+                    ? 'bg-sonar-signal/20 border-sonar-signal text-sonar-highlight-bright'
+                    : 'bg-transparent border-sonar-blue/50 text-sonar-highlight/70 hover:border-sonar-signal/50'
+                )}
+              >
+                <input
+                  type="radio"
+                  {...register('audioQuality.recordingQuality')}
+                  value={option.value}
+                  className="mr-2"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </SectionCollapsible>
+
+      {/* SPEAKER INFORMATION SECTION */}
+      <SectionCollapsible
+        title="Speaker Information"
+        isExpanded={expandedSections.speakers}
+        onToggle={() => toggleSection('speakers')}
+      >
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Number of Speakers * (1-20)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              {...register('speakers.speakerCount', { valueAsNumber: true })}
+              onChange={(e) => updateSpeakerCount(parseInt(e.target.value) || 1)}
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                errors.speakers?.speakerCount
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            {speakers && speakers.map((speaker, idx) => (
+              <div key={speaker.id} className="p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20 space-y-2">
+                <p className="text-xs font-mono text-sonar-signal font-semibold">Speaker {idx + 1}</p>
+                <input
+                  type="text"
+                  {...register(`speakers.speakers.${idx}.role`)}
+                  placeholder="Role (e.g., host, guest, interviewer)"
+                  className={cn(
+                    'w-full px-3 py-2 rounded-sonar text-sm',
+                    'bg-sonar-abyss/50 border border-sonar-blue/50',
+                    'text-sonar-highlight-bright font-mono',
+                    'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
+                  )}
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    {...register(`speakers.speakers.${idx}.ageRange`)}
+                    className={cn(
+                      'px-3 py-2 rounded-sonar text-sm',
+                      'bg-sonar-abyss/50 border border-sonar-blue/50',
+                      'text-sonar-highlight-bright font-mono',
+                      'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
+                    )}
+                  >
+                    <option value="">Age range</option>
+                    {AGE_RANGE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  <select
+                    {...register(`speakers.speakers.${idx}.gender`)}
+                    className={cn(
+                      'px-3 py-2 rounded-sonar text-sm',
+                      'bg-sonar-abyss/50 border border-sonar-blue/50',
+                      'text-sonar-highlight-bright font-mono',
+                      'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
+                    )}
+                  >
+                    <option value="">Gender</option>
+                    {GENDER_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  <select
+                    {...register(`speakers.speakers.${idx}.accent`)}
+                    className={cn(
+                      'px-3 py-2 rounded-sonar text-sm',
+                      'bg-sonar-abyss/50 border border-sonar-blue/50',
+                      'text-sonar-highlight-bright font-mono',
+                      'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
+                    )}
+                  >
+                    <option value="">Accent</option>
+                    {ACCENT_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SectionCollapsible>
+
+      {/* CONTENT CATEGORIZATION SECTION */}
+      <SectionCollapsible
+        title="Content Categorization"
+        isExpanded={expandedSections.categorization}
+        onToggle={() => toggleSection('categorization')}
+      >
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Use Case *
+            </label>
+            <select
+              {...register('categorization.useCase')}
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                errors.categorization?.useCase
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
+              )}
+            >
+              <option value="">Select use case...</option>
+              {USE_CASE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Content Type *
+            </label>
+            <select
+              {...register('categorization.contentType')}
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                errors.categorization?.contentType
+                  ? 'border-sonar-coral'
+                  : 'border-sonar-blue/50'
+              )}
+            >
+              <option value="">Select content type...</option>
+              {CONTENT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
+              Domain (optional)
+            </label>
+            <select
+              {...register('categorization.domain')}
+              className={cn(
+                'w-full px-3 py-2 rounded-sonar text-sm',
+                'bg-sonar-abyss/50 border',
+                'text-sonar-highlight-bright font-mono',
+                'focus:outline-none focus:ring-2 focus:ring-sonar-signal',
+                'border-sonar-blue/50'
+              )}
+            >
+              <option value="">Select domain (optional)...</option>
+              {DOMAIN_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </SectionCollapsible>
+
+      {/* CONSENT SECTION */}
       <GlassCard className="bg-sonar-blue/5">
         <div className="flex items-start space-x-3">
           <input
@@ -306,22 +801,36 @@ export function MetadataStep({
         )}
       </GlassCard>
 
-      {/* Info Box */}
+      {/* INFO BOX */}
       <GlassCard className="bg-sonar-signal/5">
         <div className="flex items-start space-x-3">
           <Info className="w-5 h-5 text-sonar-signal mt-0.5 flex-shrink-0" />
           <div className="text-sm text-sonar-highlight/80 space-y-2">
             <p className="font-mono font-semibold text-sonar-signal">
-              Dataset Quality Matters
+              Enhanced Labeling for Better Data Quality
             </p>
             <p>
-              Provide accurate metadata to help buyers find your dataset. AI
-              verification will analyze your audio for quality and safety before
-              publishing.
+              Comprehensive metadata helps buyers find exactly what they need
+              and improves your dataset's discoverability and value.
             </p>
           </div>
         </div>
       </GlassCard>
+
+      {/* ERROR MESSAGE */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            'p-4 rounded-sonar',
+            'bg-sonar-coral/10 border border-sonar-coral',
+            'text-sonar-coral font-mono text-sm'
+          )}
+        >
+          {error}
+        </motion.div>
+      )}
 
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between pt-4">
@@ -338,5 +847,42 @@ export function MetadataStep({
         </SonarButton>
       </div>
     </form>
+  );
+}
+
+/**
+ * SectionCollapsible Component
+ * Reusable collapsible section header
+ */
+function SectionCollapsible({
+  title,
+  isExpanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <GlassCard>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-0 text-left"
+      >
+        <h3 className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+          {title}
+        </h3>
+        <ChevronDown
+          className={cn(
+            'w-5 h-5 text-sonar-signal transition-transform duration-200',
+            isExpanded ? 'transform rotate-180' : ''
+          )}
+        />
+      </button>
+      {isExpanded && <div className="mt-4 space-y-3">{children}</div>}
+    </GlassCard>
   );
 }

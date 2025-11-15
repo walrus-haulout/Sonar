@@ -167,6 +167,40 @@ export function FileUploadStep({
     });
   };
 
+  const extractAudioQuality = async (file: File): Promise<{
+    sampleRate?: number;
+    channels?: number;
+    bitDepth?: number;
+    codec?: string;
+  }> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Extract codec from MIME type
+      const mimeType = resolveMimeType(file);
+      let codec = 'unknown';
+      if (mimeType.includes('mp3') || mimeType.includes('mpeg')) codec = 'MP3';
+      else if (mimeType.includes('mp4') || mimeType.includes('aac')) codec = 'AAC';
+      else if (mimeType.includes('flac')) codec = 'FLAC';
+      else if (mimeType.includes('wav')) codec = 'WAV';
+      else if (mimeType.includes('ogg')) codec = 'OGG';
+      else if (mimeType.includes('webm')) codec = 'WebM';
+      else if (mimeType.includes('3gp')) codec = '3GPP';
+      else if (mimeType.includes('amr')) codec = 'AMR';
+
+      return {
+        sampleRate: audioBuffer.sampleRate,
+        channels: audioBuffer.numberOfChannels,
+        codec,
+      };
+    } catch (err) {
+      console.warn('[FileUploadStep] Could not extract audio quality:', err);
+      return { codec: resolveMimeType(file).split('/')[1] || 'unknown' };
+    }
+  };
+
   const processFiles = async (files: File[]) => {
     console.log('[FileUploadStep] Processing files:', files.length);
     setValidationError(null);
@@ -198,8 +232,11 @@ export function FileUploadStep({
         try {
           const resolvedMimeType = resolveMimeType(file);
 
-          // Get audio duration
-          const duration = await getAudioDuration(file);
+          // Get audio duration and quality metadata in parallel
+          const [duration, quality] = await Promise.all([
+            getAudioDuration(file),
+            extractAudioQuality(file),
+          ]);
 
           // Create preview URL
           const preview = URL.createObjectURL(file);
@@ -210,6 +247,7 @@ export function FileUploadStep({
             duration,
             preview,
             mimeType: resolvedMimeType !== 'application/octet-stream' ? resolvedMimeType : '',
+            extractedQuality: quality,
           };
 
           processedFiles.push(audioFile);

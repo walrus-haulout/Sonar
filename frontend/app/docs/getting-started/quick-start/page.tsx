@@ -21,8 +21,10 @@ export default function QuickStartPage() {
         </DocParagraph>
         <DocList>
           <DocListItem>A wallet address (Sui network)</DocListItem>
-          <DocListItem>One or more audio files in MP3, WAV, or M4A format</DocListItem>
-          <DocListItem>Basic information about your audio (title, description)</DocListItem>
+          <DocListItem>One or more audio files in MP3, WAV, M4A, FLAC, or OGG format</DocListItem>
+          <DocListItem>Basic information about your audio (title, description, languages, tags)</DocListItem>
+          <DocListItem>Detailed metadata: audio quality specs, speaker information, content categorization</DocListItem>
+          <DocListItem>Knowledge of your audio file details: sample rate, number of channels, recording quality</DocListItem>
         </DocList>
       </DocSection>
 
@@ -48,43 +50,75 @@ export default function QuickStartPage() {
       </DocSection>
 
       <DocSection>
-        <DocHeading level={2}>Step 3: Add Metadata (2 minutes)</DocHeading>
+        <DocHeading level={2}>Step 3: Add Comprehensive Metadata (2 minutes)</DocHeading>
         <DocParagraph>
-          Provide information about your audio:
+          Provide detailed information about your audio across multiple sections. The form uses collapsible sections for easy navigation:
         </DocParagraph>
 
         <div className="space-y-4 mt-4">
-          <DocCard>
-            <p className="font-mono text-sonar-signal mb-2">Title</p>
+          <DocCard variant="info">
+            <p className="font-mono text-sonar-signal mb-2">Basic Information</p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              <strong>Title:</strong> A clear, descriptive name. Example: "Northern Cardinal Calls, Eastern USA"
+            </p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              <strong>Description:</strong> What is this audio? What makes it special? Example: "High-quality recordings of Northern Cardinal territorial and alarm calls recorded in natural woodland habitat."
+            </p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              <strong>Languages:</strong> Which languages are spoken or implied? Select from available options.
+            </p>
             <p className="text-sm text-sonar-highlight-bright/80">
-              A clear, descriptive name. Example: "Northern Cardinal Calls, Eastern USA"
+              <strong>Tags:</strong> Choose relevant tags to help others find your audio (e.g., Species, Audio type, Location, Quality)
             </p>
           </DocCard>
 
           <DocCard>
-            <p className="font-mono text-sonar-signal mb-2">Description</p>
+            <p className="font-mono text-sonar-signal mb-2">Per-File Labels</p>
             <p className="text-sm text-sonar-highlight-bright/80">
-              What is this audio? What makes it special? Be specific. Example: "High-quality recordings of Northern Cardinal territorial and alarm calls recorded in natural woodland habitat in the Eastern United States. Multiple individuals and call types included."
+              Provide individual title and description for each uploaded file. This helps categorize datasets with multiple audio clips.
             </p>
           </DocCard>
 
-          <DocCard>
-            <p className="font-mono text-sonar-signal mb-2">Languages</p>
-            <p className="text-sm text-sonar-highlight-bright/80">
-              Which languages are spoken or implied? Select from English, Spanish, Chinese, French, or others if applicable.
+          <DocCard variant="success">
+            <p className="font-mono text-sonar-signal mb-2">Audio Quality</p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              Specify technical details about your audio:
             </p>
+            <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
+              <li><strong>Sample Rate:</strong> Hz (e.g., 44100, 48000, 96000)</li>
+              <li><strong>Channels:</strong> Mono (1), Stereo (2), or Multichannel</li>
+              <li><strong>Codec:</strong> MP3, AAC, FLAC, WAV, etc.</li>
+              <li><strong>Bit Depth:</strong> Optional (16, 24, 32 bit)</li>
+              <li><strong>Recording Quality:</strong> Professional, High, Medium, or Low</li>
+            </ul>
+          </DocCard>
+
+          <DocCard variant="warning">
+            <p className="font-mono text-sonar-signal mb-2">Speaker Information</p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              Describe the speakers/participants in your audio:
+            </p>
+            <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
+              <li><strong>Speaker Count:</strong> Number of speakers (1-20)</li>
+              <li><strong>Per Speaker:</strong> Role, Age range, Gender, Accent</li>
+            </ul>
           </DocCard>
 
           <DocCard>
-            <p className="font-mono text-sonar-signal mb-2">Tags</p>
-            <p className="text-sm text-sonar-highlight-bright/80">
-              Choose relevant tags to help others find your audio (e.g., Species names, Audio type, Location, Quality indicators)
+            <p className="font-mono text-sonar-signal mb-2">Content Categorization</p>
+            <p className="text-sm text-sonar-highlight-bright/80 mb-2">
+              Categorize your audio content:
             </p>
+            <ul className="text-sm text-sonar-highlight-bright/80 list-disc list-inside space-y-1">
+              <li><strong>Use Case:</strong> Training Data, Podcast, Music, Interview, Lecture, etc.</li>
+              <li><strong>Content Type:</strong> Conversational, Monologue, Music, Ambient/SFX, Mixed</li>
+              <li><strong>Domain:</strong> Technology, Healthcare, Education, Business, Science, etc.</li>
+            </ul>
           </DocCard>
         </div>
 
         <p className="text-sonar-highlight-bright/80 mt-4">
-          Click "Next"
+          All fields are required to ensure your dataset is properly discoverable and valuable to buyers. Click "Continue"
         </p>
       </DocSection>
 
@@ -182,10 +216,13 @@ export default function QuickStartPage() {
         <DocList>
           <DocListItem><strong>Be Specific:</strong> Instead of "dog barking," say "Golden Retriever barking during play, outdoor environment"</DocListItem>
           <DocListItem><strong>Focus on Rarity:</strong> Rare sounds get 3-5x multipliers. Endangered species, vintage equipment, uncommon accents</DocListItem>
-          <DocListItem><strong>High Quality:</strong> Use good recording equipment. High sample rate (48kHz or better) adds points</DocListItem>
+          <DocListItem><strong>High Quality:</strong> Use good recording equipment. High sample rate (48kHz or better) and professional quality settings add points</DocListItem>
+          <DocListItem><strong>Detailed Audio Metadata:</strong> Accurate sample rates, channel info, and codec details help with scoring</DocListItem>
+          <DocListItem><strong>Complete Speaker Labels:</strong> Specifying speaker demographics (age, gender, accent) makes data more valuable</DocListItem>
+          <DocListItem><strong>Proper Categorization:</strong> Correct use case and content type help buyers find your data</DocListItem>
+          <DocListItem><strong>Per-File Descriptions:</strong> Individual titles and descriptions for each file improve discoverability</DocListItem>
           <DocListItem><strong>Bulk Contributions:</strong> Submitting 100+ samples of one subject gives a 2x multiplier the first time</DocListItem>
           <DocListItem><strong>First to Market:</strong> Be the first to submit a subject for bonuses</DocListItem>
-          <DocListItem><strong>Complete Metadata:</strong> Full, accurate descriptions help AI verify and score your audio</DocListItem>
         </DocList>
       </DocSection>
 

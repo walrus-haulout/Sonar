@@ -358,6 +358,18 @@ export function PublishStep({
                 verified_at: new Date().toISOString(),
               } : null;
 
+              // Include comprehensive dataset metadata
+              const datasetMetadata = {
+                title: metadata.title,
+                description: metadata.description,
+                languages: metadata.languages,
+                tags: metadata.tags,
+                per_file_metadata: metadata.perFileMetadata,
+                audio_quality: metadata.audioQuality,
+                speakers: metadata.speakers,
+                categorization: metadata.categorization,
+              };
+
               const metadataResponse = await fetch(`/api/datasets/${datasetId}/seal-metadata`, {
                 method: 'POST',
                 headers: {
@@ -366,6 +378,7 @@ export function PublishStep({
                 body: JSON.stringify({
                   files,
                   verification: verificationMetadata,
+                  metadata: datasetMetadata,
                 }),
               });
 
