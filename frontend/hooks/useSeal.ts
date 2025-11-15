@@ -162,7 +162,6 @@ export function useSeal() {
         const session = await createSession(account.address, packageId, {
           ttlMin: options.ttlMin || 10,
           suiClient: suiClient as SuiClient,
-          mvrName: 'SONAR',
           signMessage: async (message: Uint8Array) => {
             // Call the provided signing function with message bytes
             const result = await options.signMessage(message);
