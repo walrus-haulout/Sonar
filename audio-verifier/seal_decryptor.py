@@ -18,11 +18,30 @@ WALRUS_AGGREGATOR_URL = os.getenv("WALRUS_AGGREGATOR_URL")
 WALRUS_AGGREGATOR_TOKEN = os.getenv("WALRUS_AGGREGATOR_TOKEN")
 SEAL_PACKAGE_ID = os.getenv("SEAL_PACKAGE_ID")
 SEAL_THRESHOLD = int(os.getenv("SEAL_THRESHOLD", "2"))
-SEAL_SECRET_KEYS = [k.strip() for k in os.getenv("SEAL_SECRET_KEYS", "").split(",") if k.strip()]
-SEAL_KEY_SERVER_IDS = [k.strip() for k in os.getenv("SEAL_KEY_SERVER_IDS", "").split(",") if k.strip()]
 
 # Path to seal-cli binary
 SEAL_CLI_PATH = os.getenv("SEAL_CLI_PATH", "/usr/local/bin/seal-cli")
+
+
+def is_valid_seal_key(key: str) -> bool:
+    """Check if a key is valid (not a placeholder)."""
+    # Reject common placeholder keys
+    if key.lower() in ['key1', 'key2', 'key3', 'placeholder', 'changeme', 'example', 'test']:
+        logger.warning(f"Ignoring placeholder key: {key}")
+        return False
+    # Valid keys should have reasonable length (32+ chars)
+    if len(key) < 32:
+        logger.warning(f"Ignoring short key (length {len(key)}): {key[:10]}...")
+        return False
+    return True
+
+
+# Load and validate keys after is_valid_seal_key is defined
+SEAL_SECRET_KEYS = [k.strip() for k in os.getenv("SEAL_SECRET_KEYS", "").split(",") if k.strip() and is_valid_seal_key(k.strip())]
+SEAL_KEY_SERVER_IDS = [k.strip() for k in os.getenv("SEAL_KEY_SERVER_IDS", "").split(",") if k.strip()]
+
+if not SEAL_SECRET_KEYS and os.getenv("SEAL_SECRET_KEYS"):
+    logger.info("All SEAL_SECRET_KEYS were filtered out (likely placeholder values). Will use SEAL_KEY_SERVER_IDS.")
 
 
 async def decrypt_encrypted_blob(
