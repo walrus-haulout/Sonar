@@ -67,6 +67,16 @@ export function VerificationStep({
 
   // Auto-start verification when component mounts
   useEffect(() => {
+    // Log props received
+    console.log('[VerificationStep] Props received:', {
+      hasWalrusUpload: !!walrusUpload,
+      walrusUploadBlobId: walrusUpload?.blobId,
+      walrusUploadSealPolicyId: walrusUpload?.seal_policy_id?.slice(0, 20),
+      walrusUploadEncryptedHex: walrusUpload?.encryptedObjectBcsHex ? 'present' : 'missing',
+      encryptedObjectBcsHexLength: walrusUpload?.encryptedObjectBcsHex?.length ?? 0,
+      hasLegacyProps: !!(walrusBlobId || sealIdentity || encryptedObjectBcsHex),
+    });
+
     // Prevent duplicate requests in React 18 Strict Mode
     if (hasStartedRef.current) {
       return;
@@ -91,7 +101,14 @@ export function VerificationStep({
 
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(walrusUpload || (walrusBlobId && sealIdentity && encryptedObjectBcsHex));
-    console.log('[VerificationStep] Using encrypted flow:', useEncryptedFlow, { walrusUpload, walrusBlobId, sealIdentity, hasEncryptedHex: !!encryptedObjectBcsHex });
+    console.log('[VerificationStep] Using encrypted flow:', useEncryptedFlow, {
+      hasWalrusUpload: !!walrusUpload,
+      walrusUploadBlobId: walrusUpload?.blobId,
+      walrusUploadEncryptedHex: !!walrusUpload?.encryptedObjectBcsHex,
+      hasLegacyWalrusBlobId: !!walrusBlobId,
+      hasSealIdentity: !!sealIdentity,
+      hasLegacyEncryptedHex: !!encryptedObjectBcsHex,
+    });
 
     if (useEncryptedFlow) {
       // New encrypted blob flow
@@ -99,11 +116,24 @@ export function VerificationStep({
       const identity = walrusUpload?.seal_policy_id || sealIdentity!;
       const encryptedObjectHex = walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
 
+      console.log('[VerificationStep] Extracted values from walrusUpload:', {
+        blobId,
+        identityPrefix: identity?.slice(0, 20),
+        encryptedObjectHexPresent: !!encryptedObjectHex,
+        encryptedObjectHexLength: encryptedObjectHex?.length ?? 0,
+      });
+
       // Validate that encryptedObjectBcsHex is present and not empty
       if (!encryptedObjectHex || encryptedObjectHex.trim().length === 0) {
         const errorMsg = 'Missing encrypted object data. Please try encrypting again.';
         console.error('[VerificationStep] Validation failed:', errorMsg);
-        console.error('[VerificationStep] State:', { blobId, identity, encryptedObjectHex: encryptedObjectHex ? 'present' : 'missing' });
+        console.error('[VerificationStep] Missing data:', {
+          blobId,
+          identity: identity?.slice(0, 20),
+          encryptedObjectHex: encryptedObjectHex ? 'present' : 'missing',
+          walrusUploadPresent: !!walrusUpload,
+          walrusUploadEncryptedHexPresent: !!walrusUpload?.encryptedObjectBcsHex,
+        });
         setErrorMessage(errorMsg);
         setVerificationState('failed');
         onError(errorMsg);

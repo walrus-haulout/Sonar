@@ -367,6 +367,14 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
                   audioFile={state.audioFile!}
                   audioFiles={state.audioFiles}
                   onEncrypted={(result) => {
+                    console.log('[UploadWizard] Encryption completed, creating walrusUpload', {
+                      walrusBlobId: result.walrusBlobId,
+                      seal_policy_id: result.seal_policy_id?.slice(0, 20),
+                      encryptedObjectBcsHex: result.encryptedObjectBcsHex ? 'present' : 'missing',
+                      hasFiles: !!result.files,
+                      filesToProcess: result.files?.length ?? 'N/A',
+                    });
+
                     // Extract walrusUpload info from encryption result
                     const walrusUpload: WalrusUploadResult = {
                       blobId: result.walrusBlobId,
@@ -380,12 +388,25 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
                       previewMimeType: result.previewMimeType,
                     };
 
+                    console.log('[UploadWizard] WalrusUploadResult created', {
+                      blobId: walrusUpload.blobId,
+                      encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex ? 'present' : 'missing',
+                      encryptedObjectBcsHexLength: walrusUpload.encryptedObjectBcsHex?.length ?? 0,
+                    });
+
                     // Store both encryption metadata and walrus upload info
-                    setState((prev) => ({
-                      ...prev,
-                      encryption: result,
-                      walrusUpload,
-                    }));
+                    setState((prev) => {
+                      const nextState = {
+                        ...prev,
+                        encryption: result,
+                        walrusUpload,
+                      };
+                      console.log('[UploadWizard] State updated with walrusUpload', {
+                        walrusUploadPresent: !!nextState.walrusUpload,
+                        encryptedObjectBcsHexPresent: !!nextState.walrusUpload?.encryptedObjectBcsHex,
+                      });
+                      return nextState;
+                    });
                     goToNextStep();
                   }}
                   onError={(error) => setState((prev) => ({ ...prev, error }))}
