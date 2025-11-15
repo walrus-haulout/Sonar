@@ -60,9 +60,9 @@ export function useSeal() {
     }
 
     try {
-      // Set threshold based on number of key servers
-      // Threshold must be between 1 and keyServers.length
-      const threshold = Math.min(2, keyServers.length);
+      // Set threshold for 4-of-6 key servers (production redundancy)
+      // Up to 2 servers can fail and system still works
+      const threshold = 4;
 
       const client = createSonarSealClient({
         suiClient: suiClient as SuiClient,

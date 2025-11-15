@@ -62,6 +62,7 @@ export enum DemType {
  */
 export type PolicyType =
   | 'purchase'      // Requires dataset purchase
+  | 'hybrid'        // Multiple access paths (admin + purchase)
   | 'allowlist'     // Requires address in allowlist
   | 'subscription'  // Requires valid subscription NFT
   | 'timelock'      // Public after timestamp
