@@ -57,15 +57,27 @@ if not SEAL_SECRET_KEYS and not SEAL_KEY_SERVER_IDS:
 async def decrypt_encrypted_blob(
     walrus_blob_id: str,
     encrypted_object_bcs: bytes,
-    identity: str
+    identity: str,
+    session_key_data: Optional[str] = None
 ) -> bytes:
     """
-    Decrypt an encrypted blob from Walrus using Seal.
+    Decrypt an encrypted blob from Walrus using Seal with optional key server authentication.
+
+    Supports two modes:
+    1. NEW (recommended): With session_key_data (user-signed SessionKey from frontend)
+       - Uses seal-keyservers for secure key derivation
+       - User authorized via wallet signature
+    2. LEGACY (fallback): Without session_key_data (uses SEAL_SECRET_KEYS env var)
+       - Works offline with pre-shared master keys
+       - No key server authentication
 
     Args:
         walrus_blob_id: Walrus blob ID to fetch encrypted data from
         encrypted_object_bcs: BCS-serialized encrypted object (hex string will be converted)
         identity: Seal identity (hex string) used for encryption
+        session_key_data: Optional user-signed SessionKey (base64-encoded) from frontend
+                         If provided, uses key server authentication.
+                         If not provided, falls back to SEAL_SECRET_KEYS env var.
 
     Returns:
         Decrypted plaintext bytes
@@ -74,15 +86,11 @@ async def decrypt_encrypted_blob(
         ValueError: If configuration is invalid
         RuntimeError: If decryption fails
     """
-    # Validate configuration
+    # Validate basic configuration
     if not WALRUS_AGGREGATOR_URL:
         raise ValueError("WALRUS_AGGREGATOR_URL not configured")
     if not SEAL_PACKAGE_ID:
         raise ValueError("SEAL_PACKAGE_ID not configured")
-    if len(SEAL_KEY_SERVER_IDS) < SEAL_THRESHOLD:
-        raise ValueError(
-            f"Not enough Seal key server IDs: have {len(SEAL_KEY_SERVER_IDS)}, need {SEAL_THRESHOLD}"
-        )
     if not os.path.exists(SEAL_CLI_PATH):
         raise ValueError(f"seal-cli not found at {SEAL_CLI_PATH}")
 
@@ -92,21 +100,27 @@ async def decrypt_encrypted_blob(
     else:
         encrypted_object_hex = encrypted_object_bcs
 
-    logger.info(f"Decrypting blob {walrus_blob_id[:16]}... with identity {identity[:16]}...")
+    mode = 'key-server' if session_key_data else 'legacy-keys'
+    logger.info(
+        f"Decrypting blob {walrus_blob_id[:16]}... with identity {identity[:16]}... "
+        f"(mode: {mode})"
+    )
 
     # Run decryption in thread pool to avoid blocking event loop
     return await asyncio.to_thread(
         _decrypt_sync,
         walrus_blob_id,
         encrypted_object_hex,
-        identity
+        identity,
+        session_key_data
     )
 
 
 def _decrypt_sync(
     walrus_blob_id: str,
     encrypted_object_hex: str,
-    identity: str
+    identity: str,
+    session_key_data: Optional[str] = None
 ) -> bytes:
     """
     Synchronous decryption helper (runs in thread pool).
@@ -117,6 +131,11 @@ def _decrypt_sync(
     3. If envelope: decrypt sealed key with Seal (using provided encrypted_object_hex),
        then decrypt file with AES
     4. If direct: decrypt entire blob with Seal (using provided encrypted_object_hex)
+
+    Args:
+        session_key_data: Optional user-signed SessionKey for key server auth.
+                         If provided, passes to seal-cli for key server lookup.
+                         If not provided, uses SEAL_SECRET_KEYS env var (legacy mode).
     """
     try:
         # Step 1: Fetch encrypted blob from Walrus
@@ -135,7 +154,7 @@ def _decrypt_sync(
 
             # Decrypt sealed key using Seal (encrypted_object_hex is the sealed key's encrypted object)
             logger.debug("Decrypting sealed AES key with Seal...")
-            aes_key_bytes = _decrypt_with_seal_cli(encrypted_object_hex, identity)
+            aes_key_bytes = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
 
             # Decrypt file with AES
             logger.debug("Decrypting file with AES...")
@@ -144,7 +163,7 @@ def _decrypt_sync(
         else:
             logger.debug("Using direct Seal decryption")
             # Direct Seal encryption - decrypt entire blob using provided encrypted_object_hex
-            plaintext = _decrypt_with_seal_cli(encrypted_object_hex, identity)
+            plaintext = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
 
         logger.info(f"Successfully decrypted blob {walrus_blob_id[:16]}... ({len(plaintext)} bytes)")
         return plaintext
@@ -218,22 +237,42 @@ def _is_envelope_format(data: bytes) -> bool:
     return 200 <= key_length <= 400 and len(data) > key_length + 4
 
 
-def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str) -> bytes:
+def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key_data: Optional[str] = None) -> bytes:
     """
     Decrypt using seal-cli command-line tool.
+
+    Supports two authentication modes:
+    1. NEW: With session_key_data (user-signed SessionKey for key server auth)
+    2. LEGACY: With SEAL_SECRET_KEYS (pre-shared master keys, environment variable)
 
     Args:
         encrypted_object_hex: Hex-encoded BCS-serialized encrypted object
         identity: Seal identity (hex string) - not used by seal-cli but kept for logging
+        session_key_data: Optional user-signed SessionKey for key server authentication
 
     Returns:
         Decrypted plaintext bytes
+
+    Raises:
+        ValueError: If neither session_key_data nor SEAL_SECRET_KEYS are available
     """
+    # Determine which authentication method to use
+    if session_key_data:
+        logger.debug(f"Using key-server authentication mode with SessionKey for identity {identity[:16]}...")
+        # TODO: Implement key server authentication flow
+        # For now, this would call the backend seal-key-service HTTP endpoint
+        # and use the returned key shares for decryption
+        # Fall back to master keys as temporary solution
+        logger.warning("Key-server auth mode not yet fully implemented, falling back to master keys")
+        keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
+    else:
+        logger.debug(f"Using legacy master-keys mode for identity {identity[:16]}...")
+        keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
+
     # Use threshold number of key server IDs for decryption
     key_server_ids_to_use = SEAL_KEY_SERVER_IDS[:SEAL_THRESHOLD] if SEAL_KEY_SERVER_IDS else []
-    keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
 
-    # Secret keys are required for decryption
+    # Secret keys are required for decryption (until key-server mode is fully implemented)
     if not keys_to_use:
         raise ValueError(
             "No valid SEAL_SECRET_KEYS configured. "

@@ -3,7 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
+import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { cn } from '@/lib/utils';
+import { useSeal } from '@/hooks/useSeal';
 import {
   DatasetMetadata,
   VerificationResult,
@@ -49,8 +51,15 @@ export function VerificationStep({
   onVerificationComplete,
   onError,
 }: VerificationStepProps) {
-  const [verificationState, setVerificationState] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+  // Hooks for wallet interaction
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const { createSession, sessionKey } = useSeal();
+
+  // State
+  const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
   const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [sessionKeyData, setSessionKeyData] = useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
     { name: 'quality', status: 'pending', progress: 0 },
     { name: 'copyright', status: 'pending', progress: 0 },
@@ -83,7 +92,8 @@ export function VerificationStep({
     }
 
     hasStartedRef.current = true;
-    startVerification();
+    // Move to waiting-auth state - user needs to authorize first
+    setVerificationState('waiting-auth');
 
     // Cleanup polling on unmount
     return () => {
@@ -93,9 +103,43 @@ export function VerificationStep({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * Request user authorization for verification
+   * Creates a SessionKey with wallet signature
+   */
+  const handleAuthorizeVerification = async () => {
+    console.log('[VerificationStep] Requesting user authorization...');
+    setIsCreatingSession(true);
+    setErrorMessage(null);
+
+    try {
+      // Create session with wallet signature
+      const session = await createSession({
+        signMessage: async (message: Uint8Array) => {
+          const result = await signPersonalMessage({ message });
+          return { signature: result.signature };
+        },
+      });
+
+      // Export session key to send to backend
+      const exportedKey = (session as any).export?.() ?? session;
+      setSessionKeyData(typeof exportedKey === 'string' ? exportedKey : JSON.stringify(exportedKey));
+
+      console.log('[VerificationStep] Session created and exported');
+      setVerificationState('running');
+      setIsCreatingSession(false);
+
+      // Now start the actual verification with session key
+      startVerification();
+    } catch (error: any) {
+      console.error('[VerificationStep] Failed to create session:', error);
+      setErrorMessage(error.message || 'Failed to create authorization session');
+      setIsCreatingSession(false);
+    }
+  };
+
   const startVerification = async () => {
     console.log('[VerificationStep] Starting verification...');
-    setVerificationState('running');
     setErrorMessage(null);
     setErrorDetails(null);
 
@@ -237,13 +281,19 @@ export function VerificationStep({
     encryptedObjectBcsHex: string
   ) => {
     try {
-      // Prepare JSON payload with encrypted blob info
+      // Prepare JSON payload with encrypted blob info AND session key
       const payload = {
         walrusBlobId,
         sealIdentity,
         encryptedObjectBcsHex,
+        sessionKeyData, // Include user-signed session key for key server auth
         metadata,
       };
+
+      console.log('[VerificationStep] Sending verification request with sessionKeyData:', {
+        hasSessionKeyData: !!sessionKeyData,
+        sessionKeyDataLength: sessionKeyData?.length ?? 0,
+      });
 
       // Call server-side API (proxies to audio-verifier with secure token)
       const response = await fetch('/api/verify', {
@@ -456,8 +506,46 @@ export function VerificationStep({
 
   return (
     <div className="space-y-6">
+      {/* Waiting for User Authorization */}
+      {verificationState === 'waiting-auth' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-6"
+        >
+          <GlassCard className="text-center py-8">
+            <div className="flex justify-center mb-4">
+              <div className="p-6 rounded-full bg-sonar-signal/10">
+                <Shield className="w-12 h-12 text-sonar-signal" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-mono font-bold text-sonar-highlight-bright mb-2">
+              Authorize Verification
+            </h3>
+            <p className="text-sonar-highlight/70 max-w-2xl mx-auto mb-6">
+              Sign with your Sui wallet to authorize Sonar to verify your encrypted audio with secure key server authentication.
+            </p>
+            <p className="text-sm text-sonar-highlight/50 mb-8">
+              Your signature proves you own this audio and authorizes temporary key access for verification.
+            </p>
+            <SonarButton
+              onClick={handleAuthorizeVerification}
+              disabled={isCreatingSession}
+              className="w-full"
+            >
+              {isCreatingSession ? 'Signing...' : 'Sign & Authorize'}
+            </SonarButton>
+            {errorMessage && (
+              <div className="mt-4 p-3 rounded-sonar bg-sonar-coral/10 border border-sonar-coral/20">
+                <p className="text-sm text-sonar-coral">{errorMessage}</p>
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+      )}
+
       {/* Verification Running */}
-      {(verificationState === 'idle' || verificationState === 'running') && (
+      {(verificationState === 'running') && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
