@@ -5,8 +5,9 @@ Uses hypothesis to verify that pipeline logic maintains expected properties.
 """
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given, strategies as st, assume
 from unittest.mock import AsyncMock
+import json
 
 from verification_pipeline import VerificationPipeline
 
@@ -99,10 +100,10 @@ class TestApprovalInvariants:
         )
         
         # 79% should be more permissive than 80% (for given quality and safety)
-        # Both should approve if quality and safety pass
+        # Threshold is > 0.8, so 80% exactly is NOT over threshold
         if quality_passed and safety_passed:
             assert approved_79 is True  # 79% below threshold
-            assert approved_80 is False  # 80% at threshold
+            assert approved_80 is True  # 80% exactly is not > 0.8 threshold
 
     @given(
         copyright_detected=st.booleans(),
@@ -141,10 +142,9 @@ class TestApprovalInvariants:
             {"copyright": {"detected": False, "confidence": copyright_confidence}},
             {"safetyPassed": False}  # Safety fails
         )
-        
-        # Should only be True if quality passes and copyright is OK
-        expected = quality_passed and copyright_confidence <= 0.8
-        assert approved == expected
+
+        # When safety fails, approval must always be False
+        assert approved is False
 
 
 class TestAnalysisResponseParsing:
@@ -201,14 +201,22 @@ class TestAnalysisResponseParsing:
     @given(st.text(min_size=1, max_size=100))
     def test_invalid_json_returns_safe_defaults(self, invalid_text):
         """Test that invalid JSON returns safe default values."""
+        # Exclude texts that accidentally contain valid JSON (including valid JSON primitives)
+        try:
+            parsed = json.loads(invalid_text)
+            # Skip if it parses to valid JSON at all (dict, list, string, number, bool, null)
+            assume(False)
+        except (json.JSONDecodeError, ValueError):
+            pass  # This is what we want to test
+
         mock_store = AsyncMock()
         pipeline = VerificationPipeline(
             session_store=mock_store,
             openrouter_api_key="test-key"
         )
-        
+
         result = pipeline._parse_analysis_response(invalid_text)
-        
+
         # Should have safe defaults
         assert "qualityScore" in result
         assert "safetyPassed" in result
