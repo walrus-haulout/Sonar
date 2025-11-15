@@ -58,7 +58,6 @@ export function VerificationStep({
   // State
   const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
   const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [sessionKeyData, setSessionKeyData] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
     { name: 'quality', status: 'pending', progress: 0 },
@@ -121,11 +120,7 @@ export function VerificationStep({
         },
       });
 
-      // Export session key to send to backend
-      const exportedKey = session.export();
-      setSessionKeyData(JSON.stringify(exportedKey));
-
-      console.log('[VerificationStep] Session created and exported');
+      console.log('[VerificationStep] Session created and cached in IndexedDB');
       setVerificationState('running');
       setIsCreatingSession(false);
 
@@ -281,19 +276,15 @@ export function VerificationStep({
     encryptedObjectBcsHex: string
   ) => {
     try {
-      // Prepare JSON payload with encrypted blob info AND session key
+      // Prepare JSON payload with encrypted blob info
       const payload = {
         walrusBlobId,
         sealIdentity,
         encryptedObjectBcsHex,
-        sessionKeyData, // Include user-signed session key for key server auth
         metadata,
       };
 
-      console.log('[VerificationStep] Sending verification request with sessionKeyData:', {
-        hasSessionKeyData: !!sessionKeyData,
-        sessionKeyDataLength: sessionKeyData?.length ?? 0,
-      });
+      console.log('[VerificationStep] Sending encrypted blob verification request');
 
       // Call server-side API (proxies to audio-verifier with secure token)
       const response = await fetch('/api/verify', {
