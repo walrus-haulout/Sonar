@@ -224,7 +224,7 @@ export function MetadataStep({
     formState: { errors, isValid },
   } = useForm<MetadataFormData>({
     resolver: zodResolver(metadataSchema),
-    mode: 'onSubmit',
+    mode: 'onChange',
     defaultValues: metadata || {
       title: '',
       description: '',
@@ -953,6 +953,8 @@ export function MetadataStep({
         <SonarButton
           variant="primary"
           type="submit"
+          disabled={!isValid}
+          className={!isValid ? 'opacity-50 cursor-not-allowed' : ''}
         >
           Continue →
         </SonarButton>
