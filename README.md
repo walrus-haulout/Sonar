@@ -126,6 +126,55 @@ This ensures:
 
 ---
 
+## Data Access & Transparency
+
+### How SONAR Uses Your Data
+
+When you upload audio to SONAR, you grant the SONAR team access to your encrypted dataset for:
+
+1. **Verification & Quality Assurance** - Ensuring your audio meets quality, authenticity, and safety standards
+2. **Open-Source AI Training** - Training public AI models for transcription, audio classification, and analysis
+3. **Platform Improvement** - Understanding user needs and improving the SONAR experience
+
+### Access Control Model
+
+SONAR uses a **hybrid encryption policy** with multiple access paths:
+
+- **Admin Access (SONAR Team):** Can decrypt datasets for verification and AI model training
+- **Purchase Access (Marketplace Buyers):** Can decrypt datasets they purchased with purchase receipts
+- **Your Access (Owner):** Can always decrypt your own data with your wallet
+
+All access is encrypted using **threshold cryptography (4-of-6 key servers)**, meaning:
+- No single SONAR team member can decrypt data alone
+- 4 independent key servers must participate to authorize decryption
+- Every decryption is signed and recorded on the blockchain
+- You can audit who accessed your data
+
+### AI Model Training
+
+Models trained with SONAR community data are released **open-source and free to use**:
+- Published under permissive open licenses
+- Never sold or used for proprietary purposes
+- Benefit the entire AI/audio community
+- All community contributions attributed
+
+### Data Ownership & Control
+
+- **You own your data** - SONAR has usage rights, not ownership
+- **Delete anytime** - Remove from platform (subject to storage lease terms)
+- **Export anytime** - Download your decrypted data at any time
+- **No third-party sharing** - Your data is never sold or shared except with authorized marketplace buyers
+
+### Privacy Guarantees
+
+SONAR cannot access your data:
+- **Before encryption** - Audio encrypted on your device before upload
+- **After deletion** - Data removed from Walrus storage
+- **Without authorization** - Admin access requires secure key server authentication
+- **Without audit trail** - All access recorded on blockchain
+
+---
+
 ## Technology Stack
 
 ### Blockchain

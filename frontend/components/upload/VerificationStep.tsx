@@ -16,6 +16,7 @@ import {
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
+import { DataAccessNotice } from '@/components/upload/DataAccessNotice';
 
 interface VerificationStepProps {
   audioFile?: AudioFile; // Optional - for backwards compatibility
@@ -59,6 +60,7 @@ export function VerificationStep({
   const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [dataAccessAcknowledged, setDataAccessAcknowledged] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
     { name: 'decryption', status: 'pending', progress: 0 },
     { name: 'quality', status: 'pending', progress: 0 },
@@ -588,6 +590,12 @@ export function VerificationStep({
           animate={{ opacity: 1 }}
           className="space-y-6"
         >
+          {/* Data Access Notice */}
+          <DataAccessNotice
+            onAcknowledge={setDataAccessAcknowledged}
+            disabled={isCreatingSession}
+          />
+
           <GlassCard className="text-center py-8">
             <div className="flex justify-center mb-4">
               <div className="p-6 rounded-full bg-sonar-signal/10">
@@ -605,7 +613,7 @@ export function VerificationStep({
             </p>
             <SonarButton
               onClick={handleAuthorizeVerification}
-              disabled={isCreatingSession}
+              disabled={isCreatingSession || !dataAccessAcknowledged}
               className="w-full"
             >
               {isCreatingSession ? 'Signing...' : 'Sign & Authorize'}
