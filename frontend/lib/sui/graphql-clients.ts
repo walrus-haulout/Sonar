@@ -115,12 +115,13 @@ export function createGraphQLClients(network: string = 'testnet'): Array<{
     try {
       // Validate endpoint configuration first
       if (!isValidEndpoint(endpoint)) {
+        const endpointAny = endpoint as any;
         logger.warn(`Invalid GraphQL endpoint configuration`, {
           endpoint,
           network,
-          hasUrl: !!endpoint?.url,
-          hasName: !!endpoint?.name,
-          hasTimeout: !!endpoint?.timeout,
+          hasUrl: !!endpointAny?.url,
+          hasName: !!endpointAny?.name,
+          hasTimeout: !!endpointAny?.timeout,
         });
         continue;
       }
