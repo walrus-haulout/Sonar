@@ -29,8 +29,8 @@ export interface AudioFile {
 
 export interface PerFileMetadata {
   fileId: string; // Link to AudioFile
-  title: string; // Individual file title (3-100 chars)
-  description: string; // Individual file description (10-500 chars)
+  title?: string; // Individual file title (optional)
+  description?: string; // Individual file description (optional)
 }
 
 export interface AudioQualityMetadata {
