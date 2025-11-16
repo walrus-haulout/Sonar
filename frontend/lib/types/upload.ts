@@ -63,14 +63,14 @@ export interface ContentCategorization {
 export interface DatasetMetadata {
   title: string;
   description: string;
-  languages: string[];
-  tags: string[];
+  languages?: string[];
+  tags?: string[];
   consent: boolean;
-  // Labeling fields - per-file and categorization required, quality/speakers optional
-  perFileMetadata: PerFileMetadata[]; // Required - one per file
+  // Labeling fields - quality/speakers optional
+  perFileMetadata?: PerFileMetadata[];
   audioQuality?: AudioQualityMetadata; // Optional - but earns +10% points bonus
   speakers?: SpeakerMetadata; // Optional - but earns +15% points bonus
-  categorization: ContentCategorization; // Required - including domain
+  categorization?: ContentCategorization;
 }
 
 export interface EncryptionResult {
