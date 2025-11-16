@@ -41,6 +41,7 @@ COPY backend ./backend
 
 # Generate Prisma Client
 WORKDIR /app/backend
+ENV PRISMA_CLI_BINARY_TARGETS="debian-openssl-3.0.x"
 RUN bunx prisma generate
 
 # Stage 3: Runtime image
@@ -54,7 +55,7 @@ RUN mkdir -p /etc/nix && \
 
 # Install Bun and runtime dependencies via nix-env
 # Includes postgresql client libraries for Prisma, bash for scripts
-RUN nix-env -iA nixpkgs.bun nixpkgs.curl nixpkgs.coreutils nixpkgs.postgresql nixpkgs.bash nixpkgs.python3 nixpkgs.openssl_1_1
+RUN nix-env -iA nixpkgs.bun nixpkgs.curl nixpkgs.coreutils nixpkgs.postgresql nixpkgs.bash nixpkgs.python3 nixpkgs.openssl
 
 # Create /bin/bash symlink for script execution
 # NixOS minimal image doesn't have /bin/bash by default
