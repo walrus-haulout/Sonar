@@ -164,6 +164,11 @@ export function PublishStep({
                 console.log('Transaction objectChanges (full):', JSON.stringify(txDetails.objectChanges, null, 2));
                 
                 for (const change of txDetails.objectChanges) {
+                  // Skip published modules - they don't have objectType/objectId
+                  if (change.type === 'published') {
+                    continue;
+                  }
+
                   // Log every change for debugging
                   console.log('Checking object change:', {
                     type: change.type,
@@ -173,7 +178,7 @@ export function PublishStep({
                     allKeys: Object.keys(change),
                   });
 
-                  // Extract objectType and objectId
+                  // Extract objectType and objectId (safe after type guard)
                   const objectType = change.objectType;
                   const objectId = change.objectId || extractObjectId(change);
                   

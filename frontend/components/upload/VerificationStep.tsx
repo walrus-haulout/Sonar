@@ -547,7 +547,7 @@ export function VerificationStep({
     pollingIntervalRef.current = interval;
   };
 
-  const updateStagesFromSession = (session: VerificationSession) => {
+  const updateStagesFromSession = (session: Pick<VerificationSession, 'stage' | 'progress'>) => {
     const currentStage = session.stage;
     const progress = session.progress || 0;
 

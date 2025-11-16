@@ -83,6 +83,7 @@ export interface SuiEventParsedJson {
   [key: string]: unknown;
   dataset_id?: string;
   datasetId?: string;
+  submission_id?: string;
 }
 
 /**
