@@ -34,11 +34,11 @@ export interface PerFileMetadata {
 }
 
 export interface AudioQualityMetadata {
-  sampleRate: number; // Hz (e.g., 44100, 48000)
-  bitDepth?: number; // bits (16, 24, 32)
-  channels: number; // 1 (mono), 2 (stereo), etc.
-  codec: string; // MP3, AAC, FLAC, etc.
-  recordingQuality: 'professional' | 'high' | 'medium' | 'low';
+  sampleRate?: number; // Optional - Hz (e.g., 44100, 48000)
+  bitDepth?: number; // Optional - bits (16, 24, 32)
+  channels?: number; // Optional - 1 (mono), 2 (stereo), etc.
+  codec?: string; // Optional - MP3, AAC, FLAC, etc.
+  recordingQuality?: 'professional' | 'high' | 'medium' | 'low' | 'unknown'; // Optional - with 'unknown' option
 }
 
 export interface SpeakerInfo {
@@ -50,8 +50,8 @@ export interface SpeakerInfo {
 }
 
 export interface SpeakerMetadata {
-  speakerCount: number; // 1-20
-  speakers: SpeakerInfo[];
+  speakerCount?: number; // Optional - 1-20
+  speakers?: SpeakerInfo[]; // Optional
 }
 
 export interface ContentCategorization {
