@@ -29,9 +29,6 @@ dependencies = [
 
     # Cryptography for AES decryption
     "cryptography>=41.0.0",
-
-    # Vector database for semantic search
-    "qdrant-client>=2.7.0",
 ]
 
 [project.optional-dependencies]
