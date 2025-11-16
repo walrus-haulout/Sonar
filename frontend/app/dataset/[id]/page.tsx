@@ -21,8 +21,8 @@ import { formatSonarAmount } from '@/lib/tier-utils';
  * Full dataset information with audio preview and purchase functionality
  */
 export default function DatasetDetailPage() {
-  const params = useParams();
-  const datasetId = params.id as string;
+  const params = useParams() as Record<string, string> | null;
+  const datasetId = params?.id || '';
 
   const { data: dataset, isLoading, error } = useDataset(datasetId);
   const { data: stats } = useProtocolStats();

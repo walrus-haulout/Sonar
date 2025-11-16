@@ -17,7 +17,7 @@ interface DocSidebarProps {
 }
 
 export function DocSidebar({ items }: DocSidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (href: string) => {

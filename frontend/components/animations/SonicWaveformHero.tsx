@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, Variants } from 'framer-motion';
 import { BarChart2 } from 'lucide-react';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { cn } from '@/lib/utils';
@@ -123,7 +123,7 @@ export function SonicWaveformHero({
   ctaText = 'Explore Marketplace',
   ctaHref = '/marketplace',
 }: SonicWaveformHeroProps) {
-  const fadeUpVariants = {
+  const fadeUpVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: (i: number) => ({
       opacity: 1,
@@ -131,7 +131,7 @@ export function SonicWaveformHero({
       transition: {
         delay: i * 0.2 + 0.5,
         duration: 0.8,
-        ease: 'easeInOut',
+        ease: [0.25, 0.1, 0.25, 1.0],
       },
     }),
   };
