@@ -199,7 +199,7 @@ export function createGraphQLClients(network: string = 'testnet'): Array<{
     network,
     totalEndpoints: endpoints.length,
     validClients: clients.length,
-    endpoints: endpoints.map(e => ({ name: e.name, url: e.url })),
+    endpoints: endpoints.map(e => ({ name: e?.name ?? 'unknown', url: e?.url ?? 'unknown' })),
   });
 
   return clients;

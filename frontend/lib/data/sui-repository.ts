@@ -216,7 +216,7 @@ export class SuiRepository implements DataRepository {
     logger.debug(`Starting ${operationName} with ${graphqlClients.length} configured GraphQL endpoints`, {
       endpoints: graphqlClients
         .filter(item => item && item.endpoint)
-        .map(item => ({ name: item.endpoint.name, url: item.endpoint.url })),
+        .map(item => ({ name: item?.endpoint?.name ?? 'unknown', url: item?.endpoint?.url ?? 'unknown' })),
     });
 
     // Try each GraphQL endpoint in priority order
@@ -290,7 +290,7 @@ export class SuiRepository implements DataRepository {
     const errorMsg = `All GraphQL endpoints failed for ${operationName}`;
     const configuredEndpoints = graphqlClients
       .filter(item => item && item.endpoint)
-      .map(item => ({ name: item.endpoint.name, url: item.endpoint.url }));
+      .map(item => ({ name: item?.endpoint?.name ?? 'unknown', url: item?.endpoint?.url ?? 'unknown' }));
 
     logger.error(errorMsg, undefined, {
       operation: operationName,
