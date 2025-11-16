@@ -375,6 +375,17 @@ export function FileUploadStep({
 
   return (
     <div className="space-y-6">
+      {/* Hidden file input - kept at root level so ref persists when files are added */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT_PATTERNS.join(',')}
+        onChange={handleFileSelect}
+        multiple={multiFile}
+        className="hidden"
+        aria-label={multiFile ? "Upload audio files" : "Upload audio file"}
+      />
+
       {/* Drop Zone */}
       {showDropZone && (
         <motion.div
@@ -393,15 +404,6 @@ export function FileUploadStep({
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPT_PATTERNS.join(',')}
-            onChange={handleFileSelect}
-            multiple={multiFile}
-            className="hidden"
-            aria-label={multiFile ? "Upload audio files" : "Upload audio file"}
-          />
 
           <div className="flex flex-col items-center justify-center space-y-4">
             <motion.div
