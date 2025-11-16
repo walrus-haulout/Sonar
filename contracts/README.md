@@ -54,8 +54,8 @@ Test result: OK. Total tests: 31; passed: 31; failed: 0
 contracts/
 ├── sources/
 │   ├── token.move           # SONAR token (57 lines)
-│   ├── economics.move       # 4-tier dynamic economics (198 lines)
-│   └── marketplace.move     # Main protocol (851 lines)
+│   ├── economics.move       # 60/40 creator/protocol split (198 lines)
+│   └── marketplace.move     # Main protocol (960+ lines)
 ├── tests/
 │   ├── submission_tests.move
 │   ├── economics_tests.move
@@ -63,6 +63,27 @@ contracts/
 │   └── admin_tests.move
 └── Move.toml               # Framework: mainnet-v1.60.1 (rev bd272b07244d)
 ```
+
+## Key Features
+
+### Payment Support
+- **SUI Payments**: Temporary support for SUI-based purchases (can be disabled via `toggle_sui_payments`)
+- **SNR Payments**: Native SNR token payments with full economic split
+- **Revenue Split**: Fixed 60% to creator, 40% to protocol (both payment methods)
+
+### AI Price Suggestions
+- **Auto-Pricing**: When validators finalize submissions, AI automatically sets initial price based on quality score
+- **Quality Tiers**:
+  - <50: Base price (reward amount)
+  - 50-70: 2x base price
+  - 70-90: 5x base price
+  - 90+: 10x base price
+- **Updatable**: Creators can adjust prices anytime via `update_price()`
+
+### Economics
+- **Simplified Model**: Fixed 60% uploader / 40% protocol split across all tiers
+- **No Complex Burns**: Removed tier-based burn rates for clarity
+- **Transparent Treasury**: All protocol revenue goes to treasury address
 
 ## Documentation
 

@@ -9,7 +9,7 @@ The process is straightforward:
 1. **Browse**: Explore datasets by subject, quality, or popularity
 2. **Preview**: Listen to the first 30 seconds for free
 3. **Review**: Read the full description and quality scores
-4. **Purchase**: Pay in SONAR tokens
+4. **Purchase**: Pay with SUI or SNR tokens
 5. **Download**: Decrypt and access the full audio
 
 Each purchase is secure, fair, and transparent.
@@ -29,13 +29,23 @@ When you purchase a dataset, you receive:
 **Commercial Rights**: Subject to creator's license terms
 **No DRM**: Downloaded files are completely yours
 
-## Your Wallet
+## Payment Methods
 
-To purchase, you need SONAR tokens in your wallet:
+To purchase, you can use either **SUI** or **SNR tokens**:
 
-**Getting Tokens**:
-- Buy from exchanges (SONAR trading pairs)
-- Receive from selling your own datasets
+**Paying with SUI**:
+- Available now for early-stage purchases
+- Direct payment from your Sui wallet
+- Temporary support (will transition to SNR-only in future)
+
+**Paying with SNR**:
+- Coming soon with full liquidity
+- SONAR's native token with full tokenomics
+- Long-term payment method
+
+**Getting SNR**:
+- Upload datasets and earn points (redeemable for SNR in future airdrop)
+- Receive from selling your datasets
 - Participate in airdrops and bounties
 - Earn from contributions to platform
 

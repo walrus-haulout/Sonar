@@ -33,6 +33,7 @@ module sonar::marketplace {
     const E_NOT_LISTED: u64 = 3001;
     const E_NOT_APPROVED: u64 = 3002;
     const E_INVALID_PAYMENT: u64 = 3003;
+    const E_SUI_PAYMENTS_DISABLED: u64 = 3004;
 
     // Admin errors (5000-5999)
     const E_UNAUTHORIZED: u64 = 5001;
@@ -173,7 +174,10 @@ module sonar::marketplace {
         admin_cap_id: ID,              // For verification
         economic_config: EconomicConfig,
         circuit_breaker: CircuitBreaker,
-        withdrawal_limits: WithdrawalLimits
+        withdrawal_limits: WithdrawalLimits,
+
+        // Payment options
+        sui_payments_enabled: bool     // Toggle for SUI payment support (temporary)
     }
 
     // ========== Events ==========
@@ -240,6 +244,16 @@ module sonar::marketplace {
         seal_policy_id: String,        // ✅ For decryption request
         // NO walrus_blob_id!
 
+        purchase_timestamp: u64
+    }
+
+    public struct DatasetPurchasedWithSUI has copy, drop {
+        submission_id: ID,
+        buyer: address,
+        price: u64,
+        uploader_paid: u64,
+        protocol_paid: u64,
+        seal_policy_id: String,        // ✅ For decryption request
         purchase_timestamp: u64
     }
 
@@ -332,7 +346,8 @@ module sonar::marketplace {
                 min_epochs_between: 7,
                 last_withdrawal_epoch: 0,
                 total_withdrawn_this_epoch: 0
-            }
+            },
+            sui_payments_enabled: true  // Enable SUI payments by default (temporary support)
         };
 
         let marketplace_id = object::id(&marketplace);
@@ -641,9 +656,31 @@ module sonar::marketplace {
             });
         };
 
+        // Auto-list with AI-calculated price if approved
+        if (status == 1) {
+            // Calculate initial price based on quality score and reward amount
+            let ai_price = calculate_ai_price(quality_score, reward_amount);
+            submission.dataset_price = ai_price;
+            submission.listed_for_sale = true;
+        };
+
         // Update submission
         submission.quality_score = quality_score;
         submission.status = status;
+    }
+
+    /// Calculate AI-suggested price based on quality score
+    /// Tiers: <50 = base (reward), 50-70 = 2x, 70-90 = 5x, 90+ = 10x
+    fun calculate_ai_price(quality_score: u8, reward_amount: u64): u64 {
+        if (quality_score >= 90) {
+            reward_amount * 10  // Premium pricing for excellent quality
+        } else if (quality_score >= 70) {
+            reward_amount * 5   // High quality
+        } else if (quality_score >= 50) {
+            reward_amount * 2   // Medium quality
+        } else {
+            reward_amount       // Base pricing for lower quality
+        }
     }
 
     // ========== Vesting Functions ==========
@@ -863,6 +900,81 @@ module sonar::marketplace {
         });
     }
 
+    /// Purchase dataset with SUI (temporary support, will be disabled in future)
+    /// Buyers pay with SUI, which is converted to protocol revenue split
+    public entry fun purchase_dataset_with_sui(
+        marketplace: &mut QualityMarketplace,
+        submission: &mut AudioSubmission,
+        mut payment: Coin<SUI>,
+        ctx: &mut TxContext
+    ) {
+        // Check if SUI payments are enabled
+        assert!(marketplace.sui_payments_enabled, E_SUI_PAYMENTS_DISABLED);
+
+        // Circuit breaker check
+        assert!(
+            !is_circuit_breaker_active(&marketplace.circuit_breaker, ctx),
+            E_CIRCUIT_BREAKER_ACTIVE
+        );
+
+        // Validation: submission must be approved and listed
+        assert!(submission.status == 1, E_NOT_APPROVED);
+        assert!(submission.listed_for_sale, E_NOT_LISTED);
+
+        // Validate payment amount
+        let price = submission.dataset_price;
+        let paid = coin::value(&payment);
+        assert!(paid >= price, E_INVALID_PAYMENT);
+
+        // Split according to 60% uploader / 40% protocol (fixed split for SUI)
+        let uploader_amount = (price * 6000) / 10000;      // 60%
+        let protocol_amount = price - uploader_amount;      // 40%
+
+        // 1. Protocol portion (40%) to treasury
+        if (protocol_amount > 0) {
+            let protocol_coin = coin::split(&mut payment, protocol_amount, ctx);
+            transfer::public_transfer(protocol_coin, marketplace.treasury_address);
+        };
+
+        // 2. Uploader portion (60%)
+        if (uploader_amount > 0) {
+            let uploader_coin = coin::split(&mut payment, uploader_amount, ctx);
+            transfer::public_transfer(uploader_coin, submission.uploader);
+        };
+
+        // Return any excess payment to buyer
+        if (coin::value(&payment) > 0) {
+            transfer::public_transfer(payment, tx_context::sender(ctx));
+        } else {
+            coin::destroy_zero(payment);
+        };
+
+        // Update statistics
+        submission.purchase_count = submission.purchase_count + 1;
+        marketplace.total_purchases = marketplace.total_purchases + 1;
+
+        // Mint purchase receipt for SEAL access control
+        let buyer_address = tx_context::sender(ctx);
+        let receipt = purchase_policy::mint_receipt(
+            submission.seal_policy_id,
+            object::uid_to_inner(&submission.id),
+            buyer_address,
+            ctx
+        );
+        transfer::public_transfer(receipt, buyer_address);
+
+        // Emit purchase event for SUI payment
+        event::emit(DatasetPurchasedWithSUI {
+            submission_id: object::uid_to_inner(&submission.id),
+            buyer: buyer_address,
+            price,
+            uploader_paid: uploader_amount,
+            protocol_paid: protocol_amount,
+            seal_policy_id: submission.seal_policy_id,
+            purchase_timestamp: tx_context::epoch(ctx)
+        });
+    }
+
     // ========== Submission Management Functions ==========
 
     /// List submission for sale (uploader only)
@@ -987,6 +1099,16 @@ module sonar::marketplace {
         assert!(economics::validate_config(&new_config), E_UNAUTHORIZED);
 
         marketplace.economic_config = new_config;
+    }
+
+    /// Toggle SUI payment support (AdminCap required)
+    /// Used to disable SUI payments when SNR liquidity is established
+    public entry fun toggle_sui_payments(
+        _cap: &AdminCap,
+        marketplace: &mut QualityMarketplace,
+        enabled: bool
+    ) {
+        marketplace.sui_payments_enabled = enabled;
     }
 
     /// Withdraw from liquidity vault
