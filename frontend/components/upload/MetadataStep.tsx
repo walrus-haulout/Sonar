@@ -159,14 +159,14 @@ const metadataSchema = z.object({
     description: z.string().optional(),
   })).optional(),
   audioQuality: z.object({
-    sampleRate: z.number().positive().optional(),
-    bitDepth: z.number().positive().optional(),
-    channels: z.number().int().min(1).optional(),
+    sampleRate: z.preprocess((val) => (typeof val === 'number' && isNaN(val) ? undefined : val), z.number().positive().optional()),
+    bitDepth: z.preprocess((val) => (typeof val === 'number' && isNaN(val) ? undefined : val), z.number().positive().optional()),
+    channels: z.preprocess((val) => (typeof val === 'number' && isNaN(val) ? undefined : val), z.number().int().min(1).optional()),
     codec: z.string().optional(),
     recordingQuality: z.enum(['professional', 'high', 'medium', 'low', 'unknown']).optional(),
   }).optional(),
   speakers: z.object({
-    speakerCount: z.number().int().min(1).max(20).optional(),
+    speakerCount: z.preprocess((val) => (typeof val === 'number' && isNaN(val) ? undefined : val), z.number().int().min(1).max(20).optional()),
     speakers: z.array(z.object({
       id: z.string(),
       role: z.string().optional(),
