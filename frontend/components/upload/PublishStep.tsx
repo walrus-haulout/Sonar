@@ -10,7 +10,7 @@ import type {
   VerificationResult,
   PublishResult,
 } from '@/lib/types/upload';
-import { extractObjectId, isSuiCreatedObject } from '@/lib/types/sui';
+import { extractObjectId, isSuiCreatedObject, type SuiEventParsedJson } from '@/lib/types/sui';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { CHAIN_CONFIG } from '@/lib/sui/client';
@@ -216,7 +216,7 @@ export function PublishStep({
                 
                 for (const event of txDetails.events) {
                   const eventType = event.type;
-                  const parsedJson = event.parsedJson;
+                  const parsedJson = event.parsedJson as SuiEventParsedJson | undefined;
 
                   console.log('Checking event:', { eventType, parsedJson });
 
