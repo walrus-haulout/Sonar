@@ -92,7 +92,7 @@ COPY backend/scripts/start.sh /app/backend/start.sh
 COPY backend/scripts/migrate.py /app/backend/migrate.py
 
 # Create non-root user and set permissions
-RUN useradd -m -u 1000 backend && \
+RUN useradd -m -u 1001 backend && \
     chown -R backend:backend /app && \
     chmod +x /app/backend/start.sh /app/backend/migrate.py
 
