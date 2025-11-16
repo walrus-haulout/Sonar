@@ -11,7 +11,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 interface FileUploadStepProps {
   audioFile: AudioFile | null; // Backwards compatibility (single file mode)
   audioFiles?: AudioFile[]; // Multi-file mode
-  onFileSelected: (audioFile: AudioFile) => void; // Single file callback
+  onFileSelected: (audioFile: AudioFile | null) => void; // Single file callback (null to clear)
   onFilesSelected?: (audioFiles: AudioFile[]) => void; // Multi-file callback
   onContinue?: () => void; // Explicit continue action for multi-file mode
   error: string | null;
@@ -175,7 +175,11 @@ export function FileUploadStep({
   }> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        throw new Error('AudioContext not supported in this browser');
+      }
+      const audioContext = new AudioContextClass();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
       // Extract codec from MIME type
@@ -583,7 +587,7 @@ export function FileUploadStep({
                   if (audioFile.preview) {
                     URL.revokeObjectURL(audioFile.preview);
                   }
-                  onFileSelected(null as any);
+                  onFileSelected(null);
                 }}
                 className={cn(
                   'text-sonar-highlight/50 hover:text-sonar-coral',

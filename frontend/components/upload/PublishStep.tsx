@@ -10,6 +10,7 @@ import type {
   VerificationResult,
   PublishResult,
 } from '@/lib/types/upload';
+import { extractObjectId, isSuiCreatedObject } from '@/lib/types/sui';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { CHAIN_CONFIG } from '@/lib/sui/client';
@@ -164,18 +165,17 @@ export function PublishStep({
                 
                 for (const change of txDetails.objectChanges) {
                   // Log every change for debugging
-                  const changeAny = change as any;
                   console.log('Checking object change:', {
                     type: change.type,
-                    objectType: changeAny.objectType,
-                    objectId: changeAny.objectId,
+                    objectType: change.objectType,
+                    objectId: change.objectId,
                     fullChange: change,
-                    allKeys: Object.keys(changeAny),
+                    allKeys: Object.keys(change),
                   });
-                  
-                  // Extract objectType and objectId - try multiple possible field names
-                  const objectType = changeAny.objectType || changeAny.type || changeAny.object_type;
-                  const objectId = changeAny.objectId || changeAny.object_id || changeAny.reference?.objectId;
+
+                  // Extract objectType and objectId
+                  const objectType = change.objectType;
+                  const objectId = change.objectId || extractObjectId(change);
                   
                   // Check if this object matches our submission types
                   // The objectType might be the full package path like "0x...::marketplace::AudioSubmission"
@@ -211,10 +211,10 @@ export function PublishStep({
                 
                 for (const event of txDetails.events) {
                   const eventType = event.type;
-                  const parsedJson = event.parsedJson as any;
-                  
+                  const parsedJson = event.parsedJson;
+
                   console.log('Checking event:', { eventType, parsedJson });
-                  
+
                   // Check for SubmissionCreated or DatasetSubmissionCreated events
                   if (eventType &&
                       (eventType.includes('::marketplace::SubmissionCreated') ||
@@ -235,7 +235,7 @@ export function PublishStep({
                 // Fetch each created object to check its type
                 for (const createdRef of txDetails.effects.created) {
                   try {
-                    const objectId = (createdRef as any).reference?.objectId || (createdRef as any).objectId;
+                    const objectId = extractObjectId(createdRef);
                     if (!objectId) continue;
                     
                     console.log('Fetching created object to check type:', objectId);
@@ -268,7 +268,7 @@ export function PublishStep({
                 
                 for (const mutatedRef of txDetails.effects.mutated) {
                   try {
-                    const objectId = (mutatedRef as any).reference?.objectId || (mutatedRef as any).objectId;
+                    const objectId = extractObjectId(mutatedRef);
                     if (!objectId) continue;
                     
                     // Skip marketplace and coin objects we already saw

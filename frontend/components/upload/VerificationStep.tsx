@@ -9,6 +9,7 @@ import { useSeal } from '@/hooks/useSeal';
 import {
   DatasetMetadata,
   VerificationResult,
+  VerificationSession,
   VerificationStage,
   AudioFile,
   WalrusUploadResult,
@@ -17,6 +18,17 @@ import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
 import { DataAccessNotice } from '@/components/upload/DataAccessNotice';
+
+/**
+ * Extract error message from unknown error type
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return String(error || 'Unknown error');
+}
 
 interface VerificationStepProps {
   audioFile?: AudioFile; // Optional - for backwards compatibility
@@ -129,9 +141,9 @@ export function VerificationStep({
 
       // Now start the actual verification with session key
       startVerification();
-    } catch (error: any) {
+    } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
-      setErrorMessage(error.message || 'Failed to create authorization session');
+      setErrorMessage(getErrorMessage(error) || 'Failed to create authorization session');
       setIsCreatingSession(false);
     }
   };
@@ -267,11 +279,12 @@ export function VerificationStep({
       // Start polling for verification status
       startPolling(id, files, fileIndex);
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to start verification:', error);
-      setErrorMessage(error.message || 'Failed to start verification');
+      const errorMsg = getErrorMessage(error);
+      setErrorMessage(errorMsg || 'Failed to start verification');
       setVerificationState('failed');
-      onError(error.message || 'Verification failed to start');
+      onError(errorMsg || 'Verification failed to start');
     }
   };
 
@@ -388,11 +401,12 @@ export function VerificationStep({
 
       // Start polling for verification status
       startPollingEncrypted(id);
-    } catch (error: any) {
+    } catch (error) {
       console.error('[VerificationStep] Failed to decrypt and verify:', error);
-      setErrorMessage(error.message || 'Failed to decrypt and verify audio');
+      const errorMsg = getErrorMessage(error);
+      setErrorMessage(errorMsg || 'Failed to decrypt and verify audio');
       setVerificationState('failed');
-      onError(error.message || 'Decryption or verification failed');
+      onError(errorMsg || 'Decryption or verification failed');
     }
   };
 
@@ -471,7 +485,7 @@ export function VerificationStep({
           onError(errors[0] || 'Verification failed');
         }
 
-      } catch (error: any) {
+      } catch (error) {
         console.error('Polling error:', error);
         // Don't fail immediately on polling errors, keep trying
       }
@@ -524,7 +538,7 @@ export function VerificationStep({
           onError(session.errors?.[0] || 'Verification failed');
         }
 
-      } catch (error: any) {
+      } catch (error) {
         console.error('Polling error:', error);
         // Don't fail immediately on polling errors, keep trying
       }
@@ -533,7 +547,7 @@ export function VerificationStep({
     pollingIntervalRef.current = interval;
   };
 
-  const updateStagesFromSession = (session: any) => {
+  const updateStagesFromSession = (session: VerificationSession) => {
     const currentStage = session.stage;
     const progress = session.progress || 0;
 

@@ -133,6 +133,17 @@ export interface VerificationStage {
   message?: string;
 }
 
+export interface VerificationSession {
+  stage: VerificationStage['name'];
+  progress: number;
+  state: 'pending' | 'processing' | 'completed' | 'failed';
+  approved?: boolean;
+  qualityScore?: number;
+  safetyPassed?: boolean;
+  analysis?: { insights?: string[] };
+  errors?: string[];
+}
+
 export interface VerificationResult {
   id: string;
   state: 'pending' | 'processing' | 'completed' | 'failed';
