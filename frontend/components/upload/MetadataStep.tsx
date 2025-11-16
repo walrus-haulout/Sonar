@@ -176,9 +176,9 @@ const metadataSchema = z.object({
     })),
   }).optional(),
   categorization: z.object({
-    useCase: z.string().optional(),
-    contentType: z.string().optional(),
-    domain: z.string().optional(),
+    useCase: z.string().optional().or(z.literal('')),
+    contentType: z.string().optional().or(z.literal('')),
+    domain: z.string().optional().or(z.literal('')),
   }).optional(),
 });
 
@@ -392,7 +392,7 @@ export function MetadataStep({
           <div className="flex items-center space-x-2">
             <Globe className="w-4 h-4 text-sonar-signal" />
             <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Languages * (up to 5)
+              Languages (optional, up to 5)
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -426,7 +426,7 @@ export function MetadataStep({
           <div className="flex items-center space-x-2">
             <Tag className="w-4 h-4 text-sonar-signal" />
             <label className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Tags * (up to 10)
+              Tags (optional, up to 10)
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -748,7 +748,7 @@ export function MetadataStep({
         <div className="space-y-3">
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Use Case *
+              Use Case (optional)
             </label>
             <select
               {...register('categorization.useCase')}
@@ -771,7 +771,7 @@ export function MetadataStep({
 
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Content Type *
+              Content Type (optional)
             </label>
             <select
               {...register('categorization.contentType')}
@@ -794,7 +794,7 @@ export function MetadataStep({
 
           <div className="space-y-2">
             <label className="block text-sm font-mono font-semibold text-sonar-highlight-bright">
-              Domain *
+              Domain (optional)
             </label>
             <select
               {...register('categorization.domain')}
