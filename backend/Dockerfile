@@ -54,7 +54,7 @@ RUN mkdir -p /etc/nix && \
 
 # Install Bun and runtime dependencies via nix-env
 # Includes postgresql client libraries for Prisma, bash for scripts
-RUN nix-env -iA nixpkgs.bun nixpkgs.curl nixpkgs.coreutils nixpkgs.postgresql nixpkgs.bash
+RUN nix-env -iA nixpkgs.bun nixpkgs.curl nixpkgs.coreutils nixpkgs.postgresql nixpkgs.bash nixpkgs.python3
 
 # Create /bin/bash symlink for script execution
 # NixOS minimal image doesn't have /bin/bash by default
