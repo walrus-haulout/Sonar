@@ -50,6 +50,6 @@ This is the Gitbook navigation structure for SONAR documentation.
 ## Tokenomics
 
 - [Overview](tokenomics/README.md)
-- [Adaptive Token Economics](tokenomics/adaptive-burns.md)
+- [Revenue Splits and Economics](tokenomics/adaptive-burns.md)
 - [Quality-Based Rewards](tokenomics/rewards.md)
 - [Purchase Revenue Splits](tokenomics/purchase-splits.md)

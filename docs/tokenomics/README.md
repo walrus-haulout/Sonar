@@ -14,31 +14,14 @@ Most crypto projects use fixed token burn rates. As the project grows:
 
 SONAR uses adaptive tokenomics that respond to market conditions.
 
-## Adaptive Burns
+## Purchase Revenue Split
 
-SNR adjusts burn rates automatically based on circulating supply:
+When creators receive revenue from dataset purchases, the split is straightforward:
 
-**Over 50 Million SNR**:
-- 20% burned on each purchase
-- 50% to creator
-- 30% to operations
+**60%** goes to the creator
+**40%** goes to the protocol for operations and maintenance
 
-**35-50 Million SNR**:
-- 15% burned on each purchase
-- 60% to creator
-- 25% to operations
-
-**20-35 Million SNR**:
-- 10% burned on each purchase
-- 65% to creator
-- 25% to operations
-
-**Under 20 Million SNR**:
-- 0% burned on each purchase (no burn)
-- 80% to creator
-- 20% to operations
-
-As supply shrinks, burn slows and creator rewards increase. This prevents the death spiral.
+This simple split ensures creators earn fairly while the protocol remains sustainable.
 
 ## Creator Rewards
 
@@ -55,41 +38,17 @@ Vesting: Unlocked over 90 days (claimable starting day 30)
 
 ### Purchase Revenue
 
-When someone purchases your dataset:
-
-- 50-80% goes to you (depending on supply levels)
-- Vesting: Unlocked daily over 30 days
-
-Example: For any dataset purchase:
-- Creator receives majority share (50-80% depending on supply levels)
-- Platform receives a portion (0-30% variable)
-- Remainder is burned (variable)
+When someone purchases your dataset, you receive 60% of the purchase price. Payment is vested over 30 days and unlocked daily.
 
 ## Platform Treasury
 
-The platform (SONAR DAO) receives:
-
-- Purchase splits (20-30% depending on supply)
-- Submission fees (0.001% of supply, burned)
-- Developer grants
-- Community programs
-
-Treasury funds:
+The platform receives 40% of purchase revenue to fund:
 - Server operations
 - Development and improvements
-- Marketing and adoption
 - Community programs
-- DAO governance
+- Protocol governance
 
-## Burn Mechanics
-
-Token burns serve multiple purposes:
-
-**Deflationary**: Shrinking supply increases value per token
-**Anti-Spam**: Submission fee (burned) prevents spam uploads
-**Market Health**: Prevents oversaturation of tokens
-
-Submission fee of 0.001% of circulating supply. Fee adjusts with supply to maintain relative cost.
+The 0.25 SUI upload fee helps prevent spam submissions.
 
 ## Vesting Schedules
 
@@ -198,18 +157,18 @@ Treasury is transparent and community-governed.
 
 ## Guides in This Section
 
-- **[Adaptive Token Economics](adaptive-burns.md)** - How burns adjust
+- **[Revenue Splits and Economics](adaptive-burns.md)** - How creator and protocol revenue is split
 - **[Quality-Based Rewards](rewards.md)** - How creators earn points
 - **[Purchase Revenue Splits](purchase-splits.md)** - Where money goes
 
 ## Next Steps
 
-- Learn adaptive burns: [Adaptive Token Economics](adaptive-burns.md)
+- Learn about revenue splits: [Revenue Splits and Economics](adaptive-burns.md)
 - See creator rewards: [Quality-Based Rewards](rewards.md)
 - Understand purchase splits: [Purchase Revenue Splits](purchase-splits.md)
 
 ## Key Takeaway
 
-SONAR's tokenomics are designed for sustainability. By adapting burn rates to market conditions and rewarding creators fairly, SONAR avoids the death spirals that kill most crypto projects.
+SONAR's tokenomics are designed for sustainability. With a simple, transparent 60/40 revenue split between creators and the protocol, SONAR ensures both creators and the platform can thrive long-term.
 
 The system incentivizes creators to contribute quality content, incentivizes buyers to purchase datasets, and maintains token value through scarcity and utility.

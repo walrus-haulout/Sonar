@@ -40,27 +40,19 @@ SONAR addresses these challenges through:
 - Only authorized purchasers receive decryption shares
 - Zero blob ID exposure in public events
 
-### 3. Adaptive Economics
-Unlike traditional fixed-rate burns that eventually kill protocols, SONAR uses **absolute circulating supply thresholds** to automatically adjust economic parameters:
+### 3. Fair Revenue Economics
+SONAR ensures creators are fairly rewarded for their contributions:
 
-| Phase | Circulating Supply | Burn Rate | Liquidity | Uploader Share |
-|-------|-------------------|-----------|-----------|----------------|
-| Early | >50M SNR | 60% | 0% | 30% |
-| Growth | 35-50M SNR | 45% | 10% | 35% |
-| Mature | 20-35M SNR | 30% | 15% | 45% |
-| Conservation | <20M SNR | 20% | 20% | 50% |
+- **60% to creators** - You keep the majority of revenue from dataset purchases
+- **40% to protocol** - Funds operations, development, and community programs
+- **0.25 SUI upload fee** - Prevents spam while keeping the marketplace clean
 
-As the token becomes scarcer, the system automatically:
-- Reduces deflationary pressure
-- Increases liquidity provisioning
-- Rewards creators more generously
-- Maintains long-term sustainability
+This simple, transparent split ensures both creators and the protocol can thrive.
 
-### 4. Secondary Market Protection
-- Automated liquidity vault accumulation
-- Circuit breaker for catastrophic events
-- Treasury buyback framework
-- Dynamic uploader bonuses during downturns
+### 4. Sustainable Protocol Design
+- Fixed revenue splits that creators can rely on
+- Transparent fee structure
+- Community-governed protocol improvements
 
 ---
 

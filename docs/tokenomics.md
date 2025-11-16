@@ -38,7 +38,7 @@ Circulating supply thresholds and basis-point splits:
 `economics::calculate_purchase_splits(price, circulating, config)` applies those splits to every purchase and returns `(burn_amount, liquidity_amount, uploader_amount, treasury_amount)`.
 
 ## Submission Economics
-- **Burn fee**: `economics::calculate_burn_fee` charges `circulating * 1 / 100_000` (0.001 %) when a submission or dataset bundle is created. Fees are burned immediately (`balance::decrease_supply`).
+- **Upload fee**: A fixed **0.25 SUI** is charged when a submission or dataset bundle is created to prevent spam.
 - **Quality rewards** (`economics::calculate_reward`):
   - `<30` → 0 (rejected)
   - `30–49` → `0.001 %` of circulating supply

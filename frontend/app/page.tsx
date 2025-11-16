@@ -53,7 +53,7 @@ export default function HomePage() {
               Contribute Data
             </h3>
             <p className="text-sm text-sonar-highlight-bright/70">
-              Upload audio datasets of any type: music, speech, environmental sounds, vocals, sound effects, and more. Simple 0.25 SUI upload fee. Earn when buyers purchase your data.
+              Upload audio datasets of any type: music, speech, environmental sounds, vocals, sound effects, and more. Pay 0.25 SUI to prevent spam. 60% of purchase revenue goes to you.
             </p>
           </GlassCard>
         </div>

@@ -85,13 +85,13 @@ These multiply together, so combining high values creates exponential rewards.
 Example: A submission with rarity score 85, all multipliers at 1.3x or higher:
 85 × 1.4 × 1.5 × 3.0 × 1.2 × 1.1 × 1.3 = ~7,000 points
 
-### Earning SONAR Tokens
+### Revenue Model
 
-Points convert to SONAR tokens when you publish:
-- Your points determine your initial token allocation
-- Tokens vest over 90 days
-- You can claim them gradually or all at once
-- Tokens also come from purchase splits (when others buy your audio)
+You earn in two ways:
+
+**Points System**: Points earned from uploads are redeemable for SNR tokens in a future airdrop
+
+**Purchase Revenue**: When buyers purchase your datasets, you receive 60% of the purchase price, vested daily over 30 days
 
 ## Leaderboard and Tiers
 

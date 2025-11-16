@@ -46,8 +46,7 @@ To purchase, you need SONAR tokens in your wallet:
 When you purchase a dataset:
 
 - **60%**: Goes to the creator (vested over 30 days)
-- **20%**: Burned (removed from circulation)
-- **20%**: Platform operations and development
+- **40%**: Goes to the protocol for operations and maintenance
 
 Creator receives the full 60% share, which vests daily over 30 days.
 

@@ -74,15 +74,11 @@ When you click "Publish", you will be prompted to sign a blockchain transaction 
 - Revenue split (standard: 60% to you, 40% to platform)
 - Availability (immediately active)
 
-### Transaction Fees
+### Upload Fee
 
-Each publishing transaction costs:
+Publishing requires a fixed upload fee of **0.25 SUI**. This fee helps prevent spam submissions and keeps the marketplace clean and high-quality.
 
-**Base Fee**: ~0.001 SNR (varies with network conditions)
-**Submission Fee**: 0.001% of circulating SNR supply (burned, prevents spam)
-**Network Fee**: Minimal (typically under 0.001 SNR)
-
-Total cost is usually under 0.002 SNR, charged from your wallet.
+The fee is charged from your wallet when you publish.
 
 ### Signing the Transaction
 
@@ -220,13 +216,12 @@ You can claim tokens as they unlock, or wait for 90 days and claim all at once.
 
 ### Purchase Revenue
 
-In addition to initial allocation, you receive ongoing revenue when buyers purchase your dataset:
+When buyers purchase your dataset, the revenue is split as follows:
 
-- 60% of purchase price goes to you (vested over 30 days)
-- 20% is burned (removed from circulation)
-- 20% goes to platform operations
+- 60% goes to you (the creator)
+- 40% goes to the protocol for operations and maintenance
 
-Revenue splits may vary based on current token economics, but your split is always favorable to creators.
+Payment is vested over 30 days and sent directly to your wallet.
 
 ## Your Leaderboard Position
 
