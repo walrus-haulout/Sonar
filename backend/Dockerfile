@@ -29,7 +29,8 @@ RUN apt-get update -y && \
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
-    ln -sf /root/.bun/bin/bun /usr/local/bin/bun
+    ln -sf /root/.bun/bin/bun /usr/local/bin/bun && \
+    ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
 
 # Copy workspace root files
 COPY package.json bun.lock ./
@@ -74,7 +75,8 @@ RUN apt-get update -y && \
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
-    ln -sf /root/.bun/bin/bun /usr/local/bin/bun
+    ln -sf /root/.bun/bin/bun /usr/local/bin/bun && \
+    ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
 
 WORKDIR /app
 
