@@ -1,7 +1,6 @@
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import type { SessionKey } from '@mysten/seal';
+import type { SessionKey, ExportedSessionKey } from '@mysten/seal';
 import { SessionKey as SessionKeyClass } from '@mysten/seal';
-import { createSonarSealClient } from '@sonar/seal';
 import type { FastifyBaseLogger } from 'fastify';
 
 interface FetchKeysRequest {
@@ -61,12 +60,9 @@ export class SealKeyService {
   async fetchKeyShares(request: FetchKeysRequest): Promise<FetchKeysResponse> {
     const { sessionKeyData, identity, packageId, policyModule, keyServerUrls } = request;
 
-    this.logger.info('Fetching key shares from seal-keyservers', {
-      identityPrefix: identity.slice(0, 20),
-      packageId: packageId.slice(0, 20),
-      policyModule,
-      keyServerCount: keyServerUrls?.length || this.keyServerUrls.length,
-    });
+    this.logger.info(
+      `Fetching key shares from seal-keyservers (identity: ${identity.slice(0, 20)}, package: ${packageId.slice(0, 20)}, module: ${policyModule}, servers: ${keyServerUrls?.length || this.keyServerUrls.length})`
+    );
 
     const serversToUse = keyServerUrls || this.keyServerUrls;
 
@@ -74,10 +70,10 @@ export class SealKeyService {
       // Import the session key that was created and signed on the frontend
       let sessionKey: SessionKey;
       try {
-        sessionKey = await SessionKeyClass.import(sessionKeyData, this.suiClient);
+        sessionKey = (await SessionKeyClass.import(sessionKeyData as unknown as ExportedSessionKey, this.suiClient)) as SessionKey;
         this.logger.debug('Successfully imported SessionKey from frontend');
       } catch (error) {
-        this.logger.error('Failed to import SessionKey', { error });
+        this.logger.error(`Failed to import SessionKey: ${error instanceof Error ? error.message : String(error)}`);
         throw new Error(
           `Failed to import session key: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
@@ -96,9 +92,8 @@ export class SealKeyService {
           if (result.status === 'fulfilled') {
             return result.value;
           } else {
-            this.logger.warn(`Failed to fetch from seal-${idx + 1}`, {
-              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-            });
+            const errorMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+            this.logger.warn(`Failed to fetch from seal-${idx + 1}: ${errorMsg}`);
             return null;
           }
         })
@@ -117,7 +112,8 @@ export class SealKeyService {
         threshold: this.threshold,
       };
     } catch (error) {
-      this.logger.error('Error fetching key shares', { error });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error fetching key shares: ${errorMsg}`);
       throw error;
     }
   }

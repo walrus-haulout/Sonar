@@ -17,7 +17,7 @@ export async function getGlobalLeaderboard(
   try {
     const whereClause = tier ? `WHERE tier = '${tier}'` : '';
 
-    const entries = await prisma.$queryRawUnsafe<LeaderboardEntry[]>(
+    const entries = await prisma.$queryRawUnsafe(
       `
       SELECT
         ROW_NUMBER() OVER (ORDER BY total_points DESC) as rank,
@@ -36,11 +36,11 @@ export async function getGlobalLeaderboard(
       `,
       limit,
       offset
-    );
+    ) as LeaderboardEntry[];
 
-    const totalResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(
+    const totalResult = await prisma.$queryRawUnsafe(
       `SELECT COUNT(*) as count FROM users ${whereClause}`
-    );
+    ) as [{ count: bigint }];
 
     const total = Number(totalResult[0]?.count || 0);
 
@@ -61,7 +61,7 @@ export async function getGlobalLeaderboard(
  */
 export async function getUserRankInfo(walletAddress: string): Promise<UserRankInfo | null> {
   try {
-    const user = await prisma.$queryRawUnsafe<LeaderboardEntry[]>(
+    const user = await prisma.$queryRawUnsafe(
       `
       SELECT
         ROW_NUMBER() OVER (ORDER BY total_points DESC) as rank,
@@ -77,7 +77,7 @@ export async function getUserRankInfo(walletAddress: string): Promise<UserRankIn
       WHERE wallet_address = $1
       `,
       walletAddress
-    );
+    ) as LeaderboardEntry[];
 
     if (!user || user.length === 0) {
       return null;
@@ -103,7 +103,7 @@ export async function searchLeaderboard(query: string, limit: number = 20): Prom
   try {
     const searchQuery = `%${query}%`;
 
-    const results = await prisma.$queryRawUnsafe<LeaderboardEntry[]>(
+    const results = await prisma.$queryRawUnsafe(
       `
       SELECT
         ROW_NUMBER() OVER (ORDER BY total_points DESC) as rank,
@@ -122,7 +122,7 @@ export async function searchLeaderboard(query: string, limit: number = 20): Prom
       `,
       searchQuery,
       limit
-    );
+    ) as LeaderboardEntry[];
 
     return results;
   } catch (error) {
@@ -136,17 +136,17 @@ export async function searchLeaderboard(query: string, limit: number = 20): Prom
  */
 export async function getTierDistribution(): Promise<Record<string, number>> {
   try {
-    const distribution = await prisma.$queryRawUnsafe<Array<{ tier: string; count: bigint }>>(
+    const distribution = await prisma.$queryRawUnsafe(
       `
       SELECT tier, COUNT(*) as count
       FROM users
       GROUP BY tier
       ORDER BY tier
       `
-    );
+    ) as Array<{ tier: string; count: bigint }>;
 
     const result: Record<string, number> = {};
-    distribution.forEach((row) => {
+    distribution.forEach((row: { tier: string; count: bigint }) => {
       result[row.tier] = Number(row.count);
     });
 

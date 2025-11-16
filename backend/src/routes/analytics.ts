@@ -270,7 +270,6 @@ export async function registerAnalyticsRoutes(fastify: FastifyInstance) {
     '/api/analytics/search',
     {
       schema: {
-        description: 'Get search analytics and patterns',
         response: {
           200: {
             type: 'object',
@@ -287,21 +286,13 @@ export async function registerAnalyticsRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/api/analytics/datasets',
-    {
-      schema: {
-        description: 'Get dataset analytics',
-      },
-    },
+    {},
     getDatasetAnalytics
   );
 
   fastify.get(
     '/api/analytics/vectors',
-    {
-      schema: {
-        description: 'Get vector database analytics',
-      },
-    },
+    {},
     getVectorAnalytics
   );
 
@@ -309,7 +300,6 @@ export async function registerAnalyticsRoutes(fastify: FastifyInstance) {
     '/api/analytics/trending',
     {
       schema: {
-        description: 'Get trending datasets',
         querystring: {
           type: 'object',
           properties: {
@@ -323,11 +313,7 @@ export async function registerAnalyticsRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/api/analytics/summary',
-    {
-      schema: {
-        description: 'Get overall analytics summary',
-      },
-    },
+    {},
     getAnalyticsSummary
   );
 

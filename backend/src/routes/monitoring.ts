@@ -203,51 +203,31 @@ export async function registerMonitoringRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/api/monitoring/cache',
-    {
-      schema: {
-        description: 'Get cache performance metrics',
-      },
-    },
+    {},
     getCacheMetrics
   );
 
   fastify.get(
     '/api/monitoring/alerts',
-    {
-      schema: {
-        description: 'Get recent alerts',
-      },
-    },
+    {},
     getAlerts
   );
 
   fastify.post(
     '/api/monitoring/alerts/clear',
-    {
-      schema: {
-        description: 'Clear all alerts',
-      },
-    },
+    {},
     clearAlerts
   );
 
   fastify.post(
     '/api/monitoring/cache/clear',
-    {
-      schema: {
-        description: 'Clear cache',
-      },
-    },
+    {},
     clearCache
   );
 
   fastify.get(
     '/api/monitoring/health',
-    {
-      schema: {
-        description: 'Get overall system health status',
-      },
-    },
+    {},
     getHealth
   );
 

@@ -153,7 +153,6 @@ async function hybridSearch(
 ) {
   const {
     query,
-    keywords = [],
     tags = [],
     languages = [],
     limit = 10,
@@ -222,7 +221,7 @@ async function hybridSearch(
     for (const result of semanticResults) {
       const datasetId = result.metadata?.dataset_id;
       if (datasetId && !resultMap.has(datasetId)) {
-        const dataset = keywordResults.find((d) => d.id === datasetId);
+        const dataset = keywordResults.find((d: typeof keywordResults[0]) => d.id === datasetId);
         resultMap.set(datasetId, {
           similarity_score: result.similarity_score,
           dataset,
@@ -384,12 +383,11 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
     '/api/search/semantic',
     {
       schema: {
-        description: 'Semantic search for similar datasets',
         body: {
           type: 'object',
           required: ['query'],
           properties: {
-            query: { type: 'string', description: 'Search query' },
+            query: { type: 'string' },
             limit: { type: 'number', default: 10 },
             threshold: { type: 'number', default: 0.7 },
           },
@@ -423,7 +421,6 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
     '/api/search/hybrid',
     {
       schema: {
-        description: 'Hybrid keyword + semantic search',
         body: {
           type: 'object',
           required: ['query'],
@@ -449,7 +446,6 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
     '/api/datasets/:id/similar',
     {
       schema: {
-        description: 'Find similar datasets',
         params: {
           type: 'object',
           required: ['id'],
