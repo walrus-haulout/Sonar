@@ -201,7 +201,7 @@ export function FileUploadStep({
     }
   };
 
-  const processFiles = async (files: File[]) => {
+  const processFiles = useCallback(async (files: File[]) => {
     console.log('[FileUploadStep] Processing files:', files.length);
     setValidationError(null);
     setIsProcessing(true);
@@ -279,7 +279,7 @@ export function FileUploadStep({
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [multiFile, validateMultipleFiles, validateFile, selectedFiles, onFilesSelected, onFileSelected]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
