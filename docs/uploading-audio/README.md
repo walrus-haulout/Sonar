@@ -21,7 +21,7 @@ Each step is designed to be intuitive while maintaining the highest privacy and 
 
 **Quality Assured**: Every upload is analyzed automatically to ensure it meets marketplace standards. Low-quality, copyrighted, or unsafe content is blocked before reaching buyers.
 
-**Fair Rewards**: You earn tokens based on your audio's rarity, quality, and specificity. The better your dataset, the more you earn.
+**Fair Rewards**: You earn points based on your audio's rarity, quality, and specificity, redeemable for SNR tokens in a future airdrop. The better your dataset, the more you earn.
 
 **Transparent Process**: You can see exactly what is happening at each step. Verification progress is shown in real time.
 
@@ -50,7 +50,7 @@ Before uploading, you need:
 - **[Step 2: Metadata](metadata.md)** - Describe your audio clearly
 - **[Step 3: Encryption](encryption.md)** - How your audio is protected
 - **[Step 4: Verification](verification.md)** - AI analysis in progress
-- **[Step 5: Publishing](publishing.md)** - Register and earn tokens
+- **[Step 5: Publishing](publishing.md)** - Register and earn points
 
 ## Tips for Success
 

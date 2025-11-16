@@ -24,7 +24,7 @@ Audio has tremendous value for AI training and research. But most creators are e
 2. **Encrypt**: Your browser encrypts the audio using client-side encryption. No unencrypted file ever leaves your device
 3. **Verify**: SONAR's AI analyzes the audio for quality, copyright, transcription, and safety
 4. **Publish**: Your dataset is registered on the Sui blockchain with the encrypted audio reference
-5. **Earn**: You receive SONAR tokens based on how rare and high-quality your audio is
+5. **Earn**: You earn points based on how rare and high-quality your audio is (redeemable for SNR tokens in future airdrop)
 6. **Compete**: Your score updates the global leaderboard, and you unlock achievements
 7. **Monetize**: Buyers can purchase access to your dataset and listen securely
 
@@ -40,13 +40,13 @@ Audio has tremendous value for AI training and research. But most creators are e
 Yes. Encryption happens on your computer before upload. We never see your plaintext audio except during AI verification, which requires your authorization. Even SONAR servers cannot decrypt your data without your permission.
 
 **Q: Why do I need to connect my wallet?**
-Your wallet proves you own the audio dataset. It is also how you receive SONAR token rewards and purchase other datasets. You control your earnings completely.
+Your wallet proves you own the audio dataset. It is also how you earn points for the future SNR airdrop and purchase other datasets. You control your points completely.
 
 **Q: What if my audio is copied?**
 During verification, we check against copyrighted works. If high-quality matches are found, the upload is rejected before reaching the marketplace. Additionally, the blockchain records your ownership timestamp, proving you published first.
 
 **Q: How much can I earn?**
-Earnings depend on your audio's rarity tier, quality, specificity, and bulk size. A high-rarity, high-quality submission can earn anywhere from a few hundred to tens of thousands of SONAR tokens. Leaderboard leaders earn significantly more per submission.
+Points earned depend on your audio's rarity tier, quality, specificity, and bulk size. High-quality and rare submissions earn more points. These points are redeemable for SNR tokens when the airdrop launches.
 
 **Q: What makes audio rare?**
 Rarity depends on several factors: subject rarity (endangered species vs common birds), specificity (detailed variants vs generic), saturation (how many similar submissions exist), and quality. Our AI researches each subject to determine true rarity.

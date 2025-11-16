@@ -16,14 +16,7 @@ Each purchase is secure, fair, and transparent.
 
 ## Pricing
 
-Creators set their own prices, but typical pricing:
-
-**Small Datasets** (1-5 samples): 10-100 SONAR
-**Medium Datasets** (5-50 samples): 100-1,000 SONAR
-**Large Datasets** (50-1,000 samples): 1,000-10,000 SONAR
-**Comprehensive Collections** (1,000+ samples): 10,000-100,000+ SONAR
-
-High-rarity, verified datasets command premium prices.
+Creators set their own prices based on rarity, quality, and dataset size. High-rarity, verified datasets typically command premium prices compared to common datasets.
 
 ## What You Get
 

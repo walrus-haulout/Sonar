@@ -1,6 +1,6 @@
 # Token Economics
 
-SONAR token economics are designed to be sustainable and prevent the death spiral that kills most crypto projects.
+SNR token economics are designed to be sustainable and prevent the death spiral that kills most crypto projects. **Early alpha users are earning points now for a future SNR airdrop** — as you upload datasets and participate in the marketplace, you accumulate points that will be redeemable for SNR tokens when token trading launches.
 
 ## The Problem SONAR Solves
 
@@ -16,24 +16,24 @@ SONAR uses adaptive tokenomics that respond to market conditions.
 
 ## Adaptive Burns
 
-SONAR adjusts burn rates automatically based on circulating supply:
+SNR adjusts burn rates automatically based on circulating supply:
 
-**Over 50 Million SONAR**:
+**Over 50 Million SNR**:
 - 20% burned on each purchase
 - 50% to creator
 - 30% to operations
 
-**35-50 Million SONAR**:
+**35-50 Million SNR**:
 - 15% burned on each purchase
 - 60% to creator
 - 25% to operations
 
-**20-35 Million SONAR**:
+**20-35 Million SNR**:
 - 10% burned on each purchase
 - 65% to creator
 - 25% to operations
 
-**Under 20 Million SONAR**:
+**Under 20 Million SNR**:
 - 0% burned on each purchase (no burn)
 - 80% to creator
 - 20% to operations
@@ -46,10 +46,10 @@ As supply shrinks, burn slows and creator rewards increase. This prevents the de
 
 When you publish a dataset, you receive an initial allocation based on rarity and quality:
 
-**Low Rarity, Low Quality**: ~100 SONAR
-**Medium Rarity, Good Quality**: ~1,000 SONAR
-**High Rarity, Excellent Quality**: ~10,000 SONAR
-**Critical Rarity, Best Quality**: 50,000+ SONAR
+**Low Rarity, Low Quality**: Low points allocation
+**Medium Rarity, Good Quality**: Medium points allocation
+**High Rarity, Excellent Quality**: High points allocation
+**Critical Rarity, Best Quality**: Highest points allocation
 
 Vesting: Unlocked over 90 days (claimable starting day 30)
 
@@ -60,10 +60,10 @@ When someone purchases your dataset:
 - 50-80% goes to you (depending on supply levels)
 - Vesting: Unlocked daily over 30 days
 
-Example: If 10,000 SONAR purchase in one day:
-- Creator receives 5,000-8,000 SONAR
-- Platform receives 2,000 or 0 (variable)
-- 0-2,000 burned (variable)
+Example: For any dataset purchase:
+- Creator receives majority share (50-80% depending on supply levels)
+- Platform receives a portion (0-30% variable)
+- Remainder is burned (variable)
 
 ## Platform Treasury
 
@@ -89,12 +89,7 @@ Token burns serve multiple purposes:
 **Anti-Spam**: Submission fee (burned) prevents spam uploads
 **Market Health**: Prevents oversaturation of tokens
 
-Submission fee of 0.001% of circulating supply:
-- At 10M SONAR: 100 SONAR fee
-- At 100M SONAR: 1,000 SONAR fee
-- At 1B SONAR: 10,000 SONAR fee
-
-Fee adjusts with supply to maintain relative cost.
+Submission fee of 0.001% of circulating supply. Fee adjusts with supply to maintain relative cost.
 
 ## Vesting Schedules
 
@@ -151,7 +146,7 @@ The system targets equilibrium: supply growth = burn + usage.
 ### Example Scenarios
 
 **Scenario 1: Rapid Growth**
-- Many new creators earning tokens
+- Many new creators earning points
 - Many purchases happening
 - Supply growing faster than burn
 - Adaptive burns increase to 20% to slow growth
@@ -170,7 +165,7 @@ The system targets equilibrium: supply growth = burn + usage.
 
 ## Token Utility
 
-SONAR tokens are used for:
+SNR tokens are used for:
 
 **Purchasing**: Buy audio datasets on marketplace
 **Staking**: Stake for governance rights (future)
@@ -204,7 +199,7 @@ Treasury is transparent and community-governed.
 ## Guides in This Section
 
 - **[Adaptive Token Economics](adaptive-burns.md)** - How burns adjust
-- **[Quality-Based Rewards](rewards.md)** - How creators earn tokens
+- **[Quality-Based Rewards](rewards.md)** - How creators earn points
 - **[Purchase Revenue Splits](purchase-splits.md)** - Where money goes
 
 ## Next Steps

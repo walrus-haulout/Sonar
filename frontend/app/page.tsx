@@ -60,9 +60,9 @@ export default function HomePage() {
 
         {/* Coming Soon Section */}
         <div className="max-w-2xl mx-auto text-center py-12 px-6 border border-sonar-signal/20 rounded-lg bg-sonar-abyss/20 backdrop-blur-sm mb-12">
-          <h3 className="text-2xl font-mono text-sonar-highlight mb-4">Coming Soon: SONAR Token Economics</h3>
+          <h3 className="text-2xl font-mono text-sonar-highlight mb-4">SNR Token Economics</h3>
           <p className="text-sonar-highlight-bright/80">
-            Advanced reward tiers, deflationary burn model, and quality-based incentives launching in the coming months. Early alpha users will have exclusive access.
+            Earn points now for a future SNR airdrop. Advanced reward tiers, deflationary burn model, and quality-based incentives coming soon.
           </p>
         </div>
 

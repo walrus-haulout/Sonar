@@ -112,20 +112,20 @@ SONAR hosts monthly competitions with prizes:
 
 **Best New Creator** (last 30 days):
 - Highest points earned in current month
-- Prize: 5,000 SONAR + featured badge
+- Prize: Featured badge + bonus points
 
-**Most Consistent**: 
+**Most Consistent**:
 - Submissions every week for 4 weeks
 - Highest average quality
-- Prize: 3,000 SONAR
+- Prize: Bonus points
 
 **Rare Subject Expert**:
 - Most critical/high rarity submissions
-- Prize: 2,000 SONAR
+- Prize: Bonus points
 
 **Community Choice**:
 - Community votes for favorite creator
-- Prize: 1,000 SONAR
+- Prize: Bonus points
 
 Monthly prizes fund additional achievement.
 

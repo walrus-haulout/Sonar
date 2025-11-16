@@ -4,13 +4,13 @@ Welcome to SONAR (Sound Oracle Network for Audio Rewards), a decentralized marke
 
 ## What is SONAR?
 
-SONAR is a platform that lets you upload audio datasets, earn tokens based on AI-verified quality, and compete in a global leaderboard. It combines privacy-preserving encryption, decentralized storage, and intelligent AI verification to create a sustainable audio data economy.
+SONAR is a platform that lets you upload audio datasets and earn points based on AI-verified quality (redeemable for SNR tokens in a future airdrop), while competing in a global leaderboard. It combines privacy-preserving encryption, decentralized storage, and intelligent AI verification to create a sustainable audio data economy.
 
 Whether you are creating audio datasets for AI training, researching sound patterns, or looking to build a diverse audio collection, SONAR provides the tools and incentives you need.
 
 ## For Creators
 
-Upload your audio datasets and earn SONAR tokens. The system automatically analyzes your audio for quality, copyright, safety, and rarity. The higher the rarity score, the more you earn. Participate in a leaderboard, unlock achievements, and become eligible for periodic airdrops.
+Upload your audio datasets and earn points toward a future SNR airdrop. The system automatically analyzes your audio for quality, copyright, safety, and rarity. The higher the rarity score, the more points you earn. Participate in a leaderboard, unlock achievements, and become eligible for periodic airdrops.
 
 ## For Buyers
 
@@ -52,7 +52,7 @@ New to SONAR? Start with the quickstart guide:
 2. **Browser Encrypts**: Your audio is encrypted client-side with SEAL threshold cryptography
 3. **We Verify**: AI analyzes quality, copyright, transcription, and safety
 4. **You Publish**: Dataset is registered on the Sui blockchain
-5. **You Earn**: Tokens awarded based on rarity, quality, and specificity
+5. **You Earn**: Points awarded based on rarity, quality, and specificity (redeemable for SNR in future airdrop)
 6. **You Compete**: Join the leaderboard and unlock achievements
 7. **Others Buy**: Buyers can purchase your datasets and decrypt them securely
 

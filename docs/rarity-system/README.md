@@ -1,6 +1,6 @@
 # Understanding the Rarity System
 
-The Rarity System is how SONAR determines the value of your audio. High-rarity, high-quality audio earns more tokens and higher leaderboard rankings.
+The Rarity System is how SONAR determines the value of your audio. High-rarity, high-quality audio earns more points and higher leaderboard rankings. Points are redeemable for SNR tokens in a future airdrop.
 
 ## Overview
 
@@ -14,15 +14,15 @@ Your audio is scored on multiple dimensions:
 **Saturation Status**: How many similar submissions already exist?
 **Bulk Status**: Did you submit 100+ samples at once?
 
-These factors combine using the Points System to determine how many SONAR tokens you earn.
+These factors combine using the Points System to determine how many points you earn toward the future SNR airdrop.
 
 ## The Core Concept
 
 SONAR rewards rarity and quality. Think of it this way:
 
-**Common Audio** (dog barking, traffic noise, generic speech): Low value, low tokens
-**Decent Audio** (specific bird species, clear accent, vintage equipment): Medium value, medium tokens
-**Rare Audio** (endangered bird, unique accent, rare equipment): High value, high tokens
+**Common Audio** (dog barking, traffic noise, generic speech): Low value, low points
+**Decent Audio** (specific bird species, clear accent, vintage equipment): Medium value, medium points
+**Rare Audio** (endangered bird, unique accent, rare equipment): High value, high points
 
 The system automatically researches each subject to determine true rarity, not just perceived rarity.
 
@@ -201,7 +201,7 @@ See [Airdrop Guide](airdrop.md) for calculation details.
 
 ## Strategy Guide
 
-Tips for maximizing your rarity scores and earnings:
+Tips for maximizing your rarity scores and point allocation:
 
 **Target Rare Subjects**: Endangered species, vintage equipment, uncommon accents earn 3-5x multipliers
 **Be Specific**: "Golden Retriever puppy, 8 weeks old..." earns 1.3x vs "Dog"
@@ -221,7 +221,7 @@ See [Strategy Guide](strategy.md) for detailed tips and examples.
 - **[Leaderboard](leaderboard.md)** - How rankings work
 - **[Achievements](achievements.md)** - All 20 badges and unlock criteria
 - **[Airdrop](airdrop.md)** - Eligibility and allocation
-- **[Strategy](strategy.md)** - Tips for maximizing earnings
+- **[Strategy](strategy.md)** - Tips for maximizing points
 
 ## Key Takeaway
 
@@ -234,4 +234,4 @@ The Rarity System rewards:
 - Consistency: Regular submissions build reputation
 - Diversity: Varied submissions maximize airdrop allocation
 
-Understand these systems and you can strategically maximize your earnings.
+Understand these systems and you can strategically maximize your points toward the SNR airdrop.

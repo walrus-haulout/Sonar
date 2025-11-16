@@ -105,7 +105,7 @@ Points are calculated automatically based on:
 - **Early Contributor**: Bonus if you are among first creators
 - **Verification**: Bonus if AI verified all claims
 
-A typical first submission earns 100-500 SONAR tokens. Rare, high-quality audio can earn 10x more.
+Higher quality and rarer submissions earn more points, redeemable for SNR tokens in a future airdrop.
 
 ## Check Your Progress
 

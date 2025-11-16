@@ -204,17 +204,7 @@ Timelines vary based on:
 
 ## How Tiers Affect Airdrop
 
-Your tier tier is a multiplier on your base airdrop score.
-
-**Example Airdrop Round**: 1,000,000 SONAR distributed
-
-**Contributor with 500 points**: 500 × 0.1 = 50 airdrop score
-**Bronze with 2,000 points**: 2,000 × 0.3 = 600 airdrop score
-**Silver with 7,000 points**: 7,000 × 0.7 = 4,900 airdrop score
-**Gold with 15,000 points**: 15,000 × 1.5 = 22,500 airdrop score
-**Platinum with 30,000 points**: 30,000 × 3.0 = 90,000 airdrop score
-**Diamond with 70,000 points**: 70,000 × 5.0 = 350,000 airdrop score
-**Legend with 150,000 points**: 150,000 × 10.0 = 1,500,000 airdrop score
+Your tier is a multiplier on your base airdrop score. Higher tiers receive larger multipliers, so your airdrop allocation increases as you accumulate more points and advance through the tiers. Advancing to higher tiers significantly increases your airdrop eligibility.
 
 Higher tiers compound both higher points AND higher multipliers.
 

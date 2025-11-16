@@ -10,7 +10,7 @@ Publishing is a blockchain transaction that:
 2. **Stores Metadata**: Title, description, tags are recorded
 3. **Links Encrypted Audio**: Encrypted blob ID is registered
 4. **Establishes Access Policy**: Who can decrypt is defined
-5. **Awards Initial Tokens**: You receive SONAR tokens
+5. **Awards Initial Points**: You earn points redeemable for future SNR airdrop
 6. **Activates Monetization**: Buyers can now purchase
 7. **Updates Leaderboard**: Your points and rank update
 
@@ -78,11 +78,11 @@ When you click "Publish", you will be prompted to sign a blockchain transaction 
 
 Each publishing transaction costs:
 
-**Base Fee**: ~0.001 SONAR (varies with network conditions)
-**Submission Fee**: 0.001% of circulating SONAR supply (burned, prevents spam)
-**Network Fee**: Minimal (typically under 0.001 SONAR)
+**Base Fee**: ~0.001 SNR (varies with network conditions)
+**Submission Fee**: 0.001% of circulating SNR supply (burned, prevents spam)
+**Network Fee**: Minimal (typically under 0.001 SNR)
 
-Total cost is usually under 0.002 SONAR, charged from your wallet.
+Total cost is usually under 0.002 SNR, charged from your wallet.
 
 ### Signing the Transaction
 
@@ -97,7 +97,7 @@ Total cost is usually under 0.002 SONAR, charged from your wallet.
 ### Security Notes
 
 - You are signing, not giving SONAR access to your wallet
-- SONAR cannot move your tokens without your signature
+- SONAR cannot move your points or tokens without your signature
 - No private keys are shared
 - Transaction is verified by Sui blockchain consensus
 - Timestamp is cryptographically secure
@@ -193,11 +193,11 @@ Only people who:
 
 Can decrypt and access your audio. No one else can.
 
-## Token Rewards
+## Points & Token Rewards
 
 ### Initial Allocation
 
-When you publish, you receive an initial token allocation based on:
+When you publish, you earn initial points based on:
 - **Rarity Score** (0-100): How unique is the audio?
 - **Quality Score** (0-1): Technical audio quality
 - **Specificity Grade** (A-F): How detailed and specific?
@@ -205,14 +205,11 @@ When you publish, you receive an initial token allocation based on:
 - **Early Contributor Bonus**: Are you among early creators?
 - **Bulk Bonus**: Did you submit 100+ samples?
 
-Typical initial allocations:
-- Common, generic audio: 100-500 SONAR
-- Good quality, decent rarity: 1,000-5,000 SONAR
-- High rarity, high quality: 10,000-50,000+ SONAR
+Points earned are redeemable for SNR tokens in the future airdrop. Higher quality and rarity submissions earn more points.
 
-### Token Vesting
+### Point Vesting & Token Redemption
 
-Your tokens vest over 90 days:
+Your points vest over 90 days:
 
 **Day 1**: Tokens allocated (locked)
 **Day 30**: ~33% unlocked and claimable
@@ -355,7 +352,7 @@ You cannot edit. You must unpublish (if available) and re-upload with correct me
 Initial allocation is locked immediately. Vesting unlocks over 90 days. Purchase revenue vests over 30 days.
 
 **Q: How much can I earn per submission?**
-Depends entirely on rarity, quality, and buyer demand. Ranges from ~100 SONAR to 100,000+ SONAR per submission for high-value datasets.
+Depends entirely on rarity, quality, and buyer demand. Higher quality and rarer datasets earn more points.
 
 **Q: Will buyers see my wallet address?**
 Yes, your wallet address is public on the blockchain. You cannot hide your identity.

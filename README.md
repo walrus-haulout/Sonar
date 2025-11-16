@@ -45,10 +45,10 @@ Unlike traditional fixed-rate burns that eventually kill protocols, SONAR uses *
 
 | Phase | Circulating Supply | Burn Rate | Liquidity | Uploader Share |
 |-------|-------------------|-----------|-----------|----------------|
-| Early | >50M SONAR | 60% | 0% | 30% |
-| Growth | 35-50M SONAR | 45% | 10% | 35% |
-| Mature | 20-35M SONAR | 30% | 15% | 45% |
-| Conservation | <20M SONAR | 20% | 20% | 50% |
+| Early | >50M SNR | 60% | 0% | 30% |
+| Growth | 35-50M SNR | 45% | 10% | 35% |
+| Mature | 20-35M SNR | 30% | 15% | 45% |
+| Conservation | <20M SNR | 20% | 20% | 50% |
 
 As the token becomes scarcer, the system automatically:
 - Reduces deflationary pressure
@@ -202,14 +202,18 @@ SONAR cannot access your data:
 
 ## Token Economics
 
-### SONAR Token
+### SNR Token
 - **Type:** Sui Fungible Token (Coin<SONAR>)
-- **Total Supply:** 100,000,000 SONAR (fixed, non-mintable)
+- **Total Supply:** 100,000,000 SNR (fixed, non-mintable)
 - **Decimals:** 9
+- **Ticker:** SNR
+
+### Earn Points for Future Airdrop
+**Early alpha users are earning points now for a future SNR airdrop.** As you upload datasets and participate in the marketplace, you accumulate points that will be redeemable for SNR tokens when token trading launches. Advanced reward tiers, deflationary burn model, and quality-based incentives are coming soon.
 
 ### Initial Distribution
-- **Reward Pool:** 70,000,000 SONAR (70%)
-- **Team Allocation:** 30,000,000 SONAR (30%, vested 24 months)
+- **Reward Pool:** 70,000,000 SNR (70%)
+- **Team Allocation:** 30,000,000 SNR (30%, vested 24 months)
 
 ### Utility
 - Submission fees (burned)
