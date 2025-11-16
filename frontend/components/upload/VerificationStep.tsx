@@ -597,6 +597,24 @@ export function VerificationStep({
 
   return (
     <div className="space-y-6">
+      {/* Optional Metadata Reminder */}
+      <GlassCard className="bg-sonar-signal/5 border border-sonar-signal/30">
+        <div className="flex items-start space-x-3">
+          <FileText className="w-5 h-5 text-sonar-signal mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="font-mono font-semibold text-sonar-highlight-bright mb-1">
+              Enhance Your Dataset Value
+            </h3>
+            <p className="text-sm text-sonar-highlight/80 mb-3">
+              Add optional metadata like Audio Quality (+10% points) and Speaker Information (+15% points) to boost your rarity score and attract more buyers.
+            </p>
+            <p className="text-xs text-sonar-highlight/60 mb-3">
+              You can go back to the metadata form to fill in these optional fields at any time.
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
       {/* Waiting for User Authorization */}
       {verificationState === 'waiting-auth' && (
         <motion.div

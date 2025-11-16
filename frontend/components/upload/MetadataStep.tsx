@@ -953,8 +953,6 @@ export function MetadataStep({
         <SonarButton
           variant="primary"
           type="submit"
-          disabled={!isValid}
-          className={!isValid ? 'opacity-50 cursor-not-allowed' : ''}
         >
           Continue →
         </SonarButton>
