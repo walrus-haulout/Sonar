@@ -18,6 +18,16 @@
         "containerPort": 6334,
         "name": "grpc"
       }
+    ],
+    "volumes": [
+      {
+        "name": "qdrant-storage",
+        "mountPath": "/qdrant/storage"
+      },
+      {
+        "name": "qdrant-snapshots",
+        "mountPath": "/qdrant/snapshots"
+      }
     ]
   }
 }
