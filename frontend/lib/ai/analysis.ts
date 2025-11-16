@@ -81,8 +81,8 @@ function buildAnalysisPrompt(
 ## Dataset Metadata
 - Title: ${metadata.title}
 - Description: ${metadata.description}
-- Languages: ${metadata.languages.join(', ')}
-- Tags: ${metadata.tags.join(', ')}
+- Languages: ${(metadata.languages || []).join(', ') || 'Not specified'}
+- Tags: ${(metadata.tags || []).join(', ') || 'None'}
 ${audioMetadata ? `- Duration: ${Math.round(audioMetadata.duration)}s\n- File Size: ${(audioMetadata.fileSize / (1024 * 1024)).toFixed(2)}MB\n- Format: ${audioMetadata.format}` : ''}
 
 ## Transcript Sample

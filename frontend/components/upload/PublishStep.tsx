@@ -463,7 +463,7 @@ export function PublishStep({
               <div className="flex justify-between">
                 <span className="text-sonar-highlight/70">Languages:</span>
                 <span className="text-sonar-highlight-bright font-mono">
-                  {metadata.languages.join(', ')}
+                  {(metadata.languages || []).join(', ') || 'Not specified'}
                 </span>
               </div>
 
