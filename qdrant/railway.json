@@ -7,11 +7,6 @@
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5,
-    "healthcheckPath": "/healthz",
-    "healthcheckTimeout": 120,
-    "env": {
-      "PORT": "6333"
-    },
     "ports": [
       {
         "containerPort": 6333,
