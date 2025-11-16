@@ -16,12 +16,14 @@ WORKDIR /app
 # postgresql-client: Prisma PostgreSQL support
 # openssl: required for OpenSSL 3.0.x binaries
 # ca-certificates: required for curl HTTPS verification
+# unzip: required by Bun installer
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     postgresql-client \
-    openssl && \
+    openssl \
+    unzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -59,12 +61,14 @@ FROM node:20-slim AS runner
 # postgresql-client: Prisma PostgreSQL support
 # openssl: required for OpenSSL 3.0.x binaries
 # ca-certificates: required for curl HTTPS verification
+# unzip: required by Bun installer
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     postgresql-client \
-    openssl && \
+    openssl \
+    unzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
