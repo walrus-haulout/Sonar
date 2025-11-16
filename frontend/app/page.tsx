@@ -1,77 +1,30 @@
-import Link from 'next/link';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { SonarButton } from '@/components/ui/SonarButton';
-import { SignalBadge } from '@/components/ui/SignalBadge';
 import { SonarBackground } from '@/components/animations/SonarBackground';
-import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
 import { SonicWaveformHero } from '@/components/animations/SonicWaveformHero';
 import { ProtocolStatsSection } from '@/components/sections/ProtocolStatsSection';
 
 export default function HomePage() {
   return (
     <main className="relative">
-      {/* Sonic Waveform Hero */}
+      {/* Sonic Waveform Hero with Walrus Logo */}
       <SonicWaveformHero
         title="SONAR"
-        subtitle="Sound Oracle Network"
+        subtitle="Sound Oracle Network for Audio Rewards"
         description="Decentralized marketplace for high-quality conversational audio data with privacy-first design and adaptive token economics"
         ctaText="Explore Marketplace"
         ctaHref="/marketplace"
+        logoSrc="/images/walrus-icon.png"
+        logoAlt="SONAR Protocol Walrus"
+        logoSize={220}
       />
 
       {/* Animated Sonar Background */}
       <SonarBackground opacity={0.3} intensity={0.6} />
 
-      {/* Hero Section */}
+      {/* Feature Section */}
       <div className="relative z-10 container mx-auto px-6 py-20">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          {/* Logo/Title */}
-          <div className="space-y-6">
-            {/* Logo Image with Radar Scanning Effect */}
-            <div className="flex justify-center mb-16">
-              <RadarScanTarget
-                src="/images/walrus-icon.png"
-                alt="SONAR Protocol Walrus"
-                size={220}
-              />
-            </div>
-
-            <h1 className="text-7xl font-mono tracking-radar text-sonar-highlight">
-              SONAR
-            </h1>
-            <p className="text-2xl text-sonar-highlight-bright font-mono tracking-wide">
-              Sound Oracle Network for Audio Rewards
-            </p>
-          </div>
-
-          {/* Tagline */}
-          <p className="text-xl text-sonar-highlight-bright/80 max-w-2xl mx-auto">
-            Decentralized marketplace for high-quality conversational audio data
-            with privacy-first design and adaptive token economics
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex gap-4 justify-center pt-8">
-            <Link href="/marketplace">
-              <SonarButton variant="primary">Explore Marketplace</SonarButton>
-            </Link>
-            <Link href="/tokenomics">
-              <SonarButton variant="secondary">Tokenomics</SonarButton>
-            </Link>
-            <Link href="/roadmap">
-              <SonarButton variant="secondary">Roadmap</SonarButton>
-            </Link>
-          </div>
-
-          {/* Status Badges */}
-          <div className="flex gap-3 justify-center pt-4">
-            <SignalBadge variant="info">Testnet</SignalBadge>
-            <SignalBadge variant="success">Live</SignalBadge>
-          </div>
-        </div>
-
         {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-20 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20 max-w-6xl mx-auto">
           <GlassCard className="text-center space-y-4">
             <div className="text-3xl">🎯</div>
             <h3 className="text-xl font-mono text-sonar-highlight">

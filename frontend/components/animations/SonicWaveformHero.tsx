@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { motion, Variants } from 'framer-motion';
 import { BarChart2 } from 'lucide-react';
 import { SonarButton } from '@/components/ui/SonarButton';
+import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
 import { cn } from '@/lib/utils';
 
 /**
@@ -109,6 +110,9 @@ export interface SonicWaveformHeroProps {
   description?: string;
   ctaText?: string;
   ctaHref?: string;
+  logoSrc?: string;
+  logoAlt?: string;
+  logoSize?: number;
 }
 
 /**
@@ -122,6 +126,9 @@ export function SonicWaveformHero({
   description = 'Translate complex audio streams into intuitive, interactive visualizations. Hear the patterns, feel the insights.',
   ctaText = 'Explore Marketplace',
   ctaHref = '/marketplace',
+  logoSrc,
+  logoAlt = 'Logo',
+  logoSize = 220,
 }: SonicWaveformHeroProps) {
   const fadeUpVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
@@ -150,7 +157,23 @@ export function SonicWaveformHero({
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
       {/* Overlay Content */}
-      <div className="relative z-20 text-center px-6">
+      <div className="relative z-20 text-center px-6 space-y-8 max-w-4xl mx-auto">
+        {/* Logo */}
+        {logoSrc && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="flex justify-center mb-8"
+          >
+            <RadarScanTarget
+              src={logoSrc}
+              alt={logoAlt}
+              size={logoSize}
+            />
+          </motion.div>
+        )}
+
         {/* Badge */}
         <motion.div
           custom={0}
