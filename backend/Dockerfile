@@ -15,8 +15,10 @@ WORKDIR /app
 # curl: health check support
 # postgresql-client: Prisma PostgreSQL support
 # openssl: required for OpenSSL 3.0.x binaries
+# ca-certificates: required for curl HTTPS verification
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     postgresql-client \
     openssl && \
@@ -56,8 +58,10 @@ FROM node:20-slim AS runner
 # curl: health check support
 # postgresql-client: Prisma PostgreSQL support
 # openssl: required for OpenSSL 3.0.x binaries
+# ca-certificates: required for curl HTTPS verification
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     postgresql-client \
     openssl && \
