@@ -144,12 +144,10 @@ const metadataSchema = z.object({
     .max(1000, 'Description must be less than 1000 characters'),
   languages: z
     .array(z.string())
-    .min(1, 'Select at least one language')
     .max(5, 'Maximum 5 languages')
     .optional(),
   tags: z
     .array(z.string())
-    .min(1, 'Add at least one tag')
     .max(10, 'Maximum 10 tags')
     .optional(),
   consent: z
@@ -157,9 +155,9 @@ const metadataSchema = z.object({
     .refine((val) => val === true, 'You must confirm consent and rights'),
   perFileMetadata: z.array(z.object({
     fileId: z.string(),
-    title: z.string().min(10, 'Title must be at least 10 characters').max(100),
-    description: z.string().min(10, 'Description must be at least 10 characters').max(500),
-  })).min(1, 'At least one file required').optional(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+  })).optional(),
   audioQuality: z.object({
     sampleRate: z.number().positive().optional(),
     bitDepth: z.number().positive().optional(),
@@ -178,9 +176,9 @@ const metadataSchema = z.object({
     })),
   }).optional(),
   categorization: z.object({
-    useCase: z.string().min(1, 'Select a use case'),
-    contentType: z.string().min(1, 'Select content type'),
-    domain: z.string().min(1, 'Select a domain'),
+    useCase: z.string().optional(),
+    contentType: z.string().optional(),
+    domain: z.string().optional(),
   }).optional(),
 });
 
