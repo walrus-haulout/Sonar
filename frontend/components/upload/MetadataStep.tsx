@@ -206,7 +206,7 @@ export function MetadataStep({
   // Initialize default values - handle undefined audioFiles
   const defaultPerFileMetadata = (audioFiles && Array.isArray(audioFiles) ? audioFiles : []).map((f) => ({
     fileId: f.id || '',
-    title: f.file.name.replace(/\.[^.]+$/, ''),
+    title: f.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled',
     description: '',
   }));
 
@@ -455,7 +455,7 @@ export function MetadataStep({
           {audioFiles && Array.isArray(audioFiles) && audioFiles.length > 0 && audioFiles.map((file, index) => (
             <div key={file.id} className="space-y-2 p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20">
               <p className="text-xs font-mono text-sonar-signal font-semibold">
-                {file.file.name}
+                {file.file?.name || 'Unknown file'}
               </p>
               <input
                 type="text"
