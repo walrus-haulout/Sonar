@@ -29,8 +29,9 @@ RUN apt-get update -y && \
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
-    ln -sf /root/.bun/bin/bun /usr/local/bin/bun && \
-    ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
+    cp /root/.bun/bin/bun /usr/local/bin/bun && \
+    cp /root/.bun/bin/bunx /usr/local/bin/bunx && \
+    chmod +x /usr/local/bin/bun /usr/local/bin/bunx
 
 # Copy workspace root files
 COPY package.json bun.lock ./
@@ -62,6 +63,7 @@ FROM node:20-slim AS runner
 # postgresql-client: Prisma PostgreSQL support
 # openssl: required for OpenSSL 3.0.x binaries
 # ca-certificates: required for curl HTTPS verification
+# python3: required for migration scripts
 # unzip: required by Bun installer
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
@@ -69,14 +71,16 @@ RUN apt-get update -y && \
     curl \
     postgresql-client \
     openssl \
+    python3 \
     unzip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
-    ln -sf /root/.bun/bin/bun /usr/local/bin/bun && \
-    ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
+    cp /root/.bun/bin/bun /usr/local/bin/bun && \
+    cp /root/.bun/bin/bunx /usr/local/bin/bunx && \
+    chmod +x /usr/local/bin/bun /usr/local/bin/bunx
 
 WORKDIR /app
 
