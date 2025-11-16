@@ -1,8 +1,8 @@
 """
-Semantic Indexer with Vector Embeddings.
+Semantic Indexer with Dual Vector Storage (PostgreSQL + Qdrant).
 
-Generates embeddings for audio metadata and enables semantic similarity search.
-Uses pgvector for PostgreSQL vector storage.
+Generates embeddings for audio metadata and stores in both PostgreSQL (pgvector)
+and Qdrant for semantic similarity search and AI training data.
 """
 
 import asyncio
@@ -11,14 +11,15 @@ import logging
 import os
 import httpx
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
+from vector_db.vector_service import VectorService
 
 logger = logging.getLogger(__name__)
 
 
 class SemanticIndexer:
-    """Manages vector embeddings and semantic search."""
+    """Manages vector embeddings with dual storage (PostgreSQL + Qdrant)."""
 
     def __init__(self, embedding_model: str = "text-embedding-3-small"):
         """
@@ -31,13 +32,16 @@ class SemanticIndexer:
         if not self.database_url:
             raise RuntimeError("DATABASE_URL must be set")
 
-        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-        if not self.openrouter_api_key:
-            raise RuntimeError("OPENROUTER_API_KEY must be set")
-
         self.embedding_model = embedding_model
         self._pool: Optional[asyncpg.Pool] = None
-        self._embedding_cache: Dict[str, List[float]] = {}
+
+        # Initialize centralized vector service
+        try:
+            self.vector_service = VectorService()
+            logger.info("Initialized VectorService with Qdrant support")
+        except Exception as e:
+            logger.warning(f"VectorService initialization failed: {e}")
+            self.vector_service = None
 
     async def _get_pool(self) -> asyncpg.Pool:
         """Get or create database connection pool."""
@@ -52,7 +56,7 @@ class SemanticIndexer:
 
     async def _generate_embedding(self, text: str) -> Optional[List[float]]:
         """
-        Generate embedding for text using OpenRouter.
+        Generate embedding for text using VectorService.
 
         Args:
             text: Text to embed
@@ -60,42 +64,11 @@ class SemanticIndexer:
         Returns:
             Embedding vector or None if error
         """
-        # Check cache first
-        if text in self._embedding_cache:
-            return self._embedding_cache[text]
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/embeddings",
-                    headers={
-                        "Authorization": f"Bearer {self.openrouter_api_key}",
-                        "HTTP-Referer": "https://sonar-protocol.com",
-                        "X-Title": "Sonar Audio Verifier"
-                    },
-                    json={
-                        "model": "text-embedding-3-small",
-                        "input": text
-                    },
-                    timeout=30.0
-                )
-
-                if response.status_code != 200:
-                    logger.error(
-                        f"Embedding API error: {response.status_code} - {response.text}"
-                    )
-                    return None
-
-                data = response.json()
-                embedding = data["data"][0]["embedding"]
-
-                # Cache result
-                self._embedding_cache[text] = embedding
-                return embedding
-
-        except Exception as e:
-            logger.error(f"Error generating embedding: {e}", exc_info=True)
+        if not self.vector_service:
+            logger.error("VectorService not available for embedding generation")
             return None
+
+        return await self.vector_service.generate_text_embedding(text)
 
     async def index_session(
         self,
@@ -104,10 +77,11 @@ class SemanticIndexer:
         description: str,
         tags: List[str],
         languages: List[str],
-        transcript: Optional[str] = None
+        transcript: Optional[str] = None,
+        dataset_id: Optional[str] = None
     ) -> bool:
         """
-        Index a verification session with embeddings.
+        Index a verification session with embeddings (dual write to PostgreSQL + Qdrant).
 
         Args:
             session_id: Verification session ID
@@ -116,6 +90,7 @@ class SemanticIndexer:
             tags: List of tags
             languages: List of languages
             transcript: Optional transcript text
+            dataset_id: Optional dataset ID for metadata
 
         Returns:
             True if successful
@@ -140,7 +115,17 @@ class SemanticIndexer:
             if not embedding:
                 return False
 
-            # Store in database
+            # Prepare metadata for Qdrant
+            metadata = {
+                "session_id": session_id,
+                "dataset_id": dataset_id or "",
+                "title": title,
+                "tags": tags,
+                "languages": languages,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+
+            # Write to PostgreSQL
             pool = await self._get_pool()
             async with pool.acquire() as conn:
                 await conn.execute(
@@ -153,7 +138,21 @@ class SemanticIndexer:
                     session_id
                 )
 
-            logger.debug(f"Indexed session {session_id[:8]}... with embedding")
+            # Write to Qdrant (async, don't block on failure)
+            if self.vector_service:
+                await self.vector_service.index_to_qdrant(
+                    session_id,
+                    embedding,
+                    metadata
+                )
+                # Mark as synced in PostgreSQL
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE verification_sessions SET qdrant_synced = true WHERE id = $1",
+                        session_id
+                    )
+
+            logger.info(f"Indexed session {session_id[:8]}... in PostgreSQL + Qdrant")
             return True
 
         except Exception as e:
@@ -164,7 +163,8 @@ class SemanticIndexer:
         self,
         session_id: str,
         limit: int = 10,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
+        use_qdrant: bool = True
     ) -> List[Dict[str, any]]:
         """
         Find similar sessions using semantic search.
@@ -173,6 +173,7 @@ class SemanticIndexer:
             session_id: Session to find similar entries for
             limit: Maximum results to return
             similarity_threshold: Minimum cosine similarity
+            use_qdrant: Use Qdrant if available, otherwise use PostgreSQL
 
         Returns:
             List of similar sessions with similarity scores
@@ -190,7 +191,20 @@ class SemanticIndexer:
                     logger.warning(f"No embedding found for session {session_id[:8]}...")
                     return []
 
-                # Find similar sessions using vector similarity
+                # Try Qdrant first if available
+                if use_qdrant and self.vector_service:
+                    try:
+                        results = await self.vector_service.search_similar_text(
+                            "",  # No text query, will use vector directly
+                            top_k=limit,
+                            similarity_threshold=similarity_threshold
+                        )
+                        if results:
+                            return results
+                    except Exception as e:
+                        logger.warning(f"Qdrant search failed, falling back to PostgreSQL: {e}")
+
+                # Fallback to PostgreSQL
                 similar = await conn.fetch(
                     """
                     SELECT id, verification_id,
@@ -209,24 +223,25 @@ class SemanticIndexer:
                 )
 
                 return [
-                    {
-                        "session_id": str(s["id"]),
-                        "verification_id": s["verification_id"],
-                        "similarity_score": float(s["similarity"])
-                    }
-                    for s in similar
+                {
+                "vector_id": str(s["id"]),
+                "similarity_score": float(s["similarity"]),
+                "metadata": {"verification_id": s["verification_id"]},
+                }
+                for s in similar
                 ]
 
         except Exception as e:
             logger.error(f"Error searching similar: {e}", exc_info=True)
             return []
 
-    async def batch_index(self, limit: int = 1000) -> int:
+    async def batch_index(self, limit: int = 1000, sync_qdrant: bool = True) -> int:
         """
         Batch index sessions that don't have embeddings.
 
         Args:
             limit: Maximum sessions to process
+            sync_qdrant: Sync to Qdrant in addition to PostgreSQL
 
         Returns:
             Number of sessions indexed
@@ -259,13 +274,14 @@ class SemanticIndexer:
                         description=initial_data.get("description", ""),
                         tags=initial_data.get("tags", []),
                         languages=initial_data.get("languages", []),
-                        transcript=results.get("transcript", "")
+                        transcript=results.get("transcript", ""),
+                        dataset_id=initial_data.get("dataset_id")
                     )
 
                     if success:
                         indexed += 1
 
-                logger.info(f"Batch indexed {indexed} sessions")
+                logger.info(f"Batch indexed {indexed}/{len(sessions)} sessions")
                 return indexed
 
         except Exception as e:
@@ -300,6 +316,71 @@ class SemanticIndexer:
         except Exception as e:
             logger.error(f"Error getting stats: {e}", exc_info=True)
             return {}
+
+    async def sync_unsynced_to_qdrant(self, limit: int = 1000) -> int:
+        """
+        Sync sessions that exist in PostgreSQL but not in Qdrant.
+
+        Args:
+            limit: Maximum sessions to sync
+
+        Returns:
+            Number of sessions synced
+        """
+        try:
+            if not self.vector_service:
+                logger.warning("VectorService not available, cannot sync to Qdrant")
+                return 0
+
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                # Get unsynced sessions with embeddings
+                sessions = await conn.fetch(
+                    """
+                    SELECT id, initial_data, embedding
+                    FROM verification_sessions
+                    WHERE embedding IS NOT NULL
+                    AND qdrant_synced = FALSE
+                    LIMIT $1
+                    """,
+                    limit
+                )
+
+                logger.info(f"Syncing {len(sessions)} sessions to Qdrant...")
+
+                synced = 0
+                for session in sessions:
+                    initial_data = json.loads(session["initial_data"]) if session["initial_data"] else {}
+
+                    metadata = {
+                        "session_id": str(session["id"]),
+                        "dataset_id": initial_data.get("dataset_id", ""),
+                        "title": initial_data.get("title", ""),
+                        "tags": initial_data.get("tags", []),
+                        "languages": initial_data.get("languages", []),
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+
+                    success = await self.vector_service.index_to_qdrant(
+                        str(session["id"]),
+                        list(session["embedding"]),
+                        metadata
+                    )
+
+                    if success:
+                        # Mark as synced
+                        await conn.execute(
+                            "UPDATE verification_sessions SET qdrant_synced = true WHERE id = $1",
+                            session["id"]
+                        )
+                        synced += 1
+
+                logger.info(f"Synced {synced}/{len(sessions)} sessions to Qdrant")
+                return synced
+
+        except Exception as e:
+            logger.error(f"Error syncing to Qdrant: {e}", exc_info=True)
+            return 0
 
     async def close(self):
         """Close database connection."""

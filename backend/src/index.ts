@@ -12,21 +12,23 @@ import { logger } from './lib/logger';
 import { prisma } from './lib/db';
 
 declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      NODE_ENV: 'development' | 'production' | 'test';
-      PORT: string;
-      JWT_SECRET: string;
-      JWT_EXPIRES_IN: string;
-      SUI_RPC_URL: string;
-      SONAR_PACKAGE_ID: string;
-      WALRUS_AGGREGATOR_URL: string;
-      SEAL_NETWORK_URL: string;
-      LOG_LEVEL: string;
-      CORS_ORIGIN: string;
-      MOCK_WALRUS?: string;
-      MOCK_SEAL?: string;
-      SENTRY_DSN?: string;
+namespace NodeJS {
+interface ProcessEnv {
+NODE_ENV: 'development' | 'production' | 'test';
+PORT: string;
+JWT_SECRET: string;
+JWT_EXPIRES_IN: string;
+SUI_RPC_URL: string;
+SONAR_PACKAGE_ID: string;
+WALRUS_AGGREGATOR_URL: string;
+SEAL_NETWORK_URL: string;
+LOG_LEVEL: string;
+CORS_ORIGIN: string;
+MOCK_WALRUS?: string;
+MOCK_SEAL?: string;
+SENTRY_DSN?: string;
+  OPENROUTER_API_KEY?: string;
+    PINECONE_API_KEY?: string;
     }
   }
 }
@@ -124,11 +126,15 @@ async function start(): Promise<void> {
   const { registerDataRoutes } = await import('./routes/data');
   const { registerMonitoringRoutes } = await import('./routes/monitoring');
   const { registerLeaderboardRoutes } = await import('./routes/leaderboard');
+  const { registerSearchRoutes } = await import('./routes/search');
+  const { registerAnalyticsRoutes } = await import('./routes/analytics');
 
   await registerAuthRoutes(fastify);
   await registerDataRoutes(fastify);
   await registerMonitoringRoutes(fastify);
   await registerLeaderboardRoutes(fastify);
+  await registerSearchRoutes(fastify);
+  await registerAnalyticsRoutes(fastify);
 
   fastify.log.info('Routes registered');
 

@@ -1,0 +1,23 @@
+{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "qdrant/Dockerfile"
+  },
+  "deploy": {
+    "numReplicas": 1,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "ports": [
+      {
+        "containerPort": 6333,
+        "name": "http"
+      },
+      {
+        "containerPort": 6334,
+        "name": "grpc"
+      }
+    ]
+  }
+}

@@ -51,8 +51,14 @@ class SessionStore:
         """Create sessions table if it doesn't exist."""
         if self._pool is None:
             return
-        
+
         async with self._pool.acquire() as conn:
+            # Enable pgvector extension
+            try:
+                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            except Exception as e:
+                logger.warning(f"Could not create pgvector extension: {e}")
+
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS verification_sessions (
                     id UUID PRIMARY KEY,
@@ -64,24 +70,35 @@ class SessionStore:
                     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                     initial_data JSONB,
                     results JSONB,
-                    error TEXT
+                    error TEXT,
+                    embedding vector(1536)
                 );
             """)
-            
+
             # Create indexes if they don't exist
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sessions_verification_id 
+                CREATE INDEX IF NOT EXISTS idx_sessions_verification_id
                 ON verification_sessions(verification_id);
             """)
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sessions_status 
+                CREATE INDEX IF NOT EXISTS idx_sessions_status
                 ON verification_sessions(status);
             """)
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_sessions_created_at 
+                CREATE INDEX IF NOT EXISTS idx_sessions_created_at
                 ON verification_sessions(created_at);
             """)
-            
+
+            # Create pgvector index for efficient similarity search
+            try:
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_sessions_embedding
+                    ON verification_sessions USING ivfflat (embedding vector_cosine_ops)
+                    WITH (lists = 100);
+                """)
+            except Exception as e:
+                logger.warning(f"Could not create pgvector index: {e}")
+
             logger.info("Verified verification_sessions table schema")
 
     async def create_session(

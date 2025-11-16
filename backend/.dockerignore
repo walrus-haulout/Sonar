@@ -60,3 +60,22 @@ prisma/migrations
 .cache
 tmp
 temp
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Test/Coverage
+jest.config.js
+vitest.config.ts
+*.coverage
+
+# Monorepo
+pnpm-workspace.yaml
+bun.lockb
