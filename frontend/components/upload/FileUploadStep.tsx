@@ -310,6 +310,8 @@ export function FileUploadStep({
       if (files && files.length > 0) {
         processFiles(Array.from(files));
       }
+      // Clear input value to allow file picker to open again
+      e.target.value = '';
     },
     [processFiles]
   );
