@@ -905,7 +905,26 @@ export function MetadataStep({
             {errors.description && <li>• Description: {errors.description.message}</li>}
             {errors.languages && <li>• Languages: {errors.languages.message}</li>}
             {errors.tags && <li>• Tags: {errors.tags.message}</li>}
-            {errors.perFileMetadata && <li>• Per-file metadata: {errors.perFileMetadata.message}</li>}
+            {errors.perFileMetadata && (
+              <>
+                {Array.isArray(errors.perFileMetadata) && errors.perFileMetadata.map((fileError, idx) => (
+                  fileError && (
+                    <li key={idx}>
+                      • File {idx + 1}:{' '}
+                      {fileError.title && `${fileError.title.message}`}
+                      {fileError.title && fileError.description && ' | '}
+                      {fileError.description && `${fileError.description.message}`}
+                    </li>
+                  )
+                ))}
+                {!Array.isArray(errors.perFileMetadata) && errors.perFileMetadata.root && (
+                  <li>• Per-file metadata: {errors.perFileMetadata.root.message}</li>
+                )}
+                {!Array.isArray(errors.perFileMetadata) && !errors.perFileMetadata.root && (
+                  <li>• Per-file metadata: Invalid or missing</li>
+                )}
+              </>
+            )}
             {errors.categorization?.useCase && <li>• Use Case: {errors.categorization.useCase.message}</li>}
             {errors.categorization?.contentType && <li>• Content Type: {errors.categorization.contentType.message}</li>}
             {errors.categorization?.domain && <li>• Domain: {errors.categorization.domain.message}</li>}
