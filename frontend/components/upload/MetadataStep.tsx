@@ -207,7 +207,7 @@ export function MetadataStep({
   const isSingleFile = audioFiles && audioFiles.length === 1;
   const defaultPerFileMetadata = (audioFiles && Array.isArray(audioFiles) ? audioFiles : []).map((f) => ({
     fileId: f.id || '',
-    title: f.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled',
+    title: f.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled Audio File',
     description: isSingleFile ? 'A single audio file.' : '', // Default description for single files
   }));
 
@@ -224,7 +224,7 @@ export function MetadataStep({
     formState: { errors, isValid },
   } = useForm<MetadataFormData>({
     resolver: zodResolver(metadataSchema),
-    mode: 'onChange',
+    mode: 'all',
     defaultValues: metadata || {
       title: '',
       description: '',
@@ -257,7 +257,7 @@ export function MetadataStep({
     if (isSingleFile && perFileMetadata && perFileMetadata.length === 1) {
       // Only update if the values have changed to avoid infinite loops
       const currentPerFile = perFileMetadata[0];
-      if (currentPerFile.title !== watchedTitle && watchedTitle.length >= 3) {
+      if (currentPerFile.title !== watchedTitle && watchedTitle.length >= 10) {
         setValue(`perFileMetadata.0.title`, watchedTitle, { shouldValidate: true });
       }
       if (currentPerFile.description !== watchedDescription && watchedDescription.length >= 10) {
