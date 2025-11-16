@@ -166,6 +166,7 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
     clearStoredWizardState();
     resetWizardState();
     setPersistenceDisabled(false);
+    onOpenChange(false); // Close wizard after discarding draft
   };
 
   // Persist wizard state to localStorage for recovery
@@ -178,9 +179,10 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
-        // Only restore if we're not on success step
+        // Only restore verification and publish steps (long-running processes)
+        // File-upload and metadata steps always start fresh (file data can't be restored from localStorage)
         // Note: We can't restore full file data, user will need to re-upload
-        if (parsed.step !== 'success' && parsed.step !== 'encryption') {
+        if (parsed.step === 'verification' || parsed.step === 'publish') {
           // Validate metadata structure - clean up invalid optional fields
           if (parsed.metadata) {
             // Ensure speakers is either undefined or has proper structure
