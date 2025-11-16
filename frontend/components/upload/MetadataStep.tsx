@@ -262,6 +262,47 @@ export function MetadataStep({
     }
   }, [isSingleFile, watchedTitle, watchedDescription, perFileMetadata, setValue]);
 
+  // Debug logging for form state
+  useEffect(() => {
+    const audioQuality = watch('audioQuality');
+    const speakers = watch('speakers');
+    const categorization = watch('categorization');
+    const languages = watch('languages');
+    const tags = watch('tags');
+
+    const errorList = Object.entries(errors).map(([key, error]: [string, any]) => {
+      const message = error?.message || JSON.stringify(error);
+      return `  • ${key}: ${message}`;
+    }).join('\n');
+
+    const consoleGroup = [
+      '\n=== 📋 METADATA FORM STATE DEBUG ===\n',
+      `Form Valid: ${isValid}`,
+      `Button Disabled: ${!isValid}\n`,
+      '✅ REQUIRED FIELDS:',
+      `  Title: "${watchedTitle}" (${watchedTitle.length} chars) ${watchedTitle.length >= 10 ? '✓' : '✗ Need 10+ chars'}`,
+      `  Description: "${watchedDescription}" (${watchedDescription.length} chars) ${watchedDescription.length >= 10 ? '✓' : '✗ Need 10+ chars'}`,
+      `  Consent: ${consentChecked} ${consentChecked ? '✓' : '✗ Must be checked'}\n`,
+      '⭐ OPTIONAL FIELDS:',
+      `  Languages: ${languages?.length ? `[${languages.join(', ')}]` : 'undefined'} ✓`,
+      `  Tags: ${tags?.length ? `[${tags.join(', ')}]` : 'undefined'} ✓`,
+      `  Audio Quality: ${audioQuality ? JSON.stringify(audioQuality) : 'undefined'} ✓`,
+      `    - sampleRate: ${audioQuality?.sampleRate} ${typeof audioQuality?.sampleRate === 'number' && isNaN(audioQuality.sampleRate) ? '⚠️ NaN' : ''}`,
+      `    - bitDepth: ${audioQuality?.bitDepth} ${typeof audioQuality?.bitDepth === 'number' && isNaN(audioQuality.bitDepth) ? '⚠️ NaN' : ''}`,
+      `    - channels: ${audioQuality?.channels} ${typeof audioQuality?.channels === 'number' && isNaN(audioQuality.channels) ? '⚠️ NaN' : ''}`,
+      `  Speakers: ${speakers ? JSON.stringify(speakers) : 'undefined'} ✓`,
+      `    - speakerCount: ${speakers?.speakerCount} ${typeof speakers?.speakerCount === 'number' && isNaN(speakers.speakerCount) ? '⚠️ NaN' : ''}`,
+      `  Categorization: ${categorization ? JSON.stringify(categorization) : 'undefined'} ✓\n`,
+      '❌ FORM ERRORS:',
+      errorList || '  None - form is clean!',
+      `\n📊 WHY BUTTON IS ${!isValid ? 'DISABLED' : 'ENABLED'}:`,
+      !isValid ? `  Check the errors above for validation failures` : '  All required fields valid + no errors',
+      '\n=== END DEBUG ===\n'
+    ].join('\n');
+
+    console.log(consoleGroup);
+  }, [isValid, errors, watchedTitle, watchedDescription, consentChecked, watch]);
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({
       ...prev,
