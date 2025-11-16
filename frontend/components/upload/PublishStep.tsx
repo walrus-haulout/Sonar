@@ -88,7 +88,12 @@ export function PublishStep({
 
       if (isMultiFile) {
         // Multi-file dataset: Call submit_audio_dataset
-        const files = walrusUpload.files!;
+        const files = walrusUpload.files;
+        if (!files || files.length === 0) {
+          onError('No files found in multi-file upload result');
+          setPublishState('idle');
+          return;
+        }
 
         const blobIds = files.map(f => f.blobId);
         const previewBlobIds = files.map(f => f.previewBlobId || '');
