@@ -136,7 +136,7 @@ const ACCENT_OPTIONS = [
 const metadataSchema = z.object({
   title: z
     .string()
-    .min(3, 'Title must be at least 3 characters')
+    .min(10, 'Title must be at least 10 characters')
     .max(100, 'Title must be less than 100 characters'),
   description: z
     .string()
@@ -155,7 +155,7 @@ const metadataSchema = z.object({
     .refine((val) => val === true, 'You must confirm consent and rights'),
   perFileMetadata: z.array(z.object({
     fileId: z.string(),
-    title: z.string().min(3, 'Title must be at least 3 characters').max(100),
+    title: z.string().min(10, 'Title must be at least 10 characters').max(100),
     description: z.string().min(10, 'Description must be at least 10 characters').max(500),
   })).min(1, 'At least one file required'),
   audioQuality: z.object({
