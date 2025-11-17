@@ -340,7 +340,7 @@ export function VerificationStep({
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
-        undefined, // Use default options
+        { policyModule: 'hybrid_seal_policy::seal_approve_admin' },
         (progress) => {
           // Update progress: progress is 0-1, map to 30-80% for decryption stage
           const progressPercent = 30 + Math.floor(progress * 50);
