@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
 import { useSignAndExecuteTransaction, useCurrentAccount } from '@mysten/dapp-kit';
 
-const AMOUNT_PER_WALLET = 10_000_000; // 0.01 SUI
+const AMOUNT_PER_WALLET = 15_000_000; // 0.015 SUI
 const MAX_WALLETS_PER_BATCH = 40; // Conservative limit for transaction size
 
 interface FundingProgress {
