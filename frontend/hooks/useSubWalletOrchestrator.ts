@@ -264,9 +264,8 @@ export function distributeFileAcrossWallets(
  * Helper: Determine upload strategy based on file size
  */
 export function getUploadStrategy(fileSizeBytes: number): 'blockberry' | 'sponsored-parallel' {
-  const ONE_GB = 1024 * 1024 * 1024;
-
-  // Use Blockberry HTTP API for files < 1GB
-  // Use sponsored parallel uploads for files ≥ 1GB
-  return fileSizeBytes < ONE_GB ? 'blockberry' : 'sponsored-parallel';
+  // Always use sponsored-parallel with wallet funding
+  // Browser wallet funds ephemeral wallets, enabling Walrus mainnet storage purchase
+  // This ensures all uploads (regardless of size) can pay for on-chain storage
+  return 'sponsored-parallel';
 }
