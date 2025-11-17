@@ -14,6 +14,7 @@ import type { EncryptionMetadata } from '@sonar/seal';
 import { useState, useCallback } from 'react';
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
+import { useBrowserWalletFunding } from './useBrowserWalletFunding';
 
 export interface WalrusUploadProgress {
   totalFiles: number;
@@ -21,9 +22,15 @@ export interface WalrusUploadProgress {
   currentFile: number;
   fileProgress: number; // 0-100
   totalProgress: number; // 0-100
-  stage: 'encrypting' | 'uploading' | 'finalizing' | 'completed';
+  stage: 'funding' | 'encrypting' | 'uploading' | 'finalizing' | 'completed';
   currentRetry?: number; // Current retry attempt (1-10)
   maxRetries?: number; // Max retry attempts
+  fundingProgress?: {
+    totalWallets: number;
+    fundedCount: number;
+    currentBatch: number;
+    totalBatches: number;
+  };
 }
 
 export interface WalrusUploadResult {
@@ -84,6 +91,7 @@ function inferFileName(base: string, mime?: string): string {
 
 export function useWalrusParallelUpload() {
   const orchestrator = useSubWalletOrchestrator();
+  const { fundWallets, progress: fundingProgress, isLoading: isFunding, error: fundingError } = useBrowserWalletFunding();
 
   const [progress, setProgress] = useState<WalrusUploadProgress>({
     totalFiles: 0,
@@ -239,6 +247,41 @@ export function useWalrusParallelUpload() {
       chunkPlan,
     });
 
+    // Fund wallets if not already funded
+    const unfundedWallets = wallets.filter(w => !orchestrator.isFunded(w.address));
+
+    if (unfundedWallets.length > 0) {
+      console.log(`[WalrusSponsoredPrototype] Funding ${unfundedWallets.length} wallets...`);
+
+      setProgress((prev) => ({
+        ...prev,
+        stage: 'funding',
+        fileProgress: 0,
+      }));
+
+      try {
+        await fundWallets(unfundedWallets.map(w => w.address));
+
+        // Mark wallets as funded
+        orchestrator.markAsFunded(unfundedWallets.map(w => w.address));
+
+        // Verify funding succeeded
+        const balances = await orchestrator.checkAllBalances(unfundedWallets.map(w => w.address));
+        const allFunded = Array.from(balances.values()).every(balance => balance > 0);
+
+        if (!allFunded) {
+          throw new Error('Wallet funding verification failed - some wallets have zero balance');
+        }
+
+        console.log('[WalrusSponsoredPrototype] All wallets funded successfully');
+      } catch (error) {
+        console.error('[WalrusSponsoredPrototype] Funding failed:', error);
+        throw new Error(`Failed to fund wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else {
+      console.log('[WalrusSponsoredPrototype] All wallets already funded');
+    }
+
     // Simulate per-chunk processing to surface progress updates
     let processedBytes = 0;
     for (let i = 0; i < chunkPlan.length; i++) {
@@ -283,7 +326,7 @@ export function useWalrusParallelUpload() {
     } finally {
       orchestrator.discardAllWallets();
     }
-  }, [orchestrator, uploadViaBlockberry]);
+  }, [orchestrator, uploadViaBlockberry, fundWallets, setProgress]);
 
   /**
    * Upload encrypted blob to Walrus (auto-selects strategy)

@@ -34,6 +34,7 @@ export interface EphemeralSubWallet {
 
 export interface SubWalletOrchestratorState {
   wallets: Map<string, EphemeralSubWallet>;
+  fundedWallets: Set<string>;
   isProcessing: boolean;
   error: string | null;
 }
@@ -47,6 +48,7 @@ export function useSubWalletOrchestrator() {
 
   const [state, setState] = useState<SubWalletOrchestratorState>({
     wallets: new Map(),
+    fundedWallets: new Set(),
     isProcessing: false,
     error: null,
   });
@@ -125,6 +127,51 @@ export function useSubWalletOrchestrator() {
   }, []);
 
   /**
+   * Mark wallets as funded
+   */
+  const markAsFunded = useCallback((addresses: string[]) => {
+    setState(prev => {
+      const newFundedWallets = new Set(prev.fundedWallets);
+      addresses.forEach(addr => newFundedWallets.add(addr));
+      return { ...prev, fundedWallets: newFundedWallets };
+    });
+  }, []);
+
+  /**
+   * Check if a wallet is funded
+   */
+  const isFunded = useCallback((address: string): boolean => {
+    return state.fundedWallets.has(address);
+  }, [state.fundedWallets]);
+
+  /**
+   * Check wallet balance via Sui client
+   */
+  const checkWalletBalance = useCallback(async (address: string): Promise<number> => {
+    try {
+      const balance = await suiClient.getBalance({ owner: address });
+      return parseInt(balance.totalBalance);
+    } catch (error) {
+      console.error(`[SubWalletOrchestrator] Failed to check balance for ${address}:`, error);
+      return 0;
+    }
+  }, [suiClient]);
+
+  /**
+   * Check balances for all wallets
+   */
+  const checkAllBalances = useCallback(async (addresses: string[]): Promise<Map<string, number>> => {
+    const balances = new Map<string, number>();
+    await Promise.all(
+      addresses.map(async (address) => {
+        const balance = await checkWalletBalance(address);
+        balances.set(address, balance);
+      })
+    );
+    return balances;
+  }, [checkWalletBalance]);
+
+  /**
    * Build a Walrus blob storage transaction
    *
    * NOTE: This creates the transaction structure, but signing requires special handling
@@ -164,6 +211,7 @@ export function useSubWalletOrchestrator() {
     wallets: Array.from(state.wallets.values()),
     walletsMap: state.wallets,
     walletCount: state.wallets.size,
+    fundedWallets: state.fundedWallets,
     isProcessing: state.isProcessing,
     error: state.error,
 
@@ -173,6 +221,12 @@ export function useSubWalletOrchestrator() {
     discardWallet,
     discardAllWallets,
     calculateWalletCount,
+
+    // Funding management
+    markAsFunded,
+    isFunded,
+    checkWalletBalance,
+    checkAllBalances,
 
     // Transaction building
     buildWalrusStorageTransaction,

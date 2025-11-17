@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Lock, Upload, Shield, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Lock, Upload, Shield, CheckCircle, AlertTriangle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AudioFile, EncryptionResult, FileUploadResult } from '@/lib/types/upload';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -39,7 +39,7 @@ interface EncryptionStepProps {
   onError: (error: string) => void;
 }
 
-type EncryptionStage = 'encrypting' | 'generating-preview' | 'uploading-walrus' | 'finalizing' | 'completed';
+type EncryptionStage = 'encrypting' | 'generating-preview' | 'funding' | 'uploading-walrus' | 'finalizing' | 'completed';
 
 /**
  * EncryptionStep Component
@@ -80,6 +80,14 @@ export function EncryptionStep({
       onError(sealError);
     }
   }, [sealError]);
+
+  // Sync upload progress stage with component stage
+  useEffect(() => {
+    if (uploadProgress.stage === 'funding') {
+      setStage('funding');
+      addLog(`Funding ${uploadProgress.fundingProgress?.totalWallets || 0} wallets (batch ${uploadProgress.fundingProgress?.currentBatch}/${uploadProgress.fundingProgress?.totalBatches})...`);
+    }
+  }, [uploadProgress.stage, uploadProgress.fundingProgress]);
 
   // Prevent tab close/refresh during upload
   useEffect(() => {
@@ -274,6 +282,11 @@ export function EncryptionStep({
       icon: <Shield className="w-5 h-5" />,
     },
     {
+      key: 'funding',
+      label: 'Funding Wallets',
+      icon: <Wallet className="w-5 h-5" />,
+    },
+    {
       key: 'uploading-walrus',
       label: 'Uploading to Walrus',
       icon: <Upload className="w-5 h-5" />,
@@ -378,6 +391,14 @@ export function EncryptionStep({
           {uploadProgress.currentRetry && uploadProgress.currentRetry > 1 && (
             <span className="text-sm text-sonar-coral ml-2">
               (Retry {uploadProgress.currentRetry}/{uploadProgress.maxRetries})
+            </span>
+          )}
+          {stage === 'funding' && uploadProgress.fundingProgress && (
+            <span className="text-sm text-sonar-blue ml-2">
+              ({uploadProgress.fundingProgress.fundedCount}/{uploadProgress.fundingProgress.totalWallets} wallets
+              {uploadProgress.fundingProgress.totalBatches > 1 &&
+                ` - batch ${uploadProgress.fundingProgress.currentBatch}/${uploadProgress.fundingProgress.totalBatches}`
+              })
             </span>
           )}
         </motion.p>
