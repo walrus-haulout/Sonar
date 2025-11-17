@@ -337,10 +337,12 @@ export function VerificationStep({
 
       console.log('[VerificationStep] Decrypting blob with sessionKey...');
 
+      // For uploader verification, use open access (no policy module)
+      // Policy object is only created later when submitting to blockchain
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
-        { policyModule: 'hybrid_seal_policy::seal_approve_admin' },
+        {}, // No policy module = open access
         (progress) => {
           // Update progress: progress is 0-1, map to 30-80% for decryption stage
           const progressPercent = 30 + Math.floor(progress * 50);
