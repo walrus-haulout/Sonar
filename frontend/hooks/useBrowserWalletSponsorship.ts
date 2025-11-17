@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
 import { useSignAndExecuteTransaction, useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
-import type { SubWallet } from './useSubWalletOrchestrator';
+import type { EphemeralSubWallet } from './useSubWalletOrchestrator';
 
 interface SponsorshipProgress {
   totalTransactions: number;
@@ -14,8 +14,8 @@ interface SponsorshipProgress {
 
 interface UseBrowserWalletSponsorshipResult {
   sponsorTransactions: (
-    buildTransaction: (subWallet: SubWallet) => Promise<Transaction>,
-    subWallets: SubWallet[]
+    buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+    subWallets: EphemeralSubWallet[]
   ) => Promise<void>;
   progress: SponsorshipProgress | null;
   isLoading: boolean;
@@ -48,8 +48,8 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
    */
   const sponsorTransactionBatch = useCallback(
     async (
-      buildTransaction: (subWallet: SubWallet) => Promise<Transaction>,
-      subWallets: SubWallet[],
+      buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+      subWallets: EphemeralSubWallet[],
       batchIndex: number,
       totalBatches: number
     ): Promise<void> => {
@@ -105,8 +105,8 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
    */
   const sponsorTransactions = useCallback(
     async (
-      buildTransaction: (subWallet: SubWallet) => Promise<Transaction>,
-      subWallets: SubWallet[]
+      buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+      subWallets: EphemeralSubWallet[]
     ): Promise<void> => {
       if (!currentAccount) {
         const error = 'No wallet connected. Please connect your wallet first.';
@@ -127,7 +127,7 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
         console.log(`[BrowserWalletSponsorship] Sponsoring ${subWallets.length} transactions`);
 
         // Split into batches if needed
-        const batches: SubWallet[][] = [];
+        const batches: EphemeralSubWallet[][] = [];
         for (let i = 0; i < subWallets.length; i += MAX_TRANSACTIONS_PER_BATCH) {
           batches.push(subWallets.slice(i, i + MAX_TRANSACTIONS_PER_BATCH));
         }

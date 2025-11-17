@@ -1,5 +1,5 @@
 import type { Transaction } from '@mysten/sui/transactions';
-import type { SubWallet } from '@/hooks/useSubWalletOrchestrator';
+import type { EphemeralSubWallet } from '@/hooks/useSubWalletOrchestrator';
 import { buildRegisterBlobTransaction } from './buildRegisterBlobTransaction';
 
 const WALRUS_PUBLISHER_URL =
@@ -61,7 +61,7 @@ export async function uploadBlobToPublisher(
  * This transaction will be sponsored by the browser wallet
  */
 export function buildSponsoredRegisterBlob(
-  subWallet: SubWallet,
+  subWallet: EphemeralSubWallet,
   blobId: string,
   size: number,
   epochs: number = 26
