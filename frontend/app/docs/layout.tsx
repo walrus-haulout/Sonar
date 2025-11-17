@@ -51,6 +51,12 @@ const docItems: DocItem[] = [
       { title: 'Adaptive Burns', href: '/docs/tokenomics/adaptive-burns' },
     ],
   },
+  {
+    title: 'Legal',
+    items: [
+      { title: 'Privacy Policy', href: '/docs/privacy' },
+    ],
+  },
 ];
 
 export default function DocsLayout({

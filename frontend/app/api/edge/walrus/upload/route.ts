@@ -13,6 +13,7 @@ const WALRUS_AGGREGATOR_URL =
   'https://aggregator.walrus-testnet.walrus.space';
 
 const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || '';
+const DEFAULT_EPOCHS = parseInt(process.env.NEXT_PUBLIC_WALRUS_DEFAULT_EPOCHS || '26', 10);
 
 /**
  * Retry fetch with progressive delays
@@ -121,11 +122,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build Walrus URL with optional epochs parameter
-    const epochs = epochsParam ? parseInt(epochsParam.toString(), 10) : null;
-    const walrusUrl = epochs && epochs > 0
-      ? `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=${epochs}`
-      : `${WALRUS_PUBLISHER_URL}/v1/blobs`;
+    // Build Walrus URL with epochs parameter (default: 1 year = 26 epochs)
+    const epochs = epochsParam ? parseInt(epochsParam.toString(), 10) : DEFAULT_EPOCHS;
+    const walrusUrl = `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=${epochs}`;
 
     // Upload to Walrus (PUT request as per Walrus HTTP API)
     const headers: Record<string, string> = {
