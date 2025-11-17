@@ -14,7 +14,8 @@ import type { EncryptionMetadata } from '@sonar/seal';
 import { useState, useCallback } from 'react';
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
-import { useBrowserWalletFunding } from './useBrowserWalletFunding';
+import { useBrowserWalletSponsorship } from './useBrowserWalletSponsorship';
+import { uploadBlobToPublisher, buildSponsoredRegisterBlob } from '@/lib/walrus/uploadWithSponsorship';
 
 export interface WalrusUploadProgress {
   totalFiles: number;
@@ -22,15 +23,9 @@ export interface WalrusUploadProgress {
   currentFile: number;
   fileProgress: number; // 0-100
   totalProgress: number; // 0-100
-  stage: 'funding' | 'encrypting' | 'uploading' | 'finalizing' | 'completed';
+  stage: 'encrypting' | 'uploading' | 'finalizing' | 'completed';
   currentRetry?: number; // Current retry attempt (1-10)
   maxRetries?: number; // Max retry attempts
-  fundingProgress?: {
-    totalWallets: number;
-    fundedCount: number;
-    currentBatch: number;
-    totalBatches: number;
-  };
 }
 
 export interface WalrusUploadResult {
@@ -91,7 +86,7 @@ function inferFileName(base: string, mime?: string): string {
 
 export function useWalrusParallelUpload() {
   const orchestrator = useSubWalletOrchestrator();
-  const { fundWallets, progress: fundingProgress, isLoading: isFunding, error: fundingError } = useBrowserWalletFunding();
+  const { sponsorTransactions } = useBrowserWalletSponsorship();
 
   const [progress, setProgress] = useState<WalrusUploadProgress>({
     totalFiles: 0,
@@ -221,8 +216,8 @@ export function useWalrusParallelUpload() {
   }, [fetchUploadWithRetry]);
 
   /**
-   * Sponsored parallel upload prototype
-   * Simulates chunk orchestration with ephemeral wallets, then falls back to Blockberry upload.
+   * Sponsored upload with on-chain registration
+   * Uses HTTP publisher for encoding/storage, then registers ownership via sponsored transaction
    */
   const uploadViaSponsoredPrototype = useCallback(async (
     encryptedBlob: Blob,
@@ -230,103 +225,103 @@ export function useWalrusParallelUpload() {
     metadata: WalrusUploadMetadata,
     options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
-    const minWallets = 1;
-
     if (!orchestrator.isReady) {
       throw new Error('Sponsored uploads require a connected wallet session for orchestration.');
     }
 
     const totalSize = encryptedBlob.size;
-    const walletCount = Math.max(minWallets, orchestrator.calculateWalletCount(totalSize));
+    const walletCount = 1; // Single wallet for ownership registration
     const wallets = orchestrator.createWallets(walletCount);
-    const chunkPlan = distributeFileAcrossWallets(totalSize, walletCount);
 
-    console.log('[WalrusSponsoredPrototype] Created wallets for upload', {
-      walletCount: wallets.length,
-      totalSize,
-      chunkPlan,
+    console.log('[WalrusSponsored] Uploading blob via HTTP publisher', {
+      size: totalSize,
+      walletAddress: wallets[0].address,
     });
 
-    // Fund wallets if not already funded
-    const unfundedWallets = wallets.filter(w => !orchestrator.isFunded(w.address));
-
-    if (unfundedWallets.length > 0) {
-      console.log(`[WalrusSponsoredPrototype] Funding ${unfundedWallets.length} wallets...`);
-
-      setProgress((prev) => ({
-        ...prev,
-        stage: 'funding',
-        fileProgress: 0,
-      }));
-
-      try {
-        await fundWallets(unfundedWallets.map(w => w.address));
-
-        // Mark wallets as funded
-        orchestrator.markAsFunded(unfundedWallets.map(w => w.address));
-
-        // Verify funding succeeded
-        const balances = await orchestrator.checkAllBalances(unfundedWallets.map(w => w.address));
-        const allFunded = Array.from(balances.values()).every(balance => balance > 0);
-
-        if (!allFunded) {
-          throw new Error('Wallet funding verification failed - some wallets have zero balance');
-        }
-
-        console.log('[WalrusSponsoredPrototype] All wallets funded successfully');
-      } catch (error) {
-        console.error('[WalrusSponsoredPrototype] Funding failed:', error);
-        throw new Error(`Failed to fund wallets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    } else {
-      console.log('[WalrusSponsoredPrototype] All wallets already funded');
-    }
-
-    // Simulate per-chunk processing to surface progress updates
-    let processedBytes = 0;
-    for (let i = 0; i < chunkPlan.length; i++) {
-      const chunk = chunkPlan[i];
-
-      // Yield to the event loop to allow UI updates between chunks
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      processedBytes += chunk.size;
-      const percent = totalSize === 0 ? 0 : Math.min(90, Math.round((processedBytes / totalSize) * 90));
-
-      setProgress((prev) => ({
-        ...prev,
-        stage: 'uploading',
-        currentFile: 0,
-        fileProgress: percent,
-        totalProgress: percent,
-        totalFiles: 1,
-      }));
-    }
+    setProgress((prev) => ({
+      ...prev,
+      stage: 'uploading',
+      currentFile: 0,
+      fileProgress: 10,
+      totalProgress: 10,
+      totalFiles: 1,
+    }));
 
     try {
-      const blockberryResult = await uploadViaBlockberry(
-        encryptedBlob,
-        seal_policy_id,
-        metadata,
-        options
+      // Step 1: Upload blob via HTTP to get blobId
+      const httpResult = await uploadBlobToPublisher(encryptedBlob, 26);
+
+      console.log('[WalrusSponsored] Blob uploaded, blobId:', httpResult.blobId);
+
+      setProgress((prev) => ({
+        ...prev,
+        fileProgress: 50,
+        totalProgress: 50,
+      }));
+
+      // Step 2: Register on-chain ownership via sponsored transaction
+      console.log('[WalrusSponsored] Registering on-chain ownership with sponsorship');
+
+      await sponsorTransactions(
+        (subWallet) => Promise.resolve(buildSponsoredRegisterBlob(
+          subWallet,
+          httpResult.blobId,
+          httpResult.size,
+          26
+        )),
+        wallets
       );
 
+      console.log('[WalrusSponsored] On-chain registration complete');
+
+      setProgress((prev) => ({
+        ...prev,
+        stage: 'finalizing',
+        fileProgress: 90,
+        totalProgress: 90,
+      }));
+
+      // Handle preview if provided
+      let previewBlobId: string | undefined;
+      let effectivePreviewMimeType: string | undefined;
+
+      if (options.previewBlob) {
+        try {
+          const previewResult = await uploadBlobToPublisher(options.previewBlob, 26);
+          previewBlobId = previewResult.blobId;
+          effectivePreviewMimeType = normalizeAudioMimeType(options.previewMimeType) ?? undefined;
+
+          console.log('[WalrusSponsored] Preview uploaded:', previewBlobId);
+        } catch (error) {
+          console.warn('[WalrusSponsored] Preview upload failed:', error);
+        }
+      }
+
+      setProgress((prev) => ({
+        ...prev,
+        stage: 'completed',
+        fileProgress: 100,
+        totalProgress: 100,
+        completedFiles: 1,
+      }));
+
       return {
-        ...blockberryResult,
+        blobId: httpResult.blobId,
+        previewBlobId,
         seal_policy_id,
         strategy: 'sponsored-parallel',
-        mimeType: blockberryResult.mimeType,
-        previewMimeType: blockberryResult.previewMimeType,
+        mimeType: normalizeAudioMimeType(options.mimeType) ?? undefined,
+        previewMimeType: effectivePreviewMimeType,
         prototypeMetadata: {
           walletCount,
-          chunkCount: chunkPlan.length,
-          estimatedChunkSize: chunkPlan.length > 0 ? Math.ceil(totalSize / chunkPlan.length) : totalSize,
+          chunkCount: 1,
+          estimatedChunkSize: totalSize,
         },
       };
     } finally {
       orchestrator.discardAllWallets();
     }
-  }, [orchestrator, uploadViaBlockberry, fundWallets, setProgress]);
+  }, [orchestrator, sponsorTransactions, setProgress]);
 
   /**
    * Upload encrypted blob to Walrus (auto-selects strategy)
@@ -337,15 +332,7 @@ export function useWalrusParallelUpload() {
     metadata: WalrusUploadMetadata,
     options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
-    const rawStrategy = getUploadStrategy(encryptedBlob.size);
-
-    // Allow prototype to be exercised for smaller inputs by lowering threshold via env var
-    const prototypeMinSize = Number(process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE ?? NaN);
-    const prototypeEnabled = Number.isFinite(prototypeMinSize);
-    const strategy =
-      prototypeEnabled && encryptedBlob.size >= 0 && encryptedBlob.size >= prototypeMinSize
-        ? 'sponsored-parallel'
-        : rawStrategy;
+    const strategy = getUploadStrategy(encryptedBlob.size);
 
     setProgress((prev) => ({
       ...prev,
