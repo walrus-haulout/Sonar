@@ -222,8 +222,8 @@ export default function PrivacyPolicyPage() {
         <DocList>
           <DocListItem>
             <strong>Email:</strong>{' '}
-            <a href="mailto:privacy@sonar.audio" className="text-sonar-signal hover:text-sonar-highlight transition-colors">
-              privacy@sonar.audio
+            <a href="mailto:privacy@projectsonar.xyz" className="text-sonar-signal hover:text-sonar-highlight transition-colors">
+              privacy@projectsonar.xyz
             </a>
           </DocListItem>
           <DocListItem>
