@@ -45,6 +45,7 @@ export function useBrowserWalletFunding(): UseBrowserWalletFundingResult {
   const fundWalletsBatch = useCallback(
     async (addresses: string[], batchIndex: number, totalBatches: number): Promise<void> => {
       const tx = new Transaction();
+      tx.setGasBudget(50_000_000); // 0.05 SUI - sufficient for batch transfers
 
       // Split and transfer to each wallet
       addresses.forEach((address) => {
