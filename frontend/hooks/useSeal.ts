@@ -258,7 +258,6 @@ export function useSeal() {
             sessionKey,
             packageId,
             identity,
-            policyModule: 'purchase_policy', // Default policy
             suiClient: suiClient as SuiClient,
             ...options,
           },

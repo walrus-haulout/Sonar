@@ -342,7 +342,7 @@ export function VerificationStep({
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
-        {}, // No policy module = open access
+        { policyModule: undefined }, // Explicitly skip policy check for verification
         (progress) => {
           // Update progress: progress is 0-1, map to 30-80% for decryption stage
           const progressPercent = 30 + Math.floor(progress * 50);

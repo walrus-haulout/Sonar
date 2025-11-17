@@ -46,24 +46,31 @@ export async function decryptFile(
     throw new SessionExpiredError();
   }
 
-  onProgress?.(10, 'Building policy transaction...');
+  // Build policy approval transaction only if policy module is specified
+  let txBytes: Uint8Array;
 
-  // Build policy approval transaction
-  const tx = new Transaction();
-  tx.setSender(sessionKey.getAddress());
-  const target = `${packageId}::${policyModule}::seal_approve`;
+  if (policyModule) {
+    onProgress?.(10, 'Building policy transaction...');
 
-  tx.moveCall({
-    target,
-    arguments: [
-      tx.pure.vector('u8', hexToBytes(identity)),
-      ...policyArgs.map((arg) => tx.object(arg)),
-    ],
-  });
+    const tx = new Transaction();
+    tx.setSender(sessionKey.getAddress());
+    const target = `${packageId}::${policyModule}::seal_approve`;
 
-  const txBytes = await tx.build({ client: suiClient });
+    tx.moveCall({
+      target,
+      arguments: [
+        tx.pure.vector('u8', hexToBytes(identity)),
+        ...policyArgs.map((arg) => tx.object(arg)),
+      ],
+    });
 
-  onProgress?.(30, 'Checking access policy...');
+    txBytes = await tx.build({ client: suiClient });
+    onProgress?.(30, 'Checking access policy...');
+  } else {
+    // No policy check - verification mode
+    onProgress?.(30, 'Skipping policy check (verification mode)...');
+    txBytes = new Uint8Array(0);
+  }
 
   try {
     // Check if envelope encryption
@@ -97,14 +104,16 @@ export async function decryptFile(
       throw error;
     }
 
-    // Check if policy denied
-    const errorMessage = error instanceof Error ? error.message : '';
-    if (
-      errorMessage.includes('denied') ||
-      errorMessage.includes('unauthorized') ||
-      errorMessage.includes('not allowed')
-    ) {
-      throw new PolicyDeniedError(policyModule);
+    // Check if policy denied (only relevant when policy module is specified)
+    if (policyModule) {
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (
+        errorMessage.includes('denied') ||
+        errorMessage.includes('unauthorized') ||
+        errorMessage.includes('not allowed')
+      ) {
+        throw new PolicyDeniedError(policyModule);
+      }
     }
 
     throw new DecryptionError(
@@ -124,7 +133,7 @@ async function decryptDirect(
   sessionKey: any,
   txBytes: Uint8Array,
   identity: string,
-  policyModule: string,
+  policyModule: string | undefined,
   onProgress?: ProgressCallback
 ): Promise<DecryptionResult> {
   onProgress?.(50, 'Decrypting with Seal...');
@@ -158,7 +167,7 @@ async function decryptEnvelope(
   sessionKey: any,
   txBytes: Uint8Array,
   identity: string,
-  policyModule: string,
+  policyModule: string | undefined,
   onProgress?: ProgressCallback
 ): Promise<DecryptionResult> {
   onProgress?.(40, 'Extracting sealed key...');

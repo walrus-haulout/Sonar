@@ -210,8 +210,8 @@ export interface DecryptFileOptions {
   packageId: string;
   /** Identity string (hex-encoded) */
   identity: string;
-  /** Policy module name (e.g., 'allowlist', 'purchase') */
-  policyModule: string;
+  /** Policy module name (e.g., 'allowlist', 'purchase'). Optional - omit for verification without policy */
+  policyModule?: string;
   /** Additional arguments for seal_approve function */
   policyArgs?: any[];
   /** Sui client for transaction building */
@@ -236,8 +236,8 @@ export interface DecryptionMetadata {
   decryptedAt: number;
   /** Identity used for decryption */
   identity: string;
-  /** Policy module used */
-  policyModule: string;
+  /** Policy module used (undefined if no policy check) */
+  policyModule?: string;
 }
 
 /**
