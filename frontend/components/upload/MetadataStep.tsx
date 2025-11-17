@@ -4,10 +4,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Info, Tag, Globe, FileText, ChevronDown, Plus, X } from 'lucide-react';
+import { Info, Tag, Globe, ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { DatasetMetadata, AudioFile } from '@/lib/types/upload';
+import type { DatasetMetadata, AudioFile } from '@/lib/types/upload';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
@@ -203,9 +204,9 @@ export function MetadataStep({
     categorization: true,
   });
 
-  // Initialize default values - handle undefined audioFiles
-  const isSingleFile = audioFiles && audioFiles.length === 1;
-  const defaultPerFileMetadata = (audioFiles && Array.isArray(audioFiles) ? audioFiles : []).map((f) => ({
+  // Initialize default values
+  const isSingleFile = audioFiles.length === 1;
+  const defaultPerFileMetadata = audioFiles.map((f) => ({
     fileId: f.id || '',
     title: f.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled Audio File',
     description: isSingleFile ? 'A single audio file.' : '', // Default description for single files
@@ -253,14 +254,29 @@ export function MetadataStep({
     if (isSingleFile && perFileMetadata && perFileMetadata.length === 1) {
       // Only update if the values have changed to avoid infinite loops
       const currentPerFile = perFileMetadata[0];
-      if (currentPerFile.title !== watchedTitle && watchedTitle.length >= 10) {
+      if (currentPerFile.title !== watchedTitle) {
         setValue(`perFileMetadata.0.title`, watchedTitle, { shouldValidate: true });
       }
-      if (currentPerFile.description !== watchedDescription && watchedDescription.length >= 10) {
+      if (currentPerFile.description !== watchedDescription) {
         setValue(`perFileMetadata.0.description`, watchedDescription, { shouldValidate: true });
       }
     }
   }, [isSingleFile, watchedTitle, watchedDescription, perFileMetadata, setValue]);
+
+  // Auto-update speaker array when speaker count changes
+  useEffect(() => {
+    if (speakerCount && speakerCount > 0) {
+      const newSpeakers = [];
+      for (let i = 0; i < speakerCount; i++) {
+        const existingSpeaker = speakers?.[i];
+        newSpeakers.push(
+          existingSpeaker || { id: String(i + 1), role: '', ageRange: '', gender: '', accent: '' }
+        );
+      }
+      setValue('speakers.speakers', newSpeakers);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speakerCount, setValue]);
 
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -300,18 +316,6 @@ export function MetadataStep({
     }
   };
 
-  const updateSpeakerCount = (count: number) => {
-    const newSpeakers = [];
-    for (let i = 0; i < count; i++) {
-      // Get existing speaker or create new one - handle both undefined and missing speakers
-      const existingSpeaker = speakers && Array.isArray(speakers) ? speakers[i] : null;
-      newSpeakers.push(
-        existingSpeaker || { id: String(i + 1), role: '', ageRange: '', gender: '', accent: '' }
-      );
-    }
-    setValue('speakers.speakerCount', count);
-    setValue('speakers.speakers', newSpeakers);
-  };
 
   const handleFormSubmit = (data: MetadataFormData) => {
     onSubmit(data);
@@ -338,6 +342,7 @@ export function MetadataStep({
             type="text"
             {...register('title')}
             placeholder="e.g., Natural Conversations in English"
+            aria-describedby={errors.title ? 'title-error' : undefined}
             className={cn(
               'w-full px-4 py-3 rounded-sonar',
               'bg-sonar-abyss/50 border',
@@ -350,7 +355,7 @@ export function MetadataStep({
             )}
           />
           {errors.title && (
-            <p className="text-sm text-sonar-coral font-mono">
+            <p id="title-error" className="text-sm text-sonar-coral font-mono">
               {errors.title.message}
             </p>
           )}
@@ -369,6 +374,7 @@ export function MetadataStep({
             {...register('description')}
             rows={4}
             placeholder="Describe your dataset, its contents, quality, and intended use cases..."
+            aria-describedby={errors.description ? 'description-error' : undefined}
             className={cn(
               'w-full px-4 py-3 rounded-sonar',
               'bg-sonar-abyss/50 border',
@@ -382,7 +388,7 @@ export function MetadataStep({
             )}
           />
           {errors.description && (
-            <p className="text-sm text-sonar-coral font-mono">
+            <p id="description-error" className="text-sm text-sonar-coral font-mono">
               {errors.description.message}
             </p>
           )}
@@ -473,8 +479,8 @@ export function MetadataStep({
           </p>
         )}
         <div className="space-y-3">
-          {audioFiles && Array.isArray(audioFiles) && audioFiles.length > 0 && audioFiles.map((file, index) => (
-            <div key={file.id} className="space-y-2 p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20">
+          {audioFiles.map((file, index) => (
+            <div key={file.id || index} className="space-y-2 p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20">
               <p className="text-xs font-mono text-sonar-signal font-semibold">
                 {file.file?.name || 'Unknown file'}
               </p>
@@ -544,6 +550,7 @@ export function MetadataStep({
                   : 'border-sonar-blue/50'
               )}
             >
+              <option value="">Unknown</option>
               {SAMPLE_RATES.map((rate) => (
                 <option key={rate} value={rate}>
                   {rate} Hz
@@ -662,7 +669,6 @@ export function MetadataStep({
               min="1"
               max="20"
               {...register('speakers.speakerCount', { valueAsNumber: true })}
-              onChange={(e) => updateSpeakerCount(parseInt(e.target.value) || 1)}
               className={cn(
                 'w-full px-3 py-2 rounded-sonar text-sm',
                 'bg-sonar-abyss/50 border',
@@ -676,7 +682,7 @@ export function MetadataStep({
           </div>
 
           <div className="space-y-2">
-            {speakers && Array.isArray(speakers) && speakers.length > 0 && speakers.map((speaker, idx) => (
+            {speakers?.map((speaker, idx) => (
               <div key={speaker.id} className="p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20 space-y-2">
                 <p className="text-xs font-mono text-sonar-signal font-semibold">Speaker {idx + 1}</p>
                 <input
@@ -835,6 +841,7 @@ export function MetadataStep({
             id="consent"
             type="checkbox"
             {...register('consent')}
+            aria-describedby={errors.consent ? 'consent-error' : undefined}
             className={cn(
               'mt-1 w-5 h-5 rounded border-2 flex-shrink-0',
               'focus:ring-2 focus:ring-sonar-signal focus:ring-offset-2 focus:ring-offset-sonar-abyss',
@@ -863,7 +870,7 @@ export function MetadataStep({
           </label>
         </div>
         {errors.consent && (
-          <p className="text-sm text-sonar-coral font-mono mt-2 font-semibold">
+          <p id="consent-error" className="text-sm text-sonar-coral font-mono mt-2 font-semibold">
             ⚠️ {errors.consent.message}
           </p>
         )}
@@ -976,7 +983,7 @@ function SectionCollapsible({
   title: string;
   isExpanded: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <GlassCard>
