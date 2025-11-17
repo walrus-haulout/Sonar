@@ -27,7 +27,7 @@ interface UseBrowserWalletFundingResult {
  * Handles batch transactions for large wallet counts (up to 100)
  */
 export function useBrowserWalletFunding(): UseBrowserWalletFundingResult {
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const currentAccount = useCurrentAccount();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,37 +43,30 @@ export function useBrowserWalletFunding(): UseBrowserWalletFundingResult {
    * Fund a batch of wallets in a single transaction
    */
   const fundWalletsBatch = useCallback(
-    (addresses: string[], batchIndex: number, totalBatches: number): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const tx = new Transaction();
+    async (addresses: string[], batchIndex: number, totalBatches: number): Promise<void> => {
+      const tx = new Transaction();
 
-        // Split and transfer to each wallet
-        addresses.forEach((address) => {
-          const coin = tx.splitCoins(tx.gas, [AMOUNT_PER_WALLET]);
-          tx.transferObjects([coin], address);
-        });
-
-        signAndExecute(
-          { transaction: tx },
-          {
-            onSuccess: () => {
-              setProgress((prev) => ({
-                totalWallets: prev?.totalWallets || addresses.length,
-                fundedCount: (prev?.fundedCount || 0) + addresses.length,
-                currentBatch: batchIndex + 1,
-                totalBatches,
-                isComplete: batchIndex + 1 === totalBatches,
-              }));
-              resolve();
-            },
-            onError: (err) => {
-              const errorMsg = err instanceof Error ? err.message : 'Transaction failed';
-              setError(errorMsg);
-              reject(new Error(errorMsg));
-            },
-          }
-        );
+      // Split and transfer to each wallet
+      addresses.forEach((address) => {
+        const coin = tx.splitCoins(tx.gas, [AMOUNT_PER_WALLET]);
+        tx.transferObjects([coin], address);
       });
+
+      try {
+        await signAndExecute({ transaction: tx });
+
+        setProgress((prev) => ({
+          totalWallets: prev?.totalWallets || addresses.length,
+          fundedCount: (prev?.fundedCount || 0) + addresses.length,
+          currentBatch: batchIndex + 1,
+          totalBatches,
+          isComplete: batchIndex + 1 === totalBatches,
+        }));
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Transaction failed';
+        setError(errorMsg);
+        throw new Error(errorMsg);
+      }
     },
     [signAndExecute]
   );
