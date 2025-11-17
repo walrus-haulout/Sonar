@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useSignAndExecuteTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { X, Calendar, Coins, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
@@ -35,7 +35,7 @@ const EXTENSION_OPTIONS = [
 
 export function ExtendStorageModal({ lease, onClose, onSuccess }: ExtendStorageModalProps) {
   const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
 
   const [selectedEpochs, setSelectedEpochs] = useState(26);
   const [isExtending, setIsExtending] = useState(false);
@@ -47,34 +47,30 @@ export function ExtendStorageModal({ lease, onClose, onSuccess }: ExtendStorageM
     setError(null);
 
     try {
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
 
       // Call storage_lease::extend_lease
       tx.moveCall({
         target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::storage_lease::extend_lease`,
         arguments: [
           tx.object(lease.id),
-          tx.pure(selectedEpochs, 'u64'),
+          tx.pure.u64(selectedEpochs),
         ],
       });
 
       signAndExecute(
         {
-          transactionBlock: tx,
-          options: {
-            showEffects: true,
-            showObjectChanges: true,
-          },
+          transaction: tx,
         },
         {
-          onSuccess: (result) => {
+          onSuccess: (result: any) => {
             console.log('Storage extended successfully:', result);
             setSuccess(true);
             setTimeout(() => {
               onSuccess();
             }, 2000);
           },
-          onError: (err) => {
+          onError: (err: any) => {
             console.error('Failed to extend storage:', err);
             setError(err.message || 'Failed to extend storage');
             setIsExtending(false);

@@ -233,8 +233,7 @@ export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
 
                 <div className="ml-4">
                   <SonarButton
-                    size="sm"
-                    variant={status === 'expired' ? 'default' : 'secondary'}
+                    variant={status === 'expired' ? 'primary' : 'secondary'}
                     onClick={() => setSelectedLease(lease)}
                   >
                     <Plus className="w-4 h-4 mr-2" />
