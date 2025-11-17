@@ -174,7 +174,7 @@ const metadataSchema = z.object({
       ageRange: z.string().optional(),
       gender: z.string().optional(),
       accent: z.string().optional(),
-    })),
+    })).optional(),
   }).optional(),
   categorization: z.object({
     useCase: z.string().optional().or(z.literal('')),
@@ -205,8 +205,9 @@ export function MetadataStep({
   });
 
   // Initialize default values
-  const isSingleFile = audioFiles.length === 1;
-  const defaultPerFileMetadata = audioFiles.map((f) => ({
+  const fileArray = audioFiles || [];
+  const isSingleFile = fileArray.length === 1;
+  const defaultPerFileMetadata = fileArray.map((f) => ({
     fileId: f.id || '',
     title: f.file?.name?.replace(/\.[^.]+$/, '') || 'Untitled Audio File',
     description: isSingleFile ? 'A single audio file.' : '', // Default description for single files
@@ -225,7 +226,7 @@ export function MetadataStep({
     formState: { errors, isValid },
   } = useForm<MetadataFormData>({
     resolver: zodResolver(metadataSchema),
-    mode: 'onChange',
+    mode: 'all',
     defaultValues: metadata || {
       title: '',
       description: '',
@@ -479,7 +480,7 @@ export function MetadataStep({
           </p>
         )}
         <div className="space-y-3">
-          {audioFiles.map((file, index) => (
+          {fileArray.map((file, index) => (
             <div key={file.id || index} className="space-y-2 p-3 bg-sonar-abyss/30 rounded-sonar border border-sonar-blue/20">
               <p className="text-xs font-mono text-sonar-signal font-semibold">
                 {file.file?.name || 'Unknown file'}
