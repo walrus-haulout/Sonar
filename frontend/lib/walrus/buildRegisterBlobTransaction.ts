@@ -115,8 +115,8 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
   const encodingTypeU8 = encodingTypeToU8(encodingType);
   console.log('[Walrus] Encoding type u8:', encodingTypeU8);
 
-  // Convert root hash to BigInt (default to 0 if not provided)
-  let rootHashBigInt = 0n;
+  // Convert root hash to BigInt (default to blobId if not provided)
+  let rootHashBigInt = blobIdBigInt;
   if (rootHash) {
     try {
       rootHashBigInt = base64UrlToBigInt(rootHash);
@@ -126,7 +126,7 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
       throw new Error(`Invalid root hash format: ${rootHash}`);
     }
   } else {
-    console.warn('[Walrus] No root hash provided, using 0x0. This may cause "Invalid params" error.');
+    console.log('[Walrus] No root hash provided, using blobId as root hash.');
   }
 
   if (!storageId) {
