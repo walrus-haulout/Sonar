@@ -162,7 +162,17 @@ export function useWalrusParallelUpload() {
     seal_policy_id: string,
     metadata: WalrusUploadMetadata,
     options: UploadBlobOptions = {}
-  ): Promise<{ blobId: string; previewBlobId?: string; mimeType?: string; previewMimeType?: string }> => {
+  ): Promise<{
+    blobId: string;
+    size: number;
+    certifiedEpoch?: number;
+    encodingType?: string;
+    storageId?: string;
+    deletable?: boolean;
+    previewBlobId?: string;
+    mimeType?: string;
+    previewMimeType?: string;
+  }> => {
     // Call existing Blockberry upload endpoint with retries
     const formData = new FormData();
     formData.append('file', encryptedBlob, options.fileName ?? 'encrypted-audio.bin');
@@ -208,6 +218,11 @@ export function useWalrusParallelUpload() {
 
     return {
       blobId: result.blobId,
+      size: result.size,
+      certifiedEpoch: result.certifiedEpoch,
+      encodingType: result.encodingType,
+      storageId: result.storageId,
+      deletable: result.deletable,
       previewBlobId: finalPreviewBlobId,
       mimeType: normalizeAudioMimeType(options.mimeType) ?? undefined,
       previewMimeType: effectivePreviewMimeType,

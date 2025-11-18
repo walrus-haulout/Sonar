@@ -161,17 +161,33 @@ export async function POST(request: NextRequest) {
 
     const walrusResult = await uploadResponse.json();
 
-    // Walrus returns: { newlyCreated: { blobObject: { id, ... }, ... } }
+    // Walrus returns: { newlyCreated: { blobObject: { id, blobId, encodingType, storage: { id, ... }, deletable, ... }, ... } }
     // or { alreadyCertified: { blobId, ... } }
     let blobId: string;
     let certifiedEpoch: number | undefined;
+    let encodingType: string | undefined;
+    let storageId: string | undefined;
+    let deletable: boolean | undefined;
 
     if (walrusResult.newlyCreated) {
-      blobId = walrusResult.newlyCreated.blobObject.blobId;
-      certifiedEpoch = walrusResult.newlyCreated.blobObject.certifiedEpoch;
+      const blobObject = walrusResult.newlyCreated.blobObject;
+      blobId = blobObject.blobId;
+      certifiedEpoch = blobObject.certifiedEpoch;
+      encodingType = blobObject.encodingType;
+      storageId = blobObject.storage?.id;
+      deletable = blobObject.deletable;
+
+      console.log('[Walrus] Extracted blob metadata:', {
+        blobId,
+        encodingType,
+        storageId,
+        deletable,
+        certifiedEpoch,
+      });
     } else if (walrusResult.alreadyCertified) {
       blobId = walrusResult.alreadyCertified.blobId;
       certifiedEpoch = walrusResult.alreadyCertified.certifiedEpoch;
+      console.log('[Walrus] Already certified blob, limited metadata');
     } else {
       return NextResponse.json(
         { error: 'Unexpected Walrus response format' },
@@ -179,11 +195,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return blobId and metadata to client
+    // Return blobId and complete metadata to client for sponsored transactions
     return NextResponse.json({
       blobId,
       certifiedEpoch,
-      fileSize: file.size,
+      size: file.size,
+      encodingType,
+      storageId,
+      deletable,
       seal_policy_id: sealPolicyId,
       strategy: 'blockberry', // Current upload strategy
       retryAttempt, // Include which attempt succeeded
