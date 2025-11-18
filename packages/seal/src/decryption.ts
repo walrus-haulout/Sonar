@@ -104,9 +104,37 @@ export async function decryptFile(
       throw error;
     }
 
+    // If direct decryption failed and data looks like it might be an envelope,
+    // try envelope decryption as fallback
+    const errorMessage = error instanceof Error ? error.message : '';
+    if (
+      !checkIfEnvelope(encryptedData) &&
+      (errorMessage.includes('RangeError') ||
+        errorMessage.includes('Invalid array length') ||
+        errorMessage.includes('buffer'))
+    ) {
+      try {
+        console.log(
+          '[Seal] Direct decryption failed with buffer/range error. Attempting envelope decryption fallback...'
+        );
+        onProgress?.(40, 'Retrying with envelope decryption...');
+        return await decryptEnvelope(
+          client,
+          encryptedData,
+          sessionKey,
+          txBytes,
+          identity,
+          policyModule,
+          onProgress
+        );
+      } catch (fallbackError) {
+        console.log('[Seal] Envelope decryption fallback also failed:', fallbackError);
+        // Continue to throw original error below
+      }
+    }
+
     // Check if policy denied (only relevant when policy module is specified)
     if (policyModule) {
-      const errorMessage = error instanceof Error ? error.message : '';
       if (
         errorMessage.includes('denied') ||
         errorMessage.includes('unauthorized') ||
@@ -208,14 +236,37 @@ async function decryptEnvelope(
  * Envelope format: [4 bytes key length][sealed key][encrypted file]
  */
 function checkIfEnvelope(data: Uint8Array): boolean {
-  if (data.length < 4) return false;
+  if (data.length < 4) {
+    console.log('[Seal] checkIfEnvelope: Data too short', { dataLength: data.length });
+    return false;
+  }
 
   // Read key length from first 4 bytes
   const view = new DataView(data.buffer, data.byteOffset, 4);
   const keyLength = view.getUint32(0, true); // little-endian
 
-  // Sanity check: sealed key should be 200-400 bytes
-  return keyLength >= 200 && keyLength <= 400 && data.length > keyLength + 4;
+  const isValid = keyLength >= 200 && keyLength <= 400 && data.length > keyLength + 4;
+
+  // Log the detection details
+  if (!isValid) {
+    console.log('[Seal] checkIfEnvelope: Detection failed', {
+      keyLength,
+      dataLength: data.length,
+      expectedEnvelopeSize: keyLength + 4,
+      reasons: {
+        keyLengthInRange: keyLength >= 200 && keyLength <= 400,
+        hasEnoughData: data.length > keyLength + 4,
+      },
+    });
+  } else {
+    console.log('[Seal] checkIfEnvelope: Envelope detected', {
+      keyLength,
+      dataLength: data.length,
+      encryptedFileSize: data.length - keyLength - 4,
+    });
+  }
+
+  return isValid;
 }
 
 /**

@@ -326,6 +326,39 @@ export function VerificationStep({
         'bytes'
       );
 
+      // Validate blob format before decryption
+      if (encryptedBlob.length < 4) {
+        throw new Error(
+          `Invalid encrypted blob: too small (${encryptedBlob.length} bytes, need at least 4)`
+        );
+      }
+
+      // Check envelope format early
+      const view = new DataView(
+        encryptedBlob.buffer,
+        encryptedBlob.byteOffset,
+        4
+      );
+      const keyLength = view.getUint32(0, true); // little-endian
+
+      console.log('[VerificationStep] Blob format validation:', {
+        blobSize: encryptedBlob.length,
+        firstFourBytes: keyLength,
+        likelyEnvelope: keyLength >= 200 && keyLength <= 400,
+        envelopeSizeCheck: encryptedBlob.length > keyLength + 4,
+      });
+
+      if (keyLength >= 200 && keyLength <= 400 && encryptedBlob.length > keyLength + 4) {
+        console.log(
+          '[VerificationStep] Envelope format detected - expecting decryptEnvelope to be used'
+        );
+      } else if (keyLength > 100000 || keyLength < 0) {
+        console.warn(
+          '[VerificationStep] WARNING: Invalid key length detected. Blob might be corrupted or not in envelope format.',
+          { keyLength, blobSize: encryptedBlob.length }
+        );
+      }
+
       // Stage 2: Decrypt using sessionKey
       setStages((prev) =>
         prev.map((stage) =>

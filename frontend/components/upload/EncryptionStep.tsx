@@ -155,10 +155,26 @@ export function EncryptionStep({
         if (encryptionResult.metadata.isEnvelope) {
           // Envelope format: [4 bytes key length][sealed key][encrypted file]
           // Extract sealed key (BCS-serialized encrypted object)
-          const keyLengthView = new DataView(encryptionResult.encryptedData.buffer, 0, 4);
+          // Use byteOffset to handle Uint8Array slices correctly
+          const keyLengthView = new DataView(
+            encryptionResult.encryptedData.buffer,
+            encryptionResult.encryptedData.byteOffset,
+            4
+          );
           const sealedKeyLength = keyLengthView.getUint32(0, true); // little-endian
+
+          // Validate sealed key length
+          if (sealedKeyLength < 100 || sealedKeyLength > 500) {
+            addLog(
+              `[File ${index + 1}/${totalFiles}] WARNING: Unexpected sealed key length: ${sealedKeyLength} (expected 200-400)`
+            );
+          }
+
           const sealedKey = encryptionResult.encryptedData.slice(4, 4 + sealedKeyLength);
           encryptedObjectBcsHex = bytesToHex(sealedKey);
+          addLog(
+            `[File ${index + 1}/${totalFiles}] Envelope extracted: keyLength=${sealedKeyLength}, totalSize=${encryptionResult.encryptedData.length}`
+          );
         } else {
           // Direct encryption: encryptedData is the BCS-serialized encrypted object
           encryptedObjectBcsHex = bytesToHex(encryptionResult.encryptedData);
