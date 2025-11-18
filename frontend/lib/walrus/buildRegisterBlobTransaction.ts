@@ -1,4 +1,6 @@
 import { Transaction } from '@mysten/sui/transactions';
+import type { SuiClient } from '@mysten/sui/client';
+import { collectCoinsForAmount } from '@/lib/sui/coin-utils';
 
 // Get env vars lazily to support testing
 function getWalrusConfig() {
@@ -22,7 +24,9 @@ export interface RegisterBlobParams {
   storageId?: string;
   deletable?: boolean;
   rootHash?: string;
-  walCoinId: string; // WAL coin for write payment
+  walCoinId?: string; // WAL coin for write payment (optional - will fetch if not provided)
+  sponsorAddress?: string; // If walCoinId not provided, fetch from this address
+  suiClient?: SuiClient; // Required if sponsorAddress is provided
 }
 
 /**
@@ -79,7 +83,53 @@ function base64UrlToBigInt(base64Url: string): bigint {
 
 /**
  * Build a Walrus registerBlob transaction for on-chain blob registration
- * This transaction will be used with sponsored execution pattern
+ *
+ * This version handles coin fetching automatically if needed.
+ * Use this when you don't have a pre-fetched coin object ID.
+ */
+export async function buildRegisterBlobTransactionAsync(params: RegisterBlobParams): Promise<Transaction> {
+  let resolvedWalCoinId = params.walCoinId;
+
+  // If no coin ID provided, fetch one from the sponsor address
+  if (!resolvedWalCoinId && params.sponsorAddress && params.suiClient) {
+    console.log('[Walrus] Fetching WAL coin for sponsor:', params.sponsorAddress);
+    const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
+
+    try {
+      const coinsResult = await collectCoinsForAmount(
+        params.suiClient,
+        params.sponsorAddress,
+        walCoinType,
+        1n // Minimum 1 unit needed
+      );
+
+      if (coinsResult.coins.length === 0) {
+        throw new Error(
+          'No WAL coins found in sponsor wallet. Please ensure you have WAL tokens to pay for blob storage.'
+        );
+      }
+
+      resolvedWalCoinId = coinsResult.coins[0].coinObjectId;
+      console.log('[Walrus] Found WAL coin:', resolvedWalCoinId);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch WAL coins';
+      throw new Error(`[Walrus] Could not obtain WAL payment coin: ${errorMsg}`);
+    }
+  }
+
+  if (!resolvedWalCoinId) {
+    throw new Error(
+      '[Walrus] WAL coin ID not provided and unable to fetch. ' +
+      'Either provide walCoinId or provide sponsorAddress with suiClient.'
+    );
+  }
+
+  return buildRegisterBlobTransaction({ ...params, walCoinId: resolvedWalCoinId });
+}
+
+/**
+ * Build a Walrus registerBlob transaction for on-chain blob registration
+ * This is the synchronous version - use buildRegisterBlobTransactionAsync if you need coin fetching.
  *
  * Requires a WAL coin to be provided for the write_payment parameter.
  */
@@ -94,6 +144,13 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
   }
   if (!systemObject) {
     throw new Error('WALRUS_SYSTEM_OBJECT is not defined');
+  }
+
+  if (!walCoinId) {
+    throw new Error(
+      '[Walrus] WAL coin ID is required. ' +
+      'Either provide walCoinId directly or use buildRegisterBlobTransactionAsync() to fetch it automatically.'
+    );
   }
 
   console.log('[Walrus] Building registerBlob transaction:', {

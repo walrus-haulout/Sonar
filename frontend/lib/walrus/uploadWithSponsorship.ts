@@ -1,6 +1,7 @@
 import type { Transaction } from '@mysten/sui/transactions';
+import type { SuiClient } from '@mysten/sui/client';
 import type { EphemeralSubWallet } from '@/hooks/useSubWalletOrchestrator';
-import { buildRegisterBlobTransaction } from './buildRegisterBlobTransaction';
+import { buildRegisterBlobTransaction, buildRegisterBlobTransactionAsync } from './buildRegisterBlobTransaction';
 
 const WALRUS_PUBLISHER_URL =
   process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-mainnet.walrus.space';
@@ -72,6 +73,8 @@ export async function uploadBlobToPublisher(
 /**
  * Build a registerBlob transaction for a sub-wallet
  * This transaction will be sponsored by the browser wallet
+ *
+ * @deprecated Use buildSponsoredRegisterBlobAsync instead for automatic WAL coin fetching
  */
 export function buildSponsoredRegisterBlob(
   subWallet: EphemeralSubWallet,
@@ -85,5 +88,25 @@ export function buildSponsoredRegisterBlob(
     storageId: uploadResult.storageId,
     deletable: uploadResult.deletable ?? true,
     walCoinId,
+  });
+}
+
+/**
+ * Build a registerBlob transaction with automatic WAL coin fetching
+ * The sponsor's address is used to fetch available WAL coins
+ */
+export async function buildSponsoredRegisterBlobAsync(
+  uploadResult: WalrusHttpUploadResult,
+  sponsorAddress: string,
+  suiClient: SuiClient
+): Promise<Transaction> {
+  return buildRegisterBlobTransactionAsync({
+    blobId: uploadResult.blobId,
+    size: uploadResult.size,
+    encodingType: uploadResult.encodingType,
+    storageId: uploadResult.storageId,
+    deletable: uploadResult.deletable ?? true,
+    sponsorAddress,
+    suiClient,
   });
 }

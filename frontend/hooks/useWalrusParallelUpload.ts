@@ -11,10 +11,11 @@
 
 import type { EncryptionMetadata } from '@sonar/seal';
 import { useState, useCallback } from 'react';
+import { useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
 import { useBrowserWalletSponsorship } from './useBrowserWalletSponsorship';
-import { buildSponsoredRegisterBlob } from '@/lib/walrus/uploadWithSponsorship';
+import { buildSponsoredRegisterBlobAsync } from '@/lib/walrus/uploadWithSponsorship';
 
 export interface WalrusUploadProgress {
   totalFiles: number;
@@ -86,6 +87,8 @@ function inferFileName(base: string, mime?: string): string {
 export function useWalrusParallelUpload() {
   const orchestrator = useSubWalletOrchestrator();
   const { sponsorTransactions } = useBrowserWalletSponsorship();
+  const suiClient = useSuiClient();
+  const currentAccount = useCurrentAccount();
 
   const [progress, setProgress] = useState<WalrusUploadProgress>({
     totalFiles: 0,
@@ -269,19 +272,35 @@ export function useWalrusParallelUpload() {
         totalProgress: 50,
       }));
 
-      // Step 2: Register on-chain ownership via sponsored transaction
-      console.log('[WalrusSponsored] Registering on-chain ownership with sponsorship');
+      // Step 2: Register on-chain ownership
+      console.log('[WalrusSponsored] Registering on-chain ownership with browser wallet');
 
-      await sponsorTransactions(
-        (subWallet, walCoinId) => Promise.resolve(buildSponsoredRegisterBlob(
-          subWallet,
+      if (!currentAccount) {
+        throw new Error('No wallet connected for blob registration');
+      }
+
+      try {
+        // Build transaction with automatic WAL coin fetching
+        const registerTx = await buildSponsoredRegisterBlobAsync(
           uploadResult,
-          walCoinId
-        )),
-        wallets
-      );
+          currentAccount.address,
+          suiClient
+        );
 
-      console.log('[WalrusSponsored] On-chain registration complete');
+        // Execute the transaction with sponsorTransactions
+        // which handles the signature and execution properly
+        await sponsorTransactions(
+          () => Promise.resolve(registerTx),
+          [{ address: currentAccount.address, keypair: null }] as any // Dummy sub-wallet entry for sponsorship interface
+        );
+
+        console.log('[WalrusSponsored] On-chain registration complete');
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to register blob on-chain';
+        console.error('[WalrusSponsored] On-chain registration failed:', errorMsg);
+        // Don't throw - blob upload succeeded even if registration failed
+        console.warn('[WalrusSponsored] Continuing despite registration failure');
+      }
 
       setProgress((prev) => ({
         ...prev,
