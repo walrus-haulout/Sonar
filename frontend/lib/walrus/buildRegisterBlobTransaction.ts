@@ -2,8 +2,8 @@ import { Transaction } from '@mysten/sui/transactions';
 
 // Get env vars lazily to support testing
 function getWalrusConfig() {
-  const packageId = process.env.NEXT_PUBLIC_WALRUS_PACKAGE_ID;
-  const systemObject = process.env.NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT;
+  const packageId = process.env.NEXT_PUBLIC_WALRUS_PACKAGE_ID?.trim();
+  const systemObject = process.env.NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT?.trim();
 
   if (!packageId) {
     console.error('Missing NEXT_PUBLIC_WALRUS_PACKAGE_ID');
