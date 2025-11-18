@@ -16,6 +16,9 @@ import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { useSubWalletOrchestrator, getUploadStrategy, distributeFileAcrossWallets } from './useSubWalletOrchestrator';
 import { useBrowserWalletSponsorship } from './useBrowserWalletSponsorship';
 import { buildSponsoredRegisterBlobAsync } from '@/lib/walrus/uploadWithSponsorship';
+import { useChunkedWalrusUpload } from './useChunkedWalrusUpload';
+
+const CHUNKED_UPLOAD_THRESHOLD = 100 * 1024 * 1024; // 100MB
 
 export interface WalrusUploadProgress {
   totalFiles: number;
@@ -89,6 +92,7 @@ export function useWalrusParallelUpload() {
   const { sponsorTransactions } = useBrowserWalletSponsorship();
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
+  const chunkedUpload = useChunkedWalrusUpload();
 
   const [progress, setProgress] = useState<WalrusUploadProgress>({
     totalFiles: 0,
@@ -302,6 +306,7 @@ export function useWalrusParallelUpload() {
 
   /**
    * Upload encrypted blob to Walrus (auto-selects strategy)
+   * Routes to chunked service for files ≥100MB
    */
   const uploadBlob = useCallback(async (
     encryptedBlob: Blob,
@@ -309,6 +314,31 @@ export function useWalrusParallelUpload() {
     metadata: WalrusUploadMetadata,
     options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
+    // Route large files (≥100MB) to dedicated chunked upload service
+    if (encryptedBlob.size >= CHUNKED_UPLOAD_THRESHOLD) {
+      try {
+        const chunkedResult = await chunkedUpload.uploadBlob(
+          encryptedBlob,
+          seal_policy_id,
+          metadata
+        );
+
+        return {
+          blobId: chunkedResult.blobIds[0],
+          seal_policy_id,
+          strategy: 'sponsored-parallel',
+          prototypeMetadata: {
+            walletCount: 4 + Math.floor((encryptedBlob.size / (1024 ** 3)) * 4),
+            chunkCount: chunkedResult.chunksCount,
+            estimatedChunkSize: Math.ceil(encryptedBlob.size / chunkedResult.chunksCount),
+          },
+        };
+      } catch (error) {
+        console.warn('Chunked upload failed, falling back to blockberry:', error);
+        // Fall through to regular upload
+      }
+    }
+
     const strategy = getUploadStrategy(encryptedBlob.size);
 
     setProgress((prev) => ({

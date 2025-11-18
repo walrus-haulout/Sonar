@@ -1,0 +1,91 @@
+import httpx
+import asyncio
+from typing import Optional, Dict, Any
+from config.platform import Config
+
+
+class WalrusUploader:
+    """Handles parallel uploads to Walrus publisher."""
+
+    def __init__(self, publisher_url: str = Config.WALRUS_PUBLISHER_URL):
+        self.publisher_url = publisher_url
+        self.client: Optional[httpx.AsyncClient] = None
+
+    async def __aenter__(self):
+        self.client = httpx.AsyncClient(timeout=300.0)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.aclose()
+
+    async def upload_chunk(
+        self,
+        chunk_data: bytes,
+        chunk_index: int,
+    ) -> str:
+        """
+        Upload a single chunk to Walrus.
+        Returns the blob_id.
+        """
+        if not self.client:
+            raise RuntimeError("Uploader not initialized. Use 'async with' context manager.")
+
+        headers = {
+            "Content-Type": "application/octet-stream",
+        }
+
+        try:
+            response = await self.client.put(
+                f"{self.publisher_url}/v1/blobs",
+                content=chunk_data,
+                headers=headers,
+            )
+            response.raise_for_status()
+
+            # Walrus publisher returns blob_id in JSON
+            result: Any = response.json()
+            blob_id: Optional[str] = result.get("blobId") or result.get("blob_id")
+
+            if not blob_id:
+                raise ValueError(f"No blob_id in response: {result}")
+
+            return blob_id
+
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Failed to upload chunk {chunk_index}: {e}")
+
+    async def upload_chunks_parallel(
+        self,
+        chunks: Dict[int, bytes],
+        max_concurrent: int = 4,
+    ) -> Dict[int, str]:
+        """
+        Upload multiple chunks in parallel.
+        Returns mapping of chunk_index -> blob_id.
+        """
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def upload_with_semaphore(index: int, data: bytes) -> tuple[int, str]:
+            async with semaphore:
+                blob_id = await self.upload_chunk(data, index)
+                return index, blob_id
+
+        tasks = [upload_with_semaphore(idx, data) for idx, data in chunks.items()]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+
+        return {idx: blob_id for idx, blob_id in results}
+
+    async def verify_blob(self, blob_id: str) -> bool:
+        """Verify that a blob exists on Walrus."""
+        if not self.client:
+            raise RuntimeError("Uploader not initialized. Use 'async with' context manager.")
+
+        try:
+            response = await self.client.head(
+                f"{self.publisher_url}/v1/{blob_id}",
+            )
+            status_code: int = response.status_code
+            return status_code == 200
+        except httpx.HTTPError:
+            return False

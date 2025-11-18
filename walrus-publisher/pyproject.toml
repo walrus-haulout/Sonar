@@ -1,0 +1,35 @@
+[project]
+name = "walrus-publisher"
+version = "0.1.0"
+description = "High-performance Walrus publisher with sub-wallet orchestration and file chunking"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi==0.109.2",
+  "uvicorn[standard]==0.27.0",
+  "pydantic==2.6.4",
+  "pydantic-settings==2.2.1",
+  "httpx==0.26.0",
+  "pyyaml==6.0.1",
+  "redis==5.0.1",
+  "python-multipart==0.0.6",
+  "pysui[ecdsa]==0.47.0",
+  "uvloop==0.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.7.1",
+  "types-redis==5.0.0.10",
+  "types-pyyaml==6.0.12.12",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

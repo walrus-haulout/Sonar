@@ -1,0 +1,22 @@
+name: walrus-publisher
+services:
+- name: api
+  dockerfile_path: Dockerfile
+  source_dir: .
+  github:
+    repo: your-org/sonar
+    branch: main
+    deploy_on_push: true
+  health_check:
+    http_path: /health
+    http_port: 8080
+  http_port: 8080
+  internal_ports:
+  - 8080
+  envs:
+  - key: PYTHONUNBUFFERED
+    value: "1"
+  - key: PYTHONDONTWRITEBYTECODE
+    value: "1"
+  - key: PORT
+    value: "8080"
