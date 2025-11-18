@@ -22,6 +22,7 @@ export interface RegisterBlobParams {
   storageId?: string;
   deletable?: boolean;
   rootHash?: string;
+  walCoinId: string; // WAL coin for write payment
 }
 
 /**
@@ -80,11 +81,10 @@ function base64UrlToBigInt(base64Url: string): bigint {
  * Build a Walrus registerBlob transaction for on-chain blob registration
  * This transaction will be used with sponsored execution pattern
  *
- * NOTE: This function currently does NOT include the write_payment parameter.
- * The write_payment (WAL coin) must be provided separately by the transaction sender.
+ * Requires a WAL coin to be provided for the write_payment parameter.
  */
 export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transaction {
-  const { blobId, size, encodingType, storageId, deletable = true, rootHash } = params;
+  const { blobId, size, encodingType, storageId, deletable = true, rootHash, walCoinId } = params;
   const { packageId, systemObject } = getWalrusConfig();
 
   const tx = new Transaction();
@@ -144,8 +144,7 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
       tx.pure.u64(size), // size: u64
       tx.pure.u8(encodingTypeU8), // encoding_type: u8
       tx.pure.bool(deletable), // deletable: bool
-      // NOTE: write_payment: &mut Coin<WAL> is not included here
-      // The caller must provide WAL payment through other means
+      tx.object(walCoinId), // write_payment: &mut Coin<WAL>
     ],
   });
 

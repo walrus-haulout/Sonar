@@ -273,9 +273,10 @@ export function useWalrusParallelUpload() {
       console.log('[WalrusSponsored] Registering on-chain ownership with sponsorship');
 
       await sponsorTransactions(
-        (subWallet) => Promise.resolve(buildSponsoredRegisterBlob(
+        (subWallet, walCoinId) => Promise.resolve(buildSponsoredRegisterBlob(
           subWallet,
-          uploadResult
+          uploadResult,
+          walCoinId
         )),
         wallets
       );

@@ -75,7 +75,8 @@ export async function uploadBlobToPublisher(
  */
 export function buildSponsoredRegisterBlob(
   subWallet: EphemeralSubWallet,
-  uploadResult: WalrusHttpUploadResult
+  uploadResult: WalrusHttpUploadResult,
+  walCoinId: string
 ): Transaction {
   return buildRegisterBlobTransaction({
     blobId: uploadResult.blobId,
@@ -83,5 +84,6 @@ export function buildSponsoredRegisterBlob(
     encodingType: uploadResult.encodingType,
     storageId: uploadResult.storageId,
     deletable: uploadResult.deletable ?? true,
+    walCoinId,
   });
 }

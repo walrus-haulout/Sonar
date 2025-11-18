@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Transaction } from '@mysten/sui/transactions';
 import { useSignAndExecuteTransaction, useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { collectCoinsForAmount } from '@/lib/sui/coin-utils';
 import type { EphemeralSubWallet } from './useSubWalletOrchestrator';
 
 interface SponsorshipProgress {
@@ -14,7 +15,7 @@ interface SponsorshipProgress {
 
 interface UseBrowserWalletSponsorshipResult {
   sponsorTransactions: (
-    buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+    buildTransaction: (subWallet: EphemeralSubWallet, walCoinId: string) => Promise<Transaction>,
     subWallets: EphemeralSubWallet[]
   ) => Promise<void>;
   progress: SponsorshipProgress | null;
@@ -44,11 +45,40 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
   }, []);
 
   /**
+   * Get a WAL coin from the sponsor's wallet for write payment
+   */
+  const getWalCoinForPayment = useCallback(
+    async (sponsorAddress: string): Promise<string> => {
+      const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
+
+      try {
+        const coinsResult = await collectCoinsForAmount(
+          suiClient,
+          sponsorAddress,
+          walCoinType,
+          1n // We just need at least 1 lamport/unit to pass the function
+        );
+
+        if (coinsResult.coins.length === 0) {
+          throw new Error('No WAL coins available for write payment. Please ensure you have WAL tokens in your wallet.');
+        }
+
+        // Return the first coin's object ID
+        return coinsResult.coins[0].coinObjectId;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to find WAL coins';
+        throw new Error(`[BrowserWalletSponsorship] ${errorMsg}`);
+      }
+    },
+    [suiClient]
+  );
+
+  /**
    * Sponsor a batch of transactions
    */
   const sponsorTransactionBatch = useCallback(
     async (
-      buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+      buildTransaction: (subWallet: EphemeralSubWallet, walCoinId: string) => Promise<Transaction>,
       subWallets: EphemeralSubWallet[],
       batchIndex: number,
       totalBatches: number
@@ -57,10 +87,13 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
         throw new Error('No wallet connected');
       }
 
+      // Get WAL coin once for the batch
+      const walCoinId = await getWalCoinForPayment(currentAccount.address);
+
       // Process transactions sequentially within the batch
       for (const subWallet of subWallets) {
         // Build transaction for this sub-wallet
-        const tx = await buildTransaction(subWallet);
+        const tx = await buildTransaction(subWallet, walCoinId);
 
         // Step 1: Build transaction kind without gas data
         const kindBytes = await tx.build({
@@ -97,7 +130,7 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
         }
       }
     },
-    [currentAccount, suiClient, signAndExecute]
+    [currentAccount, suiClient, signAndExecute, getWalCoinForPayment]
   );
 
   /**
@@ -105,7 +138,7 @@ export function useBrowserWalletSponsorship(): UseBrowserWalletSponsorshipResult
    */
   const sponsorTransactions = useCallback(
     async (
-      buildTransaction: (subWallet: EphemeralSubWallet) => Promise<Transaction>,
+      buildTransaction: (subWallet: EphemeralSubWallet, walCoinId: string) => Promise<Transaction>,
       subWallets: EphemeralSubWallet[]
     ): Promise<void> => {
       if (!currentAccount) {

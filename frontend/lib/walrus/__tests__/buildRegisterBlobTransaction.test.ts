@@ -15,6 +15,7 @@ describe('buildRegisterBlobTransaction', () => {
             encodingType: 'RS2',
             storageId: '0xabcdef123456',
             deletable: true,
+            walCoinId: '0xcoin1234567890',
         });
 
         expect(tx).toBeDefined();
@@ -26,6 +27,7 @@ describe('buildRegisterBlobTransaction', () => {
         const tx = buildRegisterBlobTransaction({
             blobId,
             size: 100,
+            walCoinId: '0xcoin1234567890',
         });
 
         expect(tx).toBeDefined();
@@ -39,7 +41,7 @@ describe('buildRegisterBlobTransaction', () => {
         };
 
         const blobId = 'AsnZ3ALiO0f2YFHpF1fa-PKhCNnzIwtpPOOKZgG9arA';
-        buildRegisterBlobTransaction({ blobId, size: 100 });
+        buildRegisterBlobTransaction({ blobId, size: 100, walCoinId: '0xcoin1234567890' });
 
         console.warn = consoleSpy;
         expect(warnCalled).toBe(true);
