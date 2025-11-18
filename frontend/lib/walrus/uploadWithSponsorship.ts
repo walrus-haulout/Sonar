@@ -9,6 +9,9 @@ export interface WalrusHttpUploadResult {
   blobId: string;
   certifiedEpoch?: number;
   size: number;
+  encodingType?: string;
+  storageId?: string;
+  deletable?: boolean;
 }
 
 /**
@@ -38,10 +41,17 @@ export async function uploadBlobToPublisher(
 
   let blobId: string;
   let certifiedEpoch: number | undefined;
+  let encodingType: string | undefined;
+  let storageId: string | undefined;
+  let deletable: boolean | undefined;
 
   if (result.newlyCreated) {
-    blobId = result.newlyCreated.blobObject.blobId;
-    certifiedEpoch = result.newlyCreated.blobObject.certifiedEpoch;
+    const blobObj = result.newlyCreated.blobObject;
+    blobId = blobObj.blobId;
+    certifiedEpoch = blobObj.certifiedEpoch;
+    encodingType = blobObj.encodingType;
+    storageId = blobObj.storage?.id;
+    deletable = blobObj.deletable;
   } else if (result.alreadyCertified) {
     blobId = result.alreadyCertified.blobId;
     certifiedEpoch = result.alreadyCertified.certifiedEpoch;
@@ -53,6 +63,9 @@ export async function uploadBlobToPublisher(
     blobId,
     certifiedEpoch,
     size: blob.size,
+    encodingType,
+    storageId,
+    deletable,
   };
 }
 
@@ -62,15 +75,13 @@ export async function uploadBlobToPublisher(
  */
 export function buildSponsoredRegisterBlob(
   subWallet: EphemeralSubWallet,
-  blobId: string,
-  size: number,
-  epochs: number = 26
+  uploadResult: WalrusHttpUploadResult
 ): Transaction {
   return buildRegisterBlobTransaction({
-    blobId,
-    size,
-    epochs,
-    deletable: true,
-    ownerAddress: subWallet.address,
+    blobId: uploadResult.blobId,
+    size: uploadResult.size,
+    encodingType: uploadResult.encodingType,
+    storageId: uploadResult.storageId,
+    deletable: uploadResult.deletable ?? true,
   });
 }

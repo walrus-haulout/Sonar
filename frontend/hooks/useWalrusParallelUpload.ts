@@ -260,9 +260,7 @@ export function useWalrusParallelUpload() {
       await sponsorTransactions(
         (subWallet) => Promise.resolve(buildSponsoredRegisterBlob(
           subWallet,
-          uploadResult.blobId,
-          totalSize,
-          26
+          uploadResult
         )),
         wallets
       );
