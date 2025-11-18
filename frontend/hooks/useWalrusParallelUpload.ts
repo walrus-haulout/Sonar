@@ -266,42 +266,7 @@ export function useWalrusParallelUpload() {
 
       console.log('[WalrusSponsored] Blob uploaded with retries, blobId:', uploadResult.blobId);
 
-      setProgress((prev) => ({
-        ...prev,
-        fileProgress: 50,
-        totalProgress: 50,
-      }));
-
-      // Step 2: Register on-chain ownership
-      console.log('[WalrusSponsored] Registering on-chain ownership with browser wallet');
-
-      if (!currentAccount) {
-        throw new Error('No wallet connected for blob registration');
-      }
-
-      try {
-        // Build transaction with automatic WAL coin fetching
-        const registerTx = await buildSponsoredRegisterBlobAsync(
-          uploadResult,
-          currentAccount.address,
-          suiClient
-        );
-
-        // Execute the transaction with sponsorTransactions
-        // which handles the signature and execution properly
-        await sponsorTransactions(
-          () => Promise.resolve(registerTx),
-          [{ address: currentAccount.address, keypair: null }] as any // Dummy sub-wallet entry for sponsorship interface
-        );
-
-        console.log('[WalrusSponsored] On-chain registration complete');
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Failed to register blob on-chain';
-        console.error('[WalrusSponsored] On-chain registration failed:', errorMsg);
-        // Don't throw - blob upload succeeded even if registration failed
-        console.warn('[WalrusSponsored] Continuing despite registration failure');
-      }
-
+      // HTTP publisher handles all registration internally - no manual register_blob call needed
       setProgress((prev) => ({
         ...prev,
         stage: 'finalizing',
