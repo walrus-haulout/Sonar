@@ -692,6 +692,10 @@ module sonar::marketplace {
         // Create submission object
         let submission_id = object::new(ctx);
         let submission_id_copy = object::uid_to_inner(&submission_id);
+        let registration_uid = object::new(ctx);
+        let registration_id = object::uid_to_inner(&registration_uid);
+        // Mark registration as used (will be dropped)
+        object::delete(registration_uid);
 
         let submission = AudioSubmission {
             id: submission_id,
@@ -721,6 +725,7 @@ module sonar::marketplace {
         // Emit event with blob_id for backend access
         event::emit(SubmissionCreated {
             submission_id: submission_id_copy,
+            registration_id,
             uploader,
             seal_policy_id: submission.seal_policy_id,
             walrus_blob_id: submission.walrus_blob_id,

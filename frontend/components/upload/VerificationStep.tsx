@@ -373,10 +373,19 @@ export function VerificationStep({
       // For uploader verification, use open access policy
       // This allows the uploader to verify their encrypted content before blockchain submission
       // After submission, access switches to HybridPolicy with purchase/admin controls
+      // Pass upload timestamp and Clock for time-window validation (15 minutes)
+      const uploadTimestampMs = Date.now();
+      const clockObjectId = '0x6'; // Sui Clock immutable shared object
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
-        { policyModule: 'open_access_policy', policyArgs: [] },
+        {
+          policyModule: 'open_access_policy',
+          policyArgs: [
+            uploadTimestampMs.toString(),  // upload_timestamp_ms parameter
+            clockObjectId,                  // Clock parameter
+          ],
+        },
         (progress) => {
           // Update progress: progress is 0-1, map to 30-80% for decryption stage
           const progressPercent = 30 + Math.floor(progress * 50);

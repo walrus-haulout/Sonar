@@ -46,32 +46,68 @@ export async function decryptFile(
     throw new SessionExpiredError();
   }
 
+  // Validate suiClient configuration
+  if (!suiClient) {
+    throw new DecryptionError(
+      undefined,
+      'Sui client not configured. Please provide a valid SuiClient instance.'
+    );
+  }
+
   // Build policy approval transaction only if policy module is specified
   let txBytes: Uint8Array;
 
   if (policyModule) {
     onProgress?.(10, 'Building policy transaction...');
 
-    const tx = new Transaction();
-    tx.setSender(sessionKey.getAddress());
-    const target = `${packageId}::${policyModule}::seal_approve`;
+    try {
+      const tx = new Transaction();
+      tx.setSender(sessionKey.getAddress());
+      const target = `${packageId}::${policyModule}::seal_approve`;
 
-    tx.moveCall({
-      target,
-      arguments: [
-        tx.pure.vector('u8', hexToBytes(identity)),
-        ...policyArgs.map((arg) => tx.object(arg)),
-      ],
-    });
+      // Handle policy arguments based on policy type
+      const args: any[] = [tx.pure.vector('u8', hexToBytes(identity))];
 
-    txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
-    onProgress?.(30, 'Checking access policy...');
+      if (policyModule === 'open_access_policy' && policyArgs.length >= 2) {
+        // open_access_policy expects: seal_id (vector<u8>), upload_timestamp_ms (u64), clock (Clock)
+        const uploadTimestampMs = BigInt(policyArgs[0]);
+        const clockObjectId = policyArgs[1];
+
+        args.push(tx.pure.u64(uploadTimestampMs));
+        args.push(tx.object(clockObjectId));
+      } else {
+        // Default: treat all remaining args as object IDs
+        args.push(...policyArgs.map((arg) => tx.object(arg)));
+      }
+
+      tx.moveCall({
+        target,
+        arguments: args,
+      });
+
+      txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+      onProgress?.(30, 'Checking access policy...');
+    } catch (error) {
+      throw new DecryptionError(
+        undefined,
+        'Failed to build policy transaction',
+        error instanceof Error ? error : undefined
+      );
+    }
   } else {
     // No policy - build empty transaction
     onProgress?.(30, 'Building empty transaction...');
-    const tx = new Transaction();
-    tx.setSender(sessionKey.getAddress());
-    txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+    try {
+      const tx = new Transaction();
+      tx.setSender(sessionKey.getAddress());
+      txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+    } catch (error) {
+      throw new DecryptionError(
+        undefined,
+        'Failed to build empty transaction',
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   try {
@@ -363,6 +399,14 @@ export async function batchDecrypt(
 
   onProgress?.(0, `Decrypting ${items.length} files...`);
 
+  // Validate suiClient configuration
+  if (!suiClient) {
+    throw new DecryptionError(
+      undefined,
+      'Sui client not configured. Please provide a valid SuiClient instance.'
+    );
+  }
+
   // Ensure session is valid
   ensureSessionValid(sessionKey);
 
@@ -378,50 +422,55 @@ export async function batchDecrypt(
     );
 
     // Build batch transaction
-    const tx = new Transaction();
-    tx.setSender(sessionKey.getAddress());
-    batch.forEach((item) => {
-      tx.moveCall({
-        target: `${packageId}::${policyModule}::seal_approve`,
-        arguments: [tx.pure.vector('u8', hexToBytes(item.identity))],
+    try {
+      const tx = new Transaction();
+      tx.setSender(sessionKey.getAddress());
+      batch.forEach((item) => {
+        tx.moveCall({
+          target: `${packageId}::${policyModule}::seal_approve`,
+          arguments: [tx.pure.vector('u8', hexToBytes(item.identity))],
+        });
       });
-    });
 
-    const txBytes = await tx.build({ client: suiClient });
+      const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
 
-    // Pre-fetch decryption keys for batch
-    await client.fetchKeys({
-      ids: batch.map((item) => item.identity),
-      sessionKey,
-      txBytes,
-      threshold,
-    });
+      // Pre-fetch decryption keys for batch
+      await client.fetchKeys({
+        ids: batch.map((item) => item.identity),
+        sessionKey,
+        txBytes,
+        threshold,
+      });
 
-    onProgress?.(
-      50 + (i / items.length) * 50,
-      `Decrypting batch ${batchNum}/${totalBatches}...`
-    );
+      onProgress?.(
+        50 + (i / items.length) * 50,
+        `Decrypting batch ${batchNum}/${totalBatches}...`
+      );
 
-    // Decrypt files using cached keys
-    for (const item of batch) {
-      try {
-        const result = await decryptFile(
-          client,
-          item.encryptedData,
-          {
-            sessionKey,
-            packageId,
-            identity: item.identity,
-            policyModule,
-            suiClient,
-          }
-        );
+      // Decrypt files using cached keys
+      for (const item of batch) {
+        try {
+          const result = await decryptFile(
+            client,
+            item.encryptedData,
+            {
+              sessionKey,
+              packageId,
+              identity: item.identity,
+              policyModule,
+              suiClient,
+            }
+          );
 
-        results.set(item.identity, result);
-      } catch (error) {
-        console.error(`Failed to decrypt ${item.identity}:`, error);
-        // Continue with other files
+          results.set(item.identity, result);
+        } catch (error) {
+          console.error(`Failed to decrypt ${item.identity}:`, error);
+          // Continue with other files
+        }
       }
+    } catch (batchError) {
+      console.error(`Failed to process batch ${batchNum}/${totalBatches}:`, batchError);
+      // Continue with next batch
     }
   }
 
