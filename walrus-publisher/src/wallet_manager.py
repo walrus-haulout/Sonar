@@ -1,9 +1,9 @@
 import os
-import uuid
-from hashlib import sha256
 from typing import Optional
 import redis.asyncio as redis
 from pydantic import BaseModel
+from pysui.sui.sui_crypto import SuiKeyPair
+from config.platform import Config
 
 
 class WalletInfo(BaseModel):
@@ -29,12 +29,13 @@ class WalletManager:
 
     async def create_ephemeral_wallet(self, session_id: str, index: int) -> WalletInfo:
         await self._ensure_connected()
-        seed = f"{session_id}:{index}".encode()
-        private_key = sha256(seed).hexdigest()[:64]
+        keypair = SuiKeyPair.new_ed25519()
+        private_key = keypair.private_key.hex()
+        address = keypair.to_address().address
         wallet_key = f"wallet:{session_id}:{index}"
         if self.redis:
-            await self.redis.setex(wallet_key, 3600, private_key)
-        address = f"0x{sha256(private_key.encode()).hexdigest()[:40]}"
+            wallet_data = f"{private_key}|{address}"
+            await self.redis.setex(wallet_key, Config.SESSION_TTL, wallet_data)
         return WalletInfo(address=address, private_key=private_key)
 
     async def get_wallet(self, session_id: str, index: int) -> Optional[WalletInfo]:
@@ -42,10 +43,13 @@ class WalletManager:
         if not self.redis:
             return None
         wallet_key = f"wallet:{session_id}:{index}"
-        private_key = await self.redis.get(wallet_key)
-        if not private_key:
+        wallet_data = await self.redis.get(wallet_key)
+        if not wallet_data:
             return None
-        address = f"0x{sha256(private_key.encode()).hexdigest()[:40]}"
+        parts = wallet_data.split("|")
+        if len(parts) != 2:
+            return None
+        private_key, address = parts
         return WalletInfo(address=address, private_key=private_key)
 
     async def create_wallet_pool(

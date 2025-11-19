@@ -69,5 +69,8 @@ class Config:
     CHUNK_MAX_SIZE = int(os.getenv("CHUNK_MAX_SIZE", "536870912"))  # 500MB
     SESSION_TTL = int(os.getenv("SESSION_TTL", "3600"))  # 1 hour
 
+    # Security
+    WALRUS_PUBLISHER_API_KEYS = os.getenv("WALRUS_PUBLISHER_API_KEYS", "")
+
     # Feature flags
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"

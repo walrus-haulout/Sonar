@@ -1,10 +1,11 @@
 import time
 import asyncio
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthCredentials
 import uvicorn
 
 from config.platform import Config
@@ -23,9 +24,24 @@ from uploader import WalrusUploader
 from transaction_builder import TransactionBuilder
 
 
-orchestrator: UploadOrchestrator
-transaction_builder: TransactionBuilder
-start_time: float
+orchestrator: Optional[UploadOrchestrator] = None
+transaction_builder: Optional[TransactionBuilder] = None
+start_time: float = 0.0
+
+MAX_FILE_SIZE = 13 * (1024**3)
+
+security = HTTPBearer(auto_error=False)
+api_keys = set(Config.WALRUS_PUBLISHER_API_KEYS.split(",")) if Config.WALRUS_PUBLISHER_API_KEYS else set()
+
+
+async def verify_api_key(credentials: Optional[HTTPAuthCredentials] = Depends(security)) -> str:
+    if not api_keys:
+        return "no-auth-required"
+    if not credentials:
+        raise HTTPException(403, "Missing API key")
+    if credentials.credentials not in api_keys:
+        raise HTTPException(403, "Invalid API key")
+    return credentials.credentials
 
 
 app = FastAPI(
@@ -83,11 +99,17 @@ async def health_check():
 
 
 @app.post("/upload/init", response_model=UploadInitResponse)
-async def init_upload(request: UploadInitRequest):
+async def init_upload(request: UploadInitRequest, _: str = Depends(verify_api_key)):
     try:
         if request.file_size <= 0:
             raise HTTPException(400, "File size must be positive")
+        if request.file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                400,
+                f"File size exceeds maximum of 13 GiB ({MAX_FILE_SIZE} bytes)",
+            )
 
+        assert orchestrator is not None
         session_id, chunk_plans = await orchestrator.create_upload_session(request.file_size)
 
         return UploadInitResponse(
@@ -108,8 +130,10 @@ async def upload_chunk(
     session_id: str,
     chunk_index: int,
     file: UploadFile = File(...),
+    _: str = Depends(verify_api_key),
 ):
     try:
+        assert orchestrator is not None
         session = await orchestrator.get_session(session_id)
         if not session:
             raise HTTPException(404, f"Session {session_id} not found")
@@ -134,8 +158,10 @@ async def upload_chunk(
 
 
 @app.get("/upload/{session_id}/transactions", response_model=TransactionsResponse)
-async def get_transactions(session_id: str):
+async def get_transactions(session_id: str, _: str = Depends(verify_api_key)):
     try:
+        assert orchestrator is not None
+        assert transaction_builder is not None
         session = await orchestrator.get_session(session_id)
         if not session:
             raise HTTPException(404, f"Session {session_id} not found")
@@ -180,8 +206,9 @@ async def get_transactions(session_id: str):
 
 
 @app.post("/upload/{session_id}/finalize", response_model=FinalizeResponse)
-async def finalize_upload(session_id: str, request: FinalizeRequest):
+async def finalize_upload(session_id: str, request: FinalizeRequest, _: str = Depends(verify_api_key)):
     try:
+        assert orchestrator is not None
         session = await orchestrator.get_session(session_id)
         if not session:
             raise HTTPException(404, f"Session {session_id} not found")
@@ -213,8 +240,16 @@ async def get_upload_status(session_id: str):
     import json
 
     async def event_generator() -> AsyncGenerator[str, None]:
+        start_time = time.time()
+        timeout_seconds = 3600
+
         try:
+            assert orchestrator is not None
             while True:
+                if time.time() - start_time > timeout_seconds:
+                    yield f"data: {{'error': 'Timeout waiting for upload completion'}}\n\n"
+                    break
+
                 status = await orchestrator.get_upload_status(session_id)
                 if not status:
                     yield f"data: {{'error': 'Session not found'}}\n\n"
@@ -227,6 +262,8 @@ async def get_upload_status(session_id: str):
 
                 await asyncio.sleep(1)
 
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             yield f"data: {{'error': '{str(e)}'}}\n\n"
 

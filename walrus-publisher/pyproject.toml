@@ -12,15 +12,20 @@ dependencies = [
   "pyyaml==6.0.1",
   "redis==5.0.1",
   "python-multipart==0.0.6",
-  "pysui[ecdsa]==0.47.0",
+  "pysui>=0.47.0",
   "uvloop==0.19.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "mypy==1.7.1",
-  "types-redis==5.0.0.10",
-  "types-pyyaml==6.0.12.12",
+  "mypy>=1.7.1",
+  "types-redis>=5.0.0",
+  "types-pyyaml>=6.0.12",
+  "pytest>=7.4.3",
+  "pytest-asyncio>=0.23.3",
+  "pytest-cov>=4.1.0",
+  "httpx>=0.26.0",
+  "fakeredis>=2.21.1",
 ]
 
 [build-system]
