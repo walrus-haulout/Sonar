@@ -65,6 +65,23 @@ export function PublishStep({
   const publishDisabled =
     isPending || isAtomicSubmitting || publishState !== 'idle';
 
+  // Helper to clear pending upload from local storage
+  const clearPendingUpload = (walrusBlobId: string) => {
+    try {
+      const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+      const fileIdToRemove = Object.keys(pending).find(
+        key => pending[key].walrusBlobId === walrusBlobId
+      );
+      if (fileIdToRemove) {
+        delete pending[fileIdToRemove];
+        localStorage.setItem('pending_uploads', JSON.stringify(pending));
+        console.log('[PublishStep] Cleared pending upload for blob:', walrusBlobId);
+      }
+    } catch (e) {
+      console.error('Failed to clear pending upload:', e);
+    }
+  };
+
   const handlePublish = async () => {
     if (!account) {
       onError('Please connect your wallet first');
@@ -128,11 +145,39 @@ export function PublishStep({
 
         try {
           console.log('[PublishStep] Starting atomic blob registration flow');
+
+          // Check for existing registration ID in pending uploads (Recovery Flow)
+          let existingRegistrationId: string | undefined;
+          try {
+            const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+            const fileId = Object.keys(pending).find(k => pending[k].walrusBlobId === walrusUpload.blobId);
+            if (fileId && pending[fileId].registrationId) {
+              existingRegistrationId = pending[fileId].registrationId;
+              console.log('[PublishStep] Found existing registration ID:', existingRegistrationId);
+            }
+          } catch (e) { console.warn('Failed to check pending uploads:', e); }
+
           const result = await submitWithAtomicRegistration(
             walrusUpload.blobId,
             walrusUpload.previewBlobId || '',
             walrusUpload.seal_policy_id,
-            3600 // duration_seconds (placeholder - should come from audioFile)
+            3600, // duration_seconds (placeholder - should come from audioFile)
+            undefined, // previewBlobHash
+            {
+              existingRegistrationId,
+              onPhase1Complete: (regId) => {
+                // Save registration ID to pending uploads
+                try {
+                  const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+                  const fileId = Object.keys(pending).find(k => pending[k].walrusBlobId === walrusUpload.blobId);
+                  if (fileId) {
+                    pending[fileId] = { ...pending[fileId], registrationId: regId };
+                    localStorage.setItem('pending_uploads', JSON.stringify(pending));
+                    console.log('[PublishStep] Saved registration ID to pending uploads:', regId);
+                  }
+                } catch (e) { console.warn('Failed to save registration ID:', e); }
+              }
+            }
           );
 
           console.log('[PublishStep] Atomic registration successful:', result);
@@ -144,6 +189,9 @@ export function PublishStep({
             datasetId: result.submissionId,
             confirmed: true,
           });
+
+          // Clear pending upload
+          clearPendingUpload(walrusUpload.blobId);
 
           return;
         } catch (error) {
@@ -165,273 +213,153 @@ export function PublishStep({
         {
           onSuccess: async (result) => {
             setPublishState('confirming');
-
-            // Fetch full transaction details to get objectChanges
             let datasetId: string | null = null;
 
             try {
               const txDetails = await suiClient.getTransactionBlock({
                 digest: result.digest,
-                options: {
-                  showObjectChanges: true,
-                  showEffects: true,
-                  showEvents: true,
-                },
+                options: { showObjectChanges: true, showEffects: true, showEvents: true },
               });
 
-              // Extract dataset ID from objectChanges
-              // Check for both AudioSubmission (single-file) and DatasetSubmission (multi-file)
+              // 1. Check objectChanges
               if (txDetails.objectChanges) {
-                // Debug: log all object changes to understand structure
-                console.log('Transaction objectChanges (full):', JSON.stringify(txDetails.objectChanges, null, 2));
-                
                 for (const change of txDetails.objectChanges) {
-                  // Skip published modules - they don't have objectType/objectId
-                  if (change.type === 'published') {
-                    continue;
-                  }
-
-                  // Log every change for debugging
-                  console.log('Checking object change:', {
-                    type: change.type,
-                    objectType: change.objectType,
-                    objectId: change.objectId,
-                    fullChange: change,
-                    allKeys: Object.keys(change),
-                  });
-
-                  // Extract objectType and objectId (safe after type guard)
-                  const objectType = change.objectType;
+                  if (change.type === 'published') continue;
                   const objectId = change.objectId || extractObjectId(change);
-                  
-                  // Check if this object matches our submission types
-                  // The objectType might be the full package path like "0x...::marketplace::AudioSubmission"
-                  if (objectType &&
-                      (objectType.includes('::marketplace::AudioSubmission') ||
-                       objectType.includes('::marketplace::DatasetSubmission'))) {
-                    if (objectId) {
-                      datasetId = objectId;
-                      console.log(`Found dataset ID from ${change.type} object:`, datasetId, 'type:', objectType);
-                      break;
-                    }
-                  }
-                  
-                  // Also check objectType without the package prefix (just the module::type part)
-                  if (objectType && objectId && !datasetId) {
-                    const typeParts = objectType.split('::');
-                    if (typeParts.length >= 3) {
-                      const moduleType = typeParts.slice(-2).join('::'); // e.g., "marketplace::AudioSubmission"
-                      if (moduleType === 'marketplace::AudioSubmission' || moduleType === 'marketplace::DatasetSubmission') {
-                        datasetId = objectId;
-                        console.log(`Found dataset ID by module type from ${change.type} object:`, datasetId);
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Fallback 1: Extract from events if objectChanges didn't work
-              // The contract emits SubmissionCreated or DatasetSubmissionCreated events with submission_id
-              if (!datasetId && txDetails.events && CHAIN_CONFIG.packageId) {
-                console.log('Trying to extract dataset ID from events (full):', JSON.stringify(txDetails.events, null, 2));
-                
-                for (const event of txDetails.events) {
-                  const eventType = event.type;
-                  const parsedJson = event.parsedJson as SuiEventParsedJson | undefined;
-
-                  console.log('Checking event:', { eventType, parsedJson });
-
-                  // Check for SubmissionCreated or DatasetSubmissionCreated events
-                  if (eventType &&
-                      (eventType.includes('::marketplace::SubmissionCreated') ||
-                       eventType.includes('::marketplace::DatasetSubmissionCreated')) &&
-                      parsedJson?.submission_id) {
-                    datasetId = parsedJson.submission_id;
-                    console.log('Found dataset ID from events:', datasetId);
+                  if (change.objectType && objectId &&
+                    (change.objectType.includes('::marketplace::AudioSubmission') ||
+                      change.objectType.includes('::marketplace::DatasetSubmission'))) {
+                    datasetId = objectId;
                     break;
                   }
                 }
               }
-              
-              // Fallback 2: Check effects.created and fetch objects to verify their types
-              // This handles cases where objectChanges doesn't show created objects
+
+              // 2. Check events
+              if (!datasetId && txDetails.events && CHAIN_CONFIG.packageId) {
+                for (const event of txDetails.events) {
+                  const parsedJson = event.parsedJson as SuiEventParsedJson | undefined;
+                  if ((event.type.includes('SubmissionCreated') || event.type.includes('DatasetSubmissionCreated')) &&
+                    parsedJson?.submission_id) {
+                    datasetId = parsedJson.submission_id;
+                    break;
+                  }
+                }
+              }
+
+              // 3. Check effects.created
               if (!datasetId && txDetails.effects?.created) {
-                console.log('Checking effects.created:', JSON.stringify(txDetails.effects.created, null, 2));
-                
-                // Fetch each created object to check its type
                 for (const createdRef of txDetails.effects.created) {
                   try {
                     const objectId = extractObjectId(createdRef);
                     if (!objectId) continue;
-                    
-                    console.log('Fetching created object to check type:', objectId);
-                    const obj = await suiClient.getObject({
-                      id: objectId,
-                      options: { showType: true, showContent: false },
-                    });
-                    
-                    const objectType = obj.data?.type;
-                    console.log('Created object type:', objectType);
-                    
-                    if (objectType &&
-                        (objectType.includes('::marketplace::AudioSubmission') ||
-                         objectType.includes('::marketplace::DatasetSubmission'))) {
+                    const obj = await suiClient.getObject({ id: objectId, options: { showType: true } });
+                    if (obj.data?.type &&
+                      (obj.data.type.includes('::marketplace::AudioSubmission') ||
+                        obj.data.type.includes('::marketplace::DatasetSubmission'))) {
                       datasetId = objectId;
-                      console.log('Found dataset ID from effects.created:', datasetId);
                       break;
                     }
-                  } catch (err) {
-                    console.warn('Failed to fetch created object:', err);
-                    // Continue to next object
-                  }
+                  } catch (e) { console.warn(e); }
                 }
               }
-              
-              // Fallback 3: Check effects.mutated for objects that might be our submission
-              // Sometimes objects are created and immediately mutated in the same transaction
+
+              // 4. Check effects.mutated
               if (!datasetId && txDetails.effects?.mutated) {
-                console.log('Checking effects.mutated:', JSON.stringify(txDetails.effects.mutated, null, 2));
-                
                 for (const mutatedRef of txDetails.effects.mutated) {
                   try {
                     const objectId = extractObjectId(mutatedRef);
-                    if (!objectId) continue;
-                    
-                    // Skip marketplace and coin objects we already saw
-                    if (objectId === CHAIN_CONFIG.marketplaceId) continue;
-                    
-                    console.log('Fetching mutated object to check type:', objectId);
-                    const obj = await suiClient.getObject({
-                      id: objectId,
-                      options: { showType: true, showContent: false },
-                    });
-                    
-                    const objectType = obj.data?.type;
-                    console.log('Mutated object type:', objectType);
-                    
-                    if (objectType &&
-                        (objectType.includes('::marketplace::AudioSubmission') ||
-                         objectType.includes('::marketplace::DatasetSubmission'))) {
+                    if (!objectId || objectId === CHAIN_CONFIG.marketplaceId) continue;
+                    const obj = await suiClient.getObject({ id: objectId, options: { showType: true } });
+                    if (obj.data?.type &&
+                      (obj.data.type.includes('::marketplace::AudioSubmission') ||
+                        obj.data.type.includes('::marketplace::DatasetSubmission'))) {
                       datasetId = objectId;
-                      console.log('Found dataset ID from effects.mutated:', datasetId);
                       break;
                     }
-                  } catch (err) {
-                    console.warn('Failed to fetch mutated object:', err);
-                    // Continue to next object
-                  }
+                  } catch (e) { console.warn(e); }
                 }
               }
 
-              if (!datasetId) {
-                console.error('Failed to extract dataset ID from transaction', {
-                  objectChanges: txDetails.objectChanges,
-                  events: txDetails.events,
-                  effects: txDetails.effects,
+              if (datasetId) {
+                console.log('Dataset ID confirmed:', datasetId);
+
+                // Clear pending uploads
+                if (isMultiFile && walrusUpload.files) {
+                  walrusUpload.files.forEach(f => clearPendingUpload(f.blobId));
+                } else {
+                  clearPendingUpload(walrusUpload.blobId);
+                }
+
+                // Backend Metadata Storage
+                try {
+                  const fallbackDuration = Math.max(1, Math.floor(walrusUpload.files?.[0]?.duration ?? 3600));
+                  const fallbackPreviewId = walrusUpload.previewBlobId ?? walrusUpload.files?.[0]?.previewBlobId ?? null;
+                  const fallbackMime = walrusUpload.mimeType || walrusUpload.files?.[0]?.mimeType || 'audio/mpeg';
+                  const fallbackPreviewMime = walrusUpload.previewMimeType ?? walrusUpload.files?.[0]?.previewMimeType ?? null;
+
+                  const files = walrusUpload.files && walrusUpload.files.length > 0
+                    ? walrusUpload.files.map(file => ({
+                      file_index: file.file_index || 0,
+                      seal_policy_id: file.seal_policy_id,
+                      blob_id: file.blobId,
+                      preview_blob_id: file.previewBlobId ?? null,
+                      duration_seconds: Math.max(1, Math.floor(file.duration)),
+                      mime_type: file.mimeType || walrusUpload.mimeType || 'audio/mpeg',
+                      preview_mime_type: file.previewMimeType ?? walrusUpload.previewMimeType ?? null,
+                    }))
+                    : [{
+                      file_index: 0,
+                      seal_policy_id: walrusUpload.seal_policy_id,
+                      blob_id: walrusUpload.blobId,
+                      preview_blob_id: fallbackPreviewId,
+                      duration_seconds: fallbackDuration,
+                      mime_type: fallbackMime,
+                      preview_mime_type: fallbackPreviewMime,
+                    }];
+
+                  const verificationMetadata = verification ? {
+                    verification_id: verification.id,
+                    quality_score: verification.qualityScore,
+                    safety_passed: verification.safetyPassed,
+                    verified_at: new Date().toISOString(),
+                  } : null;
+
+                  const datasetMetadata = {
+                    title: metadata.title,
+                    description: metadata.description,
+                    languages: metadata.languages,
+                    tags: metadata.tags,
+                    per_file_metadata: metadata.perFileMetadata,
+                    audio_quality: metadata.audioQuality || null,
+                    speakers: metadata.speakers || null,
+                    categorization: metadata.categorization,
+                  };
+
+                  await fetch(`/api/datasets/${datasetId}/seal-metadata`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ files, verification: verificationMetadata, metadata: datasetMetadata }),
+                  });
+                } catch (error) {
+                  console.error('Error storing seal metadata:', error);
+                }
+
+                onPublished({
+                  txDigest: result.digest,
+                  datasetId,
+                  confirmed: true,
                 });
-                onError('Failed to extract dataset ID from blockchain transaction. Please try again.');
-                setPublishState('idle');
                 return;
               }
+
+              throw new Error('Failed to extract dataset ID from transaction');
+
             } catch (error) {
-              console.error('Failed to fetch transaction details:', error);
-              onError('Failed to fetch transaction details. Please try again.');
+              console.error('Transaction confirmation failed:', error);
+              onError('Failed to confirm transaction.');
               setPublishState('idle');
-              return;
             }
-
-            // Store seal metadata in backend for decryption
-            // SECURITY: backup_key storage temporarily disabled pending encryption implementation
-            // TODO: Implement backup key encryption with user's public key before persistence
-            // This requires:
-            // 1. Derive/obtain user's public key from wallet
-            // 2. Encrypt backup_key with user's public key
-            // 3. Only user can decrypt their backup keys for recovery
-            // This maintains the recovery property while keeping keys secure
-            try {
-              // Prepare file metadata for all files
-              const fallbackDuration = Math.max(
-                1,
-                Math.floor(walrusUpload.files?.[0]?.duration ?? 3600)
-              );
-              const fallbackPreviewId = walrusUpload.previewBlobId ?? walrusUpload.files?.[0]?.previewBlobId ?? null;
-              const fallbackMime = walrusUpload.mimeType || walrusUpload.files?.[0]?.mimeType || 'audio/mpeg';
-              const fallbackPreviewMime =
-                walrusUpload.previewMimeType ?? walrusUpload.files?.[0]?.previewMimeType ?? null;
-
-              const files = walrusUpload.files && walrusUpload.files.length > 0
-                ? walrusUpload.files.map(file => ({
-                    file_index: file.file_index || 0,
-                    seal_policy_id: file.seal_policy_id,
-                    // backup_key: _uint8ArrayToBase64(file.backupKey), // TODO: Add backupKey to FileUploadResult type
-                    blob_id: file.blobId,
-                    preview_blob_id: file.previewBlobId ?? null,
-                    duration_seconds: Math.max(1, Math.floor(file.duration)),
-                    mime_type: file.mimeType || walrusUpload.mimeType || 'audio/mpeg',
-                    preview_mime_type: file.previewMimeType ?? walrusUpload.previewMimeType ?? null,
-                  }))
-                : [{
-                    file_index: 0,
-                    seal_policy_id: walrusUpload.seal_policy_id,
-                    // backup_key: _uint8ArrayToBase64(walrusUpload.backupKey), // TODO: Add backupKey to WalrusUploadResult type
-                    blob_id: walrusUpload.blobId,
-                    preview_blob_id: fallbackPreviewId,
-                    duration_seconds: fallbackDuration,
-                    mime_type: fallbackMime,
-                    preview_mime_type: fallbackPreviewMime,
-                  }];
-
-              // Include verification metadata
-              const verificationMetadata = verification ? {
-                verification_id: verification.id,
-                quality_score: verification.qualityScore,
-                safety_passed: verification.safetyPassed,
-                verified_at: new Date().toISOString(),
-              } : null;
-
-              // Include comprehensive dataset metadata
-              const datasetMetadata = {
-                title: metadata.title,
-                description: metadata.description,
-                languages: metadata.languages,
-                tags: metadata.tags,
-                per_file_metadata: metadata.perFileMetadata,
-                audio_quality: metadata.audioQuality || null, // Optional - null if not provided
-                speakers: metadata.speakers || null, // Optional - null if not provided
-                categorization: metadata.categorization,
-              };
-
-              const metadataResponse = await fetch(`/api/datasets/${datasetId}/seal-metadata`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  files,
-                  verification: verificationMetadata,
-                  metadata: datasetMetadata,
-                }),
-              });
-
-              if (!metadataResponse.ok) {
-                const error = await metadataResponse.json();
-                console.error('Failed to store seal metadata:', error);
-                // Don't fail the entire publish - user can still use the dataset
-                // but decryption might require manual backup key entry
-              }
-            } catch (error) {
-              console.error('Error storing seal metadata:', error);
-              // Continue with publish - metadata storage is non-critical
-            }
-
-            const publishResult: PublishResult = {
-              txDigest: result.digest,
-              datasetId,
-              confirmed: true,
-            };
-
-            onPublished(publishResult);
           },
           onError: (error) => {
             console.error('Transaction failed:', error);

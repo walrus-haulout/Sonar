@@ -150,9 +150,9 @@ export function useAtomicBlobRegistration() {
           tx.pure.string(previewBlobId),
           previewBlobHash
             ? tx.pure.option(
-                'vector<u8>',
-                Array.from(previewBlobHash)
-              )
+              'vector<u8>',
+              Array.from(previewBlobHash)
+            )
             : tx.pure.option('vector<u8>', null),
         ],
       });
@@ -241,16 +241,27 @@ export function useAtomicBlobRegistration() {
     previewBlobId: string,
     sealPolicyId: string,
     durationSeconds: number,
-    previewBlobHash?: Uint8Array
+    previewBlobHash?: Uint8Array,
+    options?: {
+      existingRegistrationId?: string;
+      onPhase1Complete?: (registrationId: string) => void;
+    }
   ): Promise<{ submissionId: string; registrationId: string }> {
     try {
-      // Phase 1: Register blob intent on-chain
-      console.log('[AtomicRegistration] Phase 1: Registering blob intent...');
-      const registrationId = await registerBlobIntent(
-        sealPolicyId,
-        durationSeconds
-      );
-      console.log('[AtomicRegistration] Phase 1 complete:', registrationId);
+      let registrationId = options?.existingRegistrationId;
+
+      if (!registrationId) {
+        // Phase 1: Register blob intent on-chain
+        console.log('[AtomicRegistration] Phase 1: Registering blob intent...');
+        registrationId = await registerBlobIntent(
+          sealPolicyId,
+          durationSeconds
+        );
+        console.log('[AtomicRegistration] Phase 1 complete:', registrationId);
+        options?.onPhase1Complete?.(registrationId);
+      } else {
+        console.log('[AtomicRegistration] Skipping Phase 1, using existing registration:', registrationId);
+      }
 
       // Phase 2: Finalize submission with actual blob IDs
       console.log('[AtomicRegistration] Phase 2: Finalizing with blob IDs...');

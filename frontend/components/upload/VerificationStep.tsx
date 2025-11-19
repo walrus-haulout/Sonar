@@ -193,29 +193,12 @@ export function VerificationStep({
         encryptedObjectHexLength: encryptedObjectHex?.length ?? 0,
       });
 
-      // Validate that encryptedObjectBcsHex is present and not empty
-      if (!encryptedObjectHex || encryptedObjectHex.trim().length === 0) {
-        const errorMsg = 'Missing encrypted object data. Please try encrypting again.';
-        console.error('[VerificationStep] Validation failed:', errorMsg);
-        console.error('[VerificationStep] Missing data:', {
-          blobId,
-          identity: identity?.slice(0, 20),
-          encryptedObjectHex: encryptedObjectHex ? 'present' : 'missing',
-          walrusUploadPresent: !!walrusUpload,
-          walrusUploadEncryptedHexPresent: !!walrusUpload?.encryptedObjectBcsHex,
-        });
-        setErrorMessage(errorMsg);
-        setVerificationState('failed');
-        onError(errorMsg);
-        return;
-      }
-
       console.log('[VerificationStep] Validation passed. Starting encrypted blob verification...');
 
       setTotalFiles(1);
       setCurrentFileIndex(0);
 
-      await verifyEncryptedBlob(blobId, identity, encryptedObjectHex);
+      await verifyEncryptedBlob(blobId, identity);
     } else {
       // Legacy file upload flow (for backwards compatibility)
       if (!audioFile && (!audioFiles || audioFiles.length === 0)) {
@@ -306,8 +289,7 @@ export function VerificationStep({
 
   const verifyEncryptedBlob = async (
     walrusBlobId: string,
-    sealIdentity: string,
-    encryptedObjectBcsHex: string
+    sealIdentity: string
   ) => {
     try {
       if (!sessionKey) {
@@ -449,8 +431,8 @@ export function VerificationStep({
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.detail ||
-            errorData.error ||
-            `HTTP ${response.status}: ${response.statusText}`
+          errorData.error ||
+          `HTTP ${response.status}: ${response.statusText}`
         );
       }
 

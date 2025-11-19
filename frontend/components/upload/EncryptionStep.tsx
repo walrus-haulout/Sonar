@@ -109,6 +109,65 @@ export function EncryptionStep({
 
       addLog(`Starting upload flow for ${totalFiles} file${totalFiles > 1 ? 's' : ''}`);
 
+      // Check for pending uploads (Recovery Flow)
+      try {
+        const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+        const allFilesUploaded = filesToProcess.every(f =>
+          pending[f.id!] && pending[f.id!].status === 'uploaded' && pending[f.id!].walrusBlobId
+        );
+
+        if (allFilesUploaded) {
+          addLog('Found previously uploaded files. Resuming recovery flow...');
+
+          const results = filesToProcess.map((f, index) => {
+            const p = pending[f.id!];
+            return {
+              file_index: index,
+              fileId: f.id!,
+              blobId: p.walrusBlobId,
+              previewBlobId: p.previewBlobId,
+              seal_policy_id: p.sealPolicyId,
+              encryptedObjectBcsHex: p.encryptedObjectBcsHex || '',
+              duration: p.duration,
+              metadata: p.metadata,
+              encryptedData: new Uint8Array(0), // Data not needed for verification (fetches from Walrus)
+              mimeType: p.metadata.originalMimeType,
+              previewMimeType: p.metadata.originalMimeType,
+            };
+          });
+
+          setCompletedFiles(results);
+          setStage('finalizing');
+          setProgress(100);
+
+          // Prepare final result immediately
+          const result = results[0];
+          const bundleDiscountBps = totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
+
+          const finalResult = {
+            encryptedBlob: new Blob([]), // Empty blob as we don't have data
+            seal_policy_id: result.seal_policy_id,
+            encryptedObjectBcsHex: result.encryptedObjectBcsHex,
+            metadata: result.metadata,
+            previewBlob: new Blob([]), // Empty preview
+            walrusBlobId: result.blobId,
+            previewBlobId: result.previewBlobId,
+            files: isMultiFile ? results : undefined,
+            bundleDiscountBps: isMultiFile ? bundleDiscountBps : undefined,
+            mimeType: result.mimeType,
+            previewMimeType: result.previewMimeType,
+          };
+
+          addLog('Resumed successfully from local storage');
+          setTimeout(() => {
+            onEncrypted(finalResult);
+          }, 500);
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to check pending uploads:', e);
+      }
+
       // Step 1: Initialize orchestrator and determine strategy
       addLog('Initializing upload orchestrator...');
       const totalSize = filesToProcess.reduce((sum, f) => sum + f.file.size, 0);
@@ -128,6 +187,20 @@ export function EncryptionStep({
       // Step 2: Process files in parallel
       const filePromises = filesToProcess.map(async (file, index) => {
         addLog(`[File ${index + 1}/${totalFiles}] Starting encryption: ${file.file.name}`);
+
+        // Track pending upload for recovery
+        try {
+          const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+          pending[file.id!] = {
+            fileName: file.file.name,
+            fileSize: file.file.size,
+            timestamp: Date.now(),
+            status: 'encrypting',
+          };
+          localStorage.setItem('pending_uploads', JSON.stringify(pending));
+        } catch (e) {
+          console.error('Failed to save pending upload:', e);
+        }
 
         // Encrypt
         const encryptionResult = await encrypt(
@@ -151,7 +224,6 @@ export function EncryptionStep({
         // Extract encrypted object BCS hex for verifier
         // For envelope encryption, extract sealed key from envelope
         // For direct encryption, use encryptedData directly
-        let encryptedObjectBcsHex: string;
         if (encryptionResult.metadata.isEnvelope) {
           // Envelope format: [4 bytes key length][sealed key][encrypted file]
           // Sealed key size (~150-800 bytes) is constant and independent of file size
@@ -175,14 +247,17 @@ export function EncryptionStep({
           }
 
           const sealedKey = encryptionResult.encryptedData.slice(4, 4 + sealedKeyLength);
-          encryptedObjectBcsHex = bytesToHex(sealedKey);
           addLog(
             `[File ${index + 1}/${totalFiles}] Envelope extracted: keyLength=${sealedKeyLength}, totalSize=${encryptionResult.encryptedData.length}`
           );
-        } else {
-          // Direct encryption: encryptedData is the BCS-serialized encrypted object
-          encryptedObjectBcsHex = bytesToHex(encryptionResult.encryptedData);
         }
+
+        // Create BCS-compatible encrypted object
+        // We used to convert the full encrypted data to hex, but for large files (e.g. 100MB)
+        // this causes memory crashes and localStorage overflow.
+        // Since VerificationStep fetches from Walrus and PublishStep doesn't use this,
+        // we can safely omit it or use a placeholder.
+        const encryptedObjectBcsHex = ''; // Placeholder to save memory
 
         // Generate preview
         setStage('generating-preview');
@@ -214,6 +289,30 @@ export function EncryptionStep({
         );
 
         addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
+
+        // Update pending upload with blob ID
+        try {
+          const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+          if (pending[file.id!]) {
+            pending[file.id!] = {
+              ...pending[file.id!],
+              status: 'uploaded',
+              walrusBlobId: walrusResult.blobId,
+              previewBlobId: walrusResult.previewBlobId,
+              sealPolicyId: encryptionResult.identity,
+              encryptedObjectBcsHex, // Save for verification
+              duration: file.duration,
+              // Store minimal metadata needed for registration
+              metadata: {
+                originalMimeType: resolvedMimeType,
+                originalFileName: file.file.name,
+              }
+            };
+            localStorage.setItem('pending_uploads', JSON.stringify(pending));
+          }
+        } catch (e) {
+          console.error('Failed to update pending upload:', e);
+        }
 
         const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
         setProgress(40 + completedProgress);
