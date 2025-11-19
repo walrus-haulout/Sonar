@@ -154,6 +154,8 @@ export function EncryptionStep({
         let encryptedObjectBcsHex: string;
         if (encryptionResult.metadata.isEnvelope) {
           // Envelope format: [4 bytes key length][sealed key][encrypted file]
+          // Sealed key size (~150-800 bytes) is constant and independent of file size
+          // It encrypts only the 32-byte AES key, not the file data itself
           // Extract sealed key (BCS-serialized encrypted object)
           // Use byteOffset to handle Uint8Array slices correctly
           const keyLengthView = new DataView(
@@ -164,9 +166,11 @@ export function EncryptionStep({
           const sealedKeyLength = keyLengthView.getUint32(0, true); // little-endian
 
           // Validate sealed key length
-          if (sealedKeyLength < 100 || sealedKeyLength > 500) {
+          // Valid range depends on number of key servers (typically 2-7)
+          // Minimum: ~150 bytes (2 servers), Maximum: ~800 bytes (7+ servers)
+          if (sealedKeyLength < 150 || sealedKeyLength > 800) {
             addLog(
-              `[File ${index + 1}/${totalFiles}] WARNING: Unexpected sealed key length: ${sealedKeyLength} (expected 200-400)`
+              `[File ${index + 1}/${totalFiles}] WARNING: Unexpected sealed key length: ${sealedKeyLength} (expected 150-800 for 2-7 key servers)`
             );
           }
 

@@ -245,7 +245,7 @@ function checkIfEnvelope(data: Uint8Array): boolean {
   const view = new DataView(data.buffer, data.byteOffset, 4);
   const keyLength = view.getUint32(0, true); // little-endian
 
-  const isValid = keyLength >= 200 && keyLength <= 400 && data.length > keyLength + 4;
+  const isValid = keyLength >= 150 && keyLength <= 800 && data.length > keyLength + 4;
 
   // Log the detection details
   if (!isValid) {
@@ -254,7 +254,7 @@ function checkIfEnvelope(data: Uint8Array): boolean {
       dataLength: data.length,
       expectedEnvelopeSize: keyLength + 4,
       reasons: {
-        keyLengthInRange: keyLength >= 200 && keyLength <= 400,
+        keyLengthInRange: keyLength >= 150 && keyLength <= 800,
         hasEnoughData: data.length > keyLength + 4,
       },
     });
