@@ -56,7 +56,7 @@ export async function createSession(
     const { signature } = await signMessage(message);
 
     // Set signature on session key
-    sessionKey.setPersonalMessageSignature(signature);
+    await sessionKey.setPersonalMessageSignature(signature);
 
     // Cache session
     await cacheSession(packageId, sessionKey, address);
