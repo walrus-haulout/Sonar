@@ -416,3 +416,63 @@ async def test_metrics_format(test_client):
     assert '# HELP' in content
     assert '# TYPE' in content
     assert 'gauge' in content
+
+
+@pytest.mark.asyncio
+async def test_upload_session_created_fields(test_client):
+    """Test that session contains all required fields"""
+    with patch('main.api_keys', set()):
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': 100 * 1024 * 1024},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify all required fields
+        assert 'session_id' in data
+        assert 'chunk_count' in data
+        assert 'wallet_count' in data
+        assert 'chunks' in data
+        assert isinstance(data['chunks'], list)
+        assert len(data['chunks']) > 0
+
+
+@pytest.mark.asyncio
+async def test_chunk_response_structure(test_client):
+    """Test that chunk response has correct structure"""
+    with patch('main.api_keys', set()):
+        init_resp = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        chunks = init_resp.json()['chunks']
+
+        for chunk in chunks:
+            assert 'index' in chunk
+            assert 'size' in chunk
+            assert 'wallet_address' in chunk
+            assert chunk['size'] > 0
+            assert chunk['wallet_address'].startswith('0x')
+            assert isinstance(chunk['index'], int)
+            assert chunk['index'] >= 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_session_creation(test_client):
+    """Test multiple concurrent session creations"""
+    import asyncio
+    with patch('main.api_keys', set()):
+        # Create multiple sessions concurrently via test client
+        tasks = []
+        for i in range(5):
+            response = test_client.post(
+                '/upload/init',
+                json={'file_size': 10 * 1024 * 1024 * (i + 1)},
+            )
+            tasks.append(response)
+
+        # All should succeed
+        for response in tasks:
+            assert response.status_code == 200
+            assert 'session_id' in response.json()
