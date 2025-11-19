@@ -1,0 +1,75 @@
+import pytest
+import json
+from unittest.mock import AsyncMock, patch
+from orchestrator import UploadOrchestrator
+
+
+@pytest.mark.asyncio
+async def test_create_upload_session(orchestrator):
+    session_id, chunk_plans = await orchestrator.create_upload_session(100 * 1024 * 1024)
+    assert session_id
+    assert len(chunk_plans) > 0
+    for plan in chunk_plans:
+        assert plan.index >= 0
+        assert plan.size > 0
+        assert plan.wallet_address
+
+
+@pytest.mark.asyncio
+async def test_get_session_from_memory(orchestrator):
+    session_id, _ = await orchestrator.create_upload_session(50 * 1024 * 1024)
+    session = await orchestrator.get_session(session_id)
+    assert session is not None
+    assert session.session_id == session_id
+
+
+@pytest.mark.asyncio
+async def test_get_nonexistent_session(orchestrator):
+    session = await orchestrator.get_session("nonexistent_id")
+    assert session is None
+
+
+@pytest.mark.asyncio
+async def test_record_chunk_upload(orchestrator):
+    session_id, _ = await orchestrator.create_upload_session(100 * 1024 * 1024)
+    await orchestrator.record_chunk_upload(session_id, 0, "blob_id_123")
+    session = await orchestrator.get_session(session_id)
+    assert session is not None
+    assert "0" in session.blob_ids or 0 in session.blob_ids
+
+
+@pytest.mark.asyncio
+async def test_get_upload_status(orchestrator):
+    session_id, chunk_plans = await orchestrator.create_upload_session(10 * 1024 * 1024)
+    status = await orchestrator.get_upload_status(session_id)
+    assert status is not None
+    assert status.session_id == session_id
+    assert status.total_chunks == len(chunk_plans)
+    assert status.chunks_uploaded == 0
+
+
+@pytest.mark.asyncio
+async def test_record_transaction_submitted(orchestrator):
+    session_id, _ = await orchestrator.create_upload_session(50 * 1024 * 1024)
+    initial_status = await orchestrator.get_upload_status(session_id)
+    initial_submitted = initial_status.transactions_submitted
+    await orchestrator.record_transaction_submitted(session_id)
+    updated_status = await orchestrator.get_upload_status(session_id)
+    assert updated_status.transactions_submitted == initial_submitted + 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_session(orchestrator):
+    session_id, _ = await orchestrator.create_upload_session(30 * 1024 * 1024)
+    assert session_id in orchestrator.sessions
+    await orchestrator.cleanup_session(session_id, 4)
+    assert session_id not in orchestrator.sessions
+
+
+@pytest.mark.asyncio
+async def test_get_wallet_for_chunk(orchestrator):
+    session_id, _ = await orchestrator.create_upload_session(100 * 1024 * 1024)
+    wallet = await orchestrator.get_wallet_for_chunk(session_id, 0)
+    assert wallet is not None
+    assert wallet.address
+    assert wallet.private_key

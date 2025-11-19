@@ -26,6 +26,7 @@ dev = [
   "pytest-cov>=4.1.0",
   "httpx>=0.26.0",
   "fakeredis>=2.21.1",
+  "hypothesis>=6.92.0",
 ]
 
 [build-system]
