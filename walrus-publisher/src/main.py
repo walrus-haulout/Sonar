@@ -23,7 +23,6 @@ from uploader import WalrusUploader
 from transaction_builder import TransactionBuilder
 
 
-# Global state
 orchestrator: UploadOrchestrator
 transaction_builder: TransactionBuilder
 start_time: float
@@ -38,7 +37,6 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup():
-    """Initialize service on startup."""
     global orchestrator, transaction_builder, start_time
 
     start_time = time.time()
@@ -63,7 +61,6 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    """Clean up on shutdown."""
     global orchestrator
 
     if orchestrator:
@@ -73,7 +70,6 @@ async def shutdown():
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint for platform load balancers."""
     uptime = time.time() - start_time
     active_sessions = len(orchestrator.sessions)
 
@@ -88,7 +84,6 @@ async def health_check():
 
 @app.post("/upload/init", response_model=UploadInitResponse)
 async def init_upload(request: UploadInitRequest):
-    """Initialize a chunked upload session."""
     try:
         if request.file_size <= 0:
             raise HTTPException(400, "File size must be positive")
@@ -114,21 +109,16 @@ async def upload_chunk(
     chunk_index: int,
     file: UploadFile = File(...),
 ):
-    """Upload a single chunk to Walrus."""
     try:
         session = await orchestrator.get_session(session_id)
         if not session:
             raise HTTPException(404, f"Session {session_id} not found")
 
-        # Read chunk data
         chunk_data = await file.read()
         chunk_size = len(chunk_data)
 
-        # Upload to Walrus
         async with WalrusUploader() as uploader:
             blob_id = await uploader.upload_chunk(chunk_data, chunk_index)
-
-            # Record upload
             await orchestrator.record_chunk_upload(session_id, chunk_index, blob_id)
 
             return ChunkUploadResponse(
@@ -145,12 +135,6 @@ async def upload_chunk(
 
 @app.get("/upload/{session_id}/transactions", response_model=TransactionsResponse)
 async def get_transactions(session_id: str):
-    """
-    Get unsigned register_blob transactions for browser to sign and sponsor.
-
-    Returns list of transactions that the browser wallet should sponsor.
-    Each transaction is signed by the sub-wallet (transaction kind only).
-    """
     try:
         session = await orchestrator.get_session(session_id)
         if not session:
@@ -163,7 +147,6 @@ async def get_transactions(session_id: str):
                 f"Expected {len(session.chunks)}, got {session.chunks_uploaded}",
             )
 
-        # Build unsigned transactions
         transactions = []
         for chunk_index, blob_id in session.blob_ids.items():
             wallet = await orchestrator.get_wallet_for_chunk(session_id, chunk_index)
@@ -198,13 +181,6 @@ async def get_transactions(session_id: str):
 
 @app.post("/upload/{session_id}/finalize", response_model=FinalizeResponse)
 async def finalize_upload(session_id: str, request: FinalizeRequest):
-    """
-    Submit signed and sponsored transactions to the Sui network.
-
-    The browser wallet should have:
-    1. Signed each transaction as a sponsor (signing the gas object)
-    2. Combined sub-wallet and browser wallet signatures
-    """
     try:
         session = await orchestrator.get_session(session_id)
         if not session:
@@ -213,18 +189,12 @@ async def finalize_upload(session_id: str, request: FinalizeRequest):
         if not request.signed_transactions:
             raise HTTPException(400, "No transactions to submit")
 
-        # Record transaction submissions
         for tx in request.signed_transactions:
             await orchestrator.record_transaction_submitted(session_id)
 
-        # In production, would submit to Sui network and track on-chain
-        # For now, just record the attempt
         transaction_digests = [
             tx.digest or f"0x{i:064x}" for i, tx in enumerate(request.signed_transactions)
         ]
-
-        # Mark session for cleanup (in production, would await confirmations)
-        # await orchestrator.cleanup_session(session_id)
 
         return FinalizeResponse(
             session_id=session_id,
@@ -240,10 +210,9 @@ async def finalize_upload(session_id: str, request: FinalizeRequest):
 
 @app.get("/upload/{session_id}/status")
 async def get_upload_status(session_id: str):
-    """Get current upload status with SSE streaming."""
+    import json
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        """Generate server-sent events for upload progress."""
         try:
             while True:
                 status = await orchestrator.get_upload_status(session_id)
@@ -251,15 +220,11 @@ async def get_upload_status(session_id: str):
                     yield f"data: {{'error': 'Session not found'}}\n\n"
                     break
 
-                import json
-
                 yield f"data: {json.dumps(status.dict())}\n\n"
 
-                # Check if completed or failed
                 if status.status in ("completed", "failed"):
                     break
 
-                # Poll every second
                 await asyncio.sleep(1)
 
         except Exception as e:
@@ -273,7 +238,6 @@ async def get_upload_status(session_id: str):
 
 @app.get("/metrics")
 async def get_metrics():
-    """Prometheus-compatible metrics endpoint."""
     uptime = time.time() - start_time
     active_sessions = len(orchestrator.sessions)
 
