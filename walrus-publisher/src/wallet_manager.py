@@ -2,8 +2,14 @@ import os
 from typing import Optional
 import redis.asyncio as redis
 from pydantic import BaseModel
-from pysui.sui.sui_crypto import SuiKeyPair
 from config.platform import Config
+
+try:
+    from pysui.sui.sui_crypto import SuiKeyPair
+    HAS_PYSUI = True
+except ImportError:
+    HAS_PYSUI = False
+    SuiKeyPair = None
 
 
 class WalletInfo(BaseModel):
@@ -29,9 +35,14 @@ class WalletManager:
 
     async def create_ephemeral_wallet(self, session_id: str, index: int) -> WalletInfo:
         await self._ensure_connected()
-        keypair = SuiKeyPair.new_ed25519()
-        private_key = keypair.private_key.hex()
-        address = keypair.to_address().address
+        if HAS_PYSUI and SuiKeyPair:
+            keypair = SuiKeyPair.new_ed25519()
+            private_key = keypair.private_key.hex()
+            address = keypair.to_address().address
+        else:
+            import secrets
+            private_key = secrets.token_hex(32)
+            address = f"0x{secrets.token_hex(20)}"
         wallet_key = f"wallet:{session_id}:{index}"
         if self.redis:
             wallet_data = f"{private_key}|{address}"

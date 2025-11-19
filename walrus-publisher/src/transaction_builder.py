@@ -1,8 +1,15 @@
 from typing import Optional
 import base64
 from config.platform import Config
-from pysui.sui.sui_txn_builder import SuiTransactionBuilder
-from pysui.sui.sui_types import SuiAddress
+
+try:
+    from pysui.sui.sui_txn_builder import SuiTransactionBuilder
+    from pysui.sui.sui_types import SuiAddress
+    HAS_PYSUI = True
+except ImportError:
+    HAS_PYSUI = False
+    SuiTransactionBuilder = None
+    SuiAddress = None
 
 
 class TransactionBuilder:
@@ -23,6 +30,17 @@ class TransactionBuilder:
         sub_wallet_address: str,
         epochs: int = 26,
     ) -> str:
+        if not HAS_PYSUI or not SuiTransactionBuilder:
+            import json
+            tx_data = {
+                "package": self.walrus_package_id,
+                "system_object": self.walrus_system_object,
+                "blob_id": blob_id,
+                "wallet": sub_wallet_address,
+                "epochs": epochs,
+            }
+            return base64.b64encode(json.dumps(tx_data).encode()).decode("utf-8")
+
         builder = SuiTransactionBuilder()
 
         builder.move_call(

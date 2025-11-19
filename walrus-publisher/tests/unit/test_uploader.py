@@ -1,6 +1,6 @@
 import pytest
 from hypothesis import given, strategies as st
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uploader import WalrusUploader
 import httpx
 
@@ -22,8 +22,8 @@ async def test_uploader_not_initialized():
 async def test_upload_chunk_success():
     with patch('uploader.httpx.AsyncClient') as mock_client_class:
         mock_response = AsyncMock()
-        mock_response.json.return_value = {'blobId': 'test_blob_id_123'}
-        mock_response.raise_for_status = AsyncMock()
+        mock_response.json = Mock(return_value={'blobId': 'test_blob_id_123'})
+        mock_response.raise_for_status = Mock()
 
         mock_client = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
@@ -39,8 +39,8 @@ async def test_upload_chunk_success():
 async def test_upload_chunk_fallback_snake_case():
     with patch('uploader.httpx.AsyncClient') as mock_client_class:
         mock_response = AsyncMock()
-        mock_response.json.return_value = {'blob_id': 'test_blob_id_456'}
-        mock_response.raise_for_status = AsyncMock()
+        mock_response.json = Mock(return_value={'blob_id': 'test_blob_id_456'})
+        mock_response.raise_for_status = Mock()
 
         mock_client = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
@@ -56,8 +56,8 @@ async def test_upload_chunk_fallback_snake_case():
 async def test_upload_chunk_missing_blob_id():
     with patch('uploader.httpx.AsyncClient') as mock_client_class:
         mock_response = AsyncMock()
-        mock_response.json.return_value = {'some_field': 'some_value'}
-        mock_response.raise_for_status = AsyncMock()
+        mock_response.json = Mock(return_value={'some_field': 'some_value'})
+        mock_response.raise_for_status = Mock()
 
         mock_client = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
@@ -93,8 +93,8 @@ class TestWalrusUploader_PropertyBased:
     async def test_upload_chunk_size_handling(self, chunk_size, chunk_index):
         with patch('uploader.httpx.AsyncClient') as mock_client_class:
             mock_response = AsyncMock()
-            mock_response.json.return_value = {'blobId': f'blob_{chunk_index}'}
-            mock_response.raise_for_status = AsyncMock()
+            mock_response.json = Mock(return_value={'blobId': f'blob_{chunk_index}'})
+            mock_response.raise_for_status = Mock()
 
             mock_client = AsyncMock()
             mock_client.put = AsyncMock(return_value=mock_response)

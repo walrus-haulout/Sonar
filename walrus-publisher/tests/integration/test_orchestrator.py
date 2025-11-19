@@ -62,7 +62,7 @@ async def test_record_transaction_submitted(orchestrator):
 async def test_cleanup_session(orchestrator):
     session_id, _ = await orchestrator.create_upload_session(30 * 1024 * 1024)
     assert session_id in orchestrator.sessions
-    await orchestrator.cleanup_session(session_id, 4)
+    await orchestrator.cleanup_session(session_id)
     assert session_id not in orchestrator.sessions
 
 

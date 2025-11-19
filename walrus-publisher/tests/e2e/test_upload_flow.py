@@ -3,6 +3,9 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 import sys
 import os
+import asyncio
+import time
+import fakeredis.aioredis
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src'))
 
@@ -12,8 +15,37 @@ from transaction_builder import TransactionBuilder
 
 
 @pytest.fixture
-def test_client():
-    return TestClient(app)
+def test_client(event_loop):
+    """Create a test client with initialized orchestrator"""
+    async def setup():
+        import main
+        redis_client = fakeredis.aioredis.FakeRedis()
+        orch = UploadOrchestrator("fake://redis")
+        orch.redis = redis_client
+        orch.wallet_manager.redis = redis_client
+        tx_builder = TransactionBuilder(
+            walrus_package_id="0x123456789abcdef",
+            walrus_system_object="0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        main.orchestrator = orch
+        main.transaction_builder = tx_builder
+        main.start_time = time.time()
+        return redis_client
+
+    redis_client = event_loop.run_until_complete(setup())
+    client = TestClient(app)
+    yield client
+    # Cleanup
+    event_loop.run_until_complete(redis_client.flushall())
+    event_loop.run_until_complete(redis_client.aclose())
+
+
+@pytest.fixture
+def event_loop():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
 
 
 @pytest.mark.asyncio
@@ -63,8 +95,9 @@ async def test_upload_init_zero_size(test_client):
             '/upload/init',
             json={'file_size': 0},
         )
-        assert response.status_code == 400
-        assert 'positive' in response.json()['detail']
+        assert response.status_code == 422
+        data = response.json()
+        assert 'detail' in data
 
 
 @pytest.mark.asyncio

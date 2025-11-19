@@ -27,6 +27,7 @@ async def redis_client():
 async def orchestrator(redis_client):
     orch = UploadOrchestrator("fake://redis")
     orch.redis = redis_client
+    orch.wallet_manager.redis = redis_client
     return orch
 
 
@@ -52,3 +53,22 @@ def mock_walrus_uploader():
         uploader_instance.__aexit__.return_value = None
         mock.return_value = uploader_instance
         yield mock
+
+
+@pytest.fixture
+async def e2e_setup(redis_client):
+    """Initialize app globals for E2E testing"""
+    import main
+    orch = UploadOrchestrator("fake://redis")
+    orch.redis = redis_client
+    orch.wallet_manager.redis = redis_client
+    tx_builder = TransactionBuilder(
+        walrus_package_id="0x123456789abcdef",
+        walrus_system_object="0x0000000000000000000000000000000000000000000000000000000000000000",
+    )
+    main.orchestrator = orch
+    main.transaction_builder = tx_builder
+    main.start_time = __import__('time').time()
+    yield
+    main.orchestrator = None
+    main.transaction_builder = None

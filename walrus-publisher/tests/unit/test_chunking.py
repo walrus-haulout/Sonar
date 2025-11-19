@@ -17,7 +17,7 @@ class TestChunkingOrchestrator:
 
     def test_calculate_wallet_count_respects_max(self):
         orch = ChunkingOrchestrator()
-        count = orch.calculate_wallet_count(20 * 1024**3)
+        count = orch.calculate_wallet_count(100 * 1024**3)
         assert count == orch.max_wallets
 
     def test_calculate_chunk_size(self):

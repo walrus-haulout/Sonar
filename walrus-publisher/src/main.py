@@ -5,8 +5,18 @@ from typing import AsyncGenerator, Optional
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Depends
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer
+from starlette.authentication import AuthCredentials
 import uvicorn
+
+try:
+    from fastapi.security import HTTPAuthCredentials
+except ImportError:
+    from starlette.requests import HTTPConnection
+    class HTTPAuthCredentials:
+        def __init__(self, scheme: str, credentials: str):
+            self.scheme = scheme
+            self.credentials = credentials
 
 from config.platform import Config
 from models import (
@@ -119,6 +129,8 @@ async def init_upload(request: UploadInitRequest, _: str = Depends(verify_api_ke
             chunks=chunk_plans,
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
