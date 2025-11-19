@@ -4,14 +4,17 @@
  */
 
 import type { SealClient } from '@mysten/seal';
-import type { DecryptFileOptions, DecryptionResult } from './types';
+import type { DecryptFileOptions, PolicyType } from './types';
 import { DecryptionError } from './errors';
 import { decryptFile } from './decryption';
 import { encryptFile } from './encryption';
+import { hexToBytes } from './utils';
 
 export interface ReencryptionOptions {
   // Decryption context (for reading current encrypted blob)
-  decryptionOptions: DecryptFileOptions;
+  decryptionOptions: DecryptFileOptions & {
+    client: SealClient;
+  };
 
   // Encryption context (for writing re-encrypted blob with new policy)
   encryptionOptions: {
@@ -19,6 +22,7 @@ export interface ReencryptionOptions {
     identity: string; // New policy identity/seal_policy_id
     packageId?: string;
     threshold?: number;
+    accessPolicy: PolicyType; // Required for encryption
   };
 
   // Progress callback for long-running operations
@@ -98,12 +102,13 @@ export async function reencryptBlob(
     const reencryptionResult = await encryptFile(
       options.encryptionOptions.client,
       decryptionResult.data,
-      options.encryptionOptions.identity,
       {
         packageId: options.encryptionOptions.packageId,
         threshold: options.encryptionOptions.threshold,
+        accessPolicy: options.encryptionOptions.accessPolicy,
+        customId: hexToBytes(options.encryptionOptions.identity),
       },
-      (progress) => {
+      (progress: number) => {
         const encryptProgress = 30 + Math.floor(progress * 70); // 30-100%
         options.onProgress?.('reencrypting', encryptProgress, `Re-encrypting: ${encryptProgress}%`);
       }

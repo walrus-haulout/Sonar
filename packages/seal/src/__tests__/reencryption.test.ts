@@ -8,22 +8,31 @@ import { validateReencryptionOptions } from '../reencryption';
 import type { ReencryptionOptions } from '../reencryption';
 import * as fc from 'fast-check';
 
+/** Helper to create valid re-encryption options for testing */
+function createValidOptions(overrides?: Partial<ReencryptionOptions>): ReencryptionOptions {
+  return {
+    decryptionOptions: {
+      client: {} as any,
+      identity: 'policy-1',
+      sessionKey: {},
+      packageId: 'test-package-id',
+      suiClient: {} as any,
+    },
+    encryptionOptions: {
+      client: {} as any,
+      identity: 'policy-2',
+      accessPolicy: 'private',
+    },
+    ...overrides,
+  };
+}
+
 describe('Re-encryption Module', () => {
   describe('validateReencryptionOptions', () => {
     let validOptions: ReencryptionOptions;
 
     beforeEach(() => {
-      validOptions = {
-        decryptionOptions: {
-          client: {} as any,
-          identity: 'policy-1',
-          sessionKey: {},
-        },
-        encryptionOptions: {
-          client: {} as any,
-          identity: 'policy-2',
-        },
-      };
+      validOptions = createValidOptions();
     });
 
     it('should accept valid re-encryption options', () => {
@@ -33,8 +42,8 @@ describe('Re-encryption Module', () => {
     });
 
     it('should reject if decryption options missing', () => {
-      const invalid = { ...validOptions };
-      delete invalid.decryptionOptions;
+      const invalid = createValidOptions() as any;
+      invalid.decryptionOptions = undefined;
 
       const result = validateReencryptionOptions(invalid);
       expect(result.valid).toBe(false);
@@ -42,8 +51,8 @@ describe('Re-encryption Module', () => {
     });
 
     it('should reject if encryption options missing', () => {
-      const invalid = { ...validOptions };
-      delete invalid.encryptionOptions;
+      const invalid = createValidOptions() as any;
+      invalid.encryptionOptions = undefined;
 
       const result = validateReencryptionOptions(invalid);
       expect(result.valid).toBe(false);
@@ -109,49 +118,58 @@ describe('Re-encryption Module', () => {
 
   describe('Re-encryption Policy Rotation Scenarios', () => {
     it('should validate subscription policy change', () => {
-      const options: ReencryptionOptions = {
+      const options = createValidOptions({
         decryptionOptions: {
           client: {} as any,
           identity: 'subscription-tier-1',
           sessionKey: {},
+          packageId: 'test-package-id',
+          suiClient: {} as any,
         },
         encryptionOptions: {
           client: {} as any,
           identity: 'subscription-tier-2',
+          accessPolicy: 'subscription',
         },
-      };
+      });
 
       expect(validateReencryptionOptions(options).valid).toBe(true);
     });
 
     it('should validate access revocation (remove user)', () => {
-      const options: ReencryptionOptions = {
+      const options = createValidOptions({
         decryptionOptions: {
           client: {} as any,
           identity: 'policy-with-user-123',
           sessionKey: {},
+          packageId: 'test-package-id',
+          suiClient: {} as any,
         },
         encryptionOptions: {
           client: {} as any,
           identity: 'policy-without-user-123',
+          accessPolicy: 'allowlist',
         },
-      };
+      });
 
       expect(validateReencryptionOptions(options).valid).toBe(true);
     });
 
     it('should validate key rotation', () => {
-      const options: ReencryptionOptions = {
+      const options = createValidOptions({
         decryptionOptions: {
           client: {} as any,
           identity: 'master-key-v1',
           sessionKey: {},
+          packageId: 'test-package-id',
+          suiClient: {} as any,
         },
         encryptionOptions: {
           client: {} as any,
           identity: 'master-key-v2',
+          accessPolicy: 'private',
         },
-      };
+      });
 
       expect(validateReencryptionOptions(options).valid).toBe(true);
     });
@@ -165,17 +183,20 @@ describe('Re-encryption Module', () => {
           ([policy1, policy2]) => {
             fc.pre(policy1 !== policy2);
 
-            const options: ReencryptionOptions = {
+            const options = createValidOptions({
               decryptionOptions: {
                 client: {} as any,
                 identity: policy1,
                 sessionKey: {},
+                packageId: 'test-package-id',
+                suiClient: {} as any,
               },
               encryptionOptions: {
                 client: {} as any,
                 identity: policy2,
+                accessPolicy: 'private',
               },
-            };
+            });
 
             return validateReencryptionOptions(options).valid === true;
           }
@@ -186,17 +207,20 @@ describe('Re-encryption Module', () => {
     it('should reject if policies are identical', () => {
       fc.assert(
         fc.property(fc.string({ minLength: 1 }), (policy) => {
-          const options: ReencryptionOptions = {
+          const options = createValidOptions({
             decryptionOptions: {
               client: {} as any,
               identity: policy,
               sessionKey: {},
+              packageId: 'test-package-id',
+              suiClient: {} as any,
             },
             encryptionOptions: {
               client: {} as any,
               identity: policy,
+              accessPolicy: 'private',
             },
-          };
+          });
 
           return validateReencryptionOptions(options).valid === false;
         })
@@ -206,36 +230,43 @@ describe('Re-encryption Module', () => {
 
   describe('Large-Scale Re-encryption', () => {
     it('should handle GB-scale encrypted files', () => {
-      const options: ReencryptionOptions = {
+      const progressCallback = vi.fn();
+      const options = createValidOptions({
         decryptionOptions: {
           client: {} as any,
           identity: 'current-policy',
           sessionKey: {},
+          packageId: 'test-package-id',
+          suiClient: {} as any,
         },
         encryptionOptions: {
           client: {} as any,
           identity: 'new-policy',
+          accessPolicy: 'purchase',
         },
-        onProgress: vi.fn(),
-      };
+        onProgress: progressCallback,
+      });
 
       expect(validateReencryptionOptions(options).valid).toBe(true);
-      expect(options.onProgress).not.toHaveBeenCalled();
+      expect(progressCallback).not.toHaveBeenCalled();
     });
 
     it('should validate multi-hour re-encryption', () => {
       // For 10GB file with 100MB/s throughput = 100 seconds
-      const options: ReencryptionOptions = {
+      const options = createValidOptions({
         decryptionOptions: {
           client: {} as any,
           identity: 'policy-for-huge-file',
           sessionKey: {},
+          packageId: 'test-package-id',
+          suiClient: {} as any,
         },
         encryptionOptions: {
           client: {} as any,
           identity: 'policy-for-huge-file-v2',
+          accessPolicy: 'hybrid',
         },
-      };
+      });
 
       expect(validateReencryptionOptions(options).valid).toBe(true);
     });

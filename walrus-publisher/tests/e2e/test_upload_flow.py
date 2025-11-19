@@ -273,3 +273,146 @@ async def test_upload_status_endpoint(test_client):
         response = test_client.get(f'/upload/{session_id}/status')
         assert response.status_code == 200
         assert 'text/event-stream' in response.headers.get('content-type', '')
+
+
+@pytest.mark.asyncio
+async def test_auth_required_on_endpoints(test_client):
+    """Test that protected endpoints require auth when API keys are set"""
+    with patch('main.api_keys', {'valid-key'}):
+        # POST endpoints should require auth
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        assert response.status_code == 403
+
+        # GET transactions should require auth
+        response = test_client.get('/upload/session123/transactions')
+        assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_auth_with_valid_key(test_client):
+    """Test that valid API key allows access"""
+    with patch('main.api_keys', {'valid-key'}):
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+            headers={'Authorization': 'Bearer valid-key'},
+        )
+        assert response.status_code == 200
+        assert 'session_id' in response.json()
+
+
+@pytest.mark.asyncio
+async def test_auth_with_invalid_key(test_client):
+    """Test that invalid API key is rejected"""
+    with patch('main.api_keys', {'valid-key'}):
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+            headers={'Authorization': 'Bearer invalid-key'},
+        )
+        assert response.status_code == 403
+        assert 'Invalid API key' in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_upload_init_boundary_size(test_client):
+    """Test /upload/init with boundary file size"""
+    with patch('main.api_keys', set()):
+        # Test max allowed size (13 GiB - 1 byte)
+        max_bytes = 13 * (1024**3) - 1
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': max_bytes},
+        )
+        assert response.status_code == 200
+        assert 'session_id' in response.json()
+
+
+@pytest.mark.asyncio
+async def test_upload_init_chunk_distribution(test_client):
+    """Test that chunk plans are properly distributed"""
+    with patch('main.api_keys', set()):
+        response = test_client.post(
+            '/upload/init',
+            json={'file_size': 1 * 1024 * 1024 * 1024},  # 1 GiB
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['chunk_count'] > 0
+        assert data['wallet_count'] >= 4  # Minimum wallets
+        assert data['chunk_count'] >= data['wallet_count']  # At least one chunk per wallet
+
+        # Verify chunks have required fields
+        for chunk in data['chunks']:
+            assert 'index' in chunk
+            assert 'size' in chunk
+            assert 'wallet_address' in chunk
+            assert chunk['size'] > 0
+
+
+@pytest.mark.asyncio
+async def test_finalize_with_transactions(test_client):
+    """Test finalize endpoint with actual transactions"""
+    with patch('main.api_keys', set()):
+        # Create session
+        init_resp = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        session_id = init_resp.json()['session_id']
+
+        # Finalize with signed transactions
+        finalize_data = {
+            'signed_transactions': [
+                {
+                    'tx_bytes': 'dummy_tx_bytes',
+                    'digest': f'0x{i:064x}',
+                }
+                for i in range(2)
+            ]
+        }
+        response = test_client.post(
+            f'/upload/{session_id}/finalize',
+            json=finalize_data,
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result['session_id'] == session_id
+        assert result['status'] == 'submitted'
+        assert len(result['transaction_digests']) == 2
+
+
+@pytest.mark.asyncio
+async def test_health_check_returns_valid_data(test_client):
+    """Test health endpoint returns all required fields"""
+    response = test_client.get('/health')
+    assert response.status_code == 200
+    data = response.json()
+    assert data['status'] == 'ok'
+    assert 'version' in data
+    assert 'platform' in data
+    assert 'uptime_seconds' in data
+    assert 'active_sessions' in data
+    assert isinstance(data['uptime_seconds'], (int, float))
+    assert data['uptime_seconds'] >= 0
+
+
+@pytest.mark.asyncio
+async def test_metrics_format(test_client):
+    """Test metrics endpoint returns valid Prometheus format"""
+    response = test_client.get('/metrics')
+    assert response.status_code == 200
+    content = response.text
+
+    # Check for required metrics
+    assert 'walrus_uploader_uptime_seconds' in content
+    assert 'walrus_uploader_active_sessions' in content
+    assert 'walrus_uploader_version' in content
+
+    # Check Prometheus format markers
+    assert '# HELP' in content
+    assert '# TYPE' in content
+    assert 'gauge' in content

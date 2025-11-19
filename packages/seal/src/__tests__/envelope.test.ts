@@ -10,7 +10,6 @@ import {
   isVersionedEnvelope,
   migrateToVersionedEnvelope,
 } from '../envelope';
-import * as fc from 'fast-check';
 
 describe('Envelope Versioning', () => {
   describe('buildEnvelopeWithVersion', () => {

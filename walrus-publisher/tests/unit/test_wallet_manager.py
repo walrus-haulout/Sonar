@@ -31,3 +31,11 @@ async def test_wallet_uniqueness():
     wallet2 = await manager.create_ephemeral_wallet("session_789", 1)
     assert wallet1.address != wallet2.address
     assert wallet1.private_key != wallet2.private_key
+
+
+@pytest.mark.asyncio
+async def test_wallet_manager_initialization():
+    """Test wallet manager can be initialized with config"""
+    manager = WalletManager("redis://localhost:6379")
+    assert manager.redis_url == "redis://localhost:6379"
+    assert manager.redis is None

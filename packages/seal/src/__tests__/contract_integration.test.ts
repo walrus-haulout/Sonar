@@ -38,7 +38,12 @@ describe('Move Contract Integration', () => {
     });
 
     it('should track registration state transitions', () => {
-      const registration = {
+      const registration: {
+        id: string;
+        is_finalized: boolean;
+        walrus_blob_id: string | null;
+        submission_id: string | null;
+      } = {
         id: 'reg-1',
         is_finalized: false,
         walrus_blob_id: null,
@@ -92,7 +97,10 @@ describe('Move Contract Integration', () => {
 
   describe('Atomic Submission Creation', () => {
     it('should require both blob IDs for finalization', () => {
-      const registration = {
+      const registration: {
+        walrus_blob_id: string | null;
+        preview_blob_id: string | null;
+      } = {
         walrus_blob_id: null,
         preview_blob_id: null,
       };
@@ -106,7 +114,10 @@ describe('Move Contract Integration', () => {
     });
 
     it('should prevent double-finalization', () => {
-      const registration = {
+      const registration: {
+        is_finalized: boolean;
+        submission_id: string | null;
+      } = {
         is_finalized: false,
         submission_id: null,
       };
@@ -364,7 +375,11 @@ describe('Move Contract Integration', () => {
     it('should maintain finalization invariant', () => {
       const registrations = new Map();
 
-      const reg = {
+      const reg: {
+        id: string;
+        is_finalized: boolean;
+        submission_id: string | null;
+      } = {
         id: 'reg-1',
         is_finalized: false,
         submission_id: null,
@@ -388,7 +403,11 @@ describe('Move Contract Integration', () => {
     });
 
     it('should maintain blob ID invariant', () => {
-      const registration = {
+      const registration: {
+        walrus_blob_id: string | null;
+        preview_blob_id: string | null;
+        is_finalized: boolean;
+      } = {
         walrus_blob_id: null,
         preview_blob_id: null,
         is_finalized: false,

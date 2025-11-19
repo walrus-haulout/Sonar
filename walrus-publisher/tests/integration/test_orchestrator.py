@@ -107,3 +107,42 @@ async def test_wallet_cleanup_session(orchestrator):
 
     # Cleanup should work
     await orchestrator.wallet_manager.cleanup_session(session_id, wallet_count)
+
+
+@pytest.mark.asyncio
+async def test_session_to_status_conversion(orchestrator):
+    """Test converting UploadSession to UploadStatus"""
+    session_id, _ = await orchestrator.create_upload_session(10 * 1024 * 1024)
+    session = await orchestrator.get_session(session_id)
+
+    # Convert to status
+    status = session.to_status()
+    assert status.session_id == session_id
+    assert 'status' in status.dict()
+    assert 'chunks_uploaded' in status.dict()
+
+
+@pytest.mark.asyncio
+async def test_get_wallet_for_valid_chunk(orchestrator):
+    """Test getting wallet for existing chunk"""
+    session_id, chunk_plans = await orchestrator.create_upload_session(10 * 1024 * 1024)
+    # Get wallet for first chunk
+    if chunk_plans:
+        first_chunk_index = chunk_plans[0]['index']
+        wallet = await orchestrator.get_wallet_for_chunk(session_id, first_chunk_index)
+        assert wallet is not None
+        assert wallet.address
+        assert wallet.private_key
+
+
+@pytest.mark.asyncio
+async def test_invalid_file_size():
+    """Test that zero file size raises"""
+    import fakeredis.aioredis
+    redis_client = fakeredis.aioredis.FakeRedis()
+    orch = UploadOrchestrator("fake://redis")
+    orch.redis = redis_client
+    orch.wallet_manager.redis = redis_client
+
+    with pytest.raises(ValueError):
+        await orch.create_upload_session(0)

@@ -12,12 +12,10 @@ import {
   formatSessionExpiry,
   shouldRefreshSessionForBatch,
   calculateSafeBatchSize,
-  DEFAULT_SESSION_REFRESH_CONFIG,
   type ManagedSession,
   type SessionRefreshConfig,
   type BatchOperationConfig,
 } from '../session_utils';
-import * as fc from 'fast-check';
 
 describe('Session Management', () => {
   let now: number;
