@@ -90,7 +90,7 @@ pub mod tests;
 mod time;
 
 const GAS_BUDGET: u64 = 500_000_000;
-const GIT_VERSION: &str = utils::git_version!();
+const GIT_VERSION: &str = "0.5.13-custom";
 
 // Transaction size limit: 128KB + 33% for base64 + some extra room for other parameters
 const MAX_REQUEST_SIZE: usize = 180 * 1024;
