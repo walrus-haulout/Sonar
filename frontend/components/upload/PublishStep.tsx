@@ -14,6 +14,7 @@ import { extractObjectId, isSuiCreatedObject, type SuiEventParsedJson } from '@/
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { CHAIN_CONFIG } from '@/lib/sui/client';
+import { useAtomicBlobRegistration } from '@/hooks/useAtomicBlobRegistration';
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -58,8 +59,11 @@ export function PublishStep({
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { submitWithAtomicRegistration, isSubmitting: isAtomicSubmitting } =
+    useAtomicBlobRegistration();
   const [publishState, setPublishState] = useState<'idle' | 'signing' | 'broadcasting' | 'confirming'>('idle');
-  const publishDisabled = isPending || publishState !== 'idle';
+  const publishDisabled =
+    isPending || isAtomicSubmitting || publishState !== 'idle';
 
   const handlePublish = async () => {
     if (!account) {
@@ -116,26 +120,44 @@ export function PublishStep({
           ],
         });
       } else {
-        // Single file: Call submit_audio (backwards compatibility)
-        const uploadFeeCoin = tx.splitCoins(tx.gas, [UPLOAD_FEE_MIST])[0];
+        // Single file: Use atomic blob registration for true atomicity
+        // This replaces the old submit_audio call with a two-phase atomic transaction:
+        // Phase 1: register_blob_intent() creates BlobRegistration on-chain
+        // Phase 2: finalize_submission_with_blob() atomically creates AudioSubmission
+        setPublishState('signing');
 
-        tx.moveCall({
-          target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio`,
-          arguments: [
-            marketplaceSharedRef,
-            uploadFeeCoin,
-            tx.pure.string(walrusUpload.blobId),
-            tx.pure.string(walrusUpload.previewBlobId || ''),
-            tx.pure.string(walrusUpload.seal_policy_id), // Seal policy ID for decryption
-            tx.pure.option('vector<u8>', null), // preview_blob_hash (optional)
-            tx.pure.u64(3600), // duration_seconds (placeholder - should come from audioFile)
-          ],
-        });
+        try {
+          console.log('[PublishStep] Starting atomic blob registration flow');
+          const result = await submitWithAtomicRegistration(
+            walrusUpload.blobId,
+            walrusUpload.previewBlobId || '',
+            walrusUpload.seal_policy_id,
+            3600 // duration_seconds (placeholder - should come from audioFile)
+          );
+
+          console.log('[PublishStep] Atomic registration successful:', result);
+          setPublishState('confirming');
+
+          // Proceed with object change detection
+          onPublished({
+            datasetId: result.submissionId,
+            epoch: 0, // Will be filled from transaction details if needed
+            message: 'Dataset published to blockchain',
+          });
+
+          return;
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Atomic registration failed';
+          console.error('[PublishStep] Atomic registration failed:', errorMsg);
+          onError(errorMsg);
+          setPublishState('idle');
+          return;
+        }
       }
 
       setPublishState('broadcasting');
 
-      // Sign and execute
+      // Sign and execute (for multi-file datasets using old flow)
       signAndExecute(
         {
           transaction: tx,

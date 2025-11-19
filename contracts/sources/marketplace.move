@@ -28,6 +28,8 @@ module sonar::marketplace {
     const E_INVALID_QUALITY_SCORE: u64 = 2004;
     const E_INSUFFICIENT_REWARDS: u64 = 2005;
     const E_INVALID_PARAMETER: u64 = 2006;
+    const E_BLOB_NOT_REGISTERED: u64 = 2007;
+    const E_REGISTRATION_ALREADY_FINALIZED: u64 = 2008;
 
     // Purchase errors (3000-3999)
     const E_NOT_LISTED: u64 = 3001;
@@ -88,6 +90,28 @@ module sonar::marketplace {
         unlock_start_epoch: u64,        // Epoch when vesting started
         unlock_duration_epochs: u64,    // 90 epochs (~90 days)
         claimed_amount: u64             // Tokens already claimed
+    }
+
+    /// Blob Registration - atomic synchronization between Walrus and Move objects
+    /// This object ensures that blob uploads are traceable and recoverable
+    public struct BlobRegistration has key, store {
+        id: UID,
+        uploader: address,
+        created_at_epoch: u64,
+
+        // Blob metadata
+        walrus_blob_id: Option<String>,  // Set after Walrus upload succeeds
+        preview_blob_id: Option<String>, // Set after preview upload succeeds
+        seal_policy_id: String,          // Set during registration
+        preview_blob_hash: Option<vector<u8>>,
+
+        // Status tracking
+        is_finalized: bool,              // True after submission is created
+        submission_id: Option<ID>,       // Set when AudioSubmission is created
+
+        // Content metadata
+        duration_seconds: u64,
+        submitted_at_epoch: u64
     }
 
     /// Audio submission with Walrus/Seal metadata
@@ -190,8 +214,25 @@ module sonar::marketplace {
         team_wallet: address
     }
 
+    public struct BlobRegistrationCreated has copy, drop {
+        registration_id: ID,
+        uploader: address,
+        seal_policy_id: String,
+        duration_seconds: u64,
+        created_at_epoch: u64
+    }
+
+    public struct BlobUploadFinalized has copy, drop {
+        registration_id: ID,
+        walrus_blob_id: String,
+        preview_blob_id: String,
+        seal_policy_id: String,
+        finalized_at_epoch: u64
+    }
+
     public struct SubmissionCreated has copy, drop {
         submission_id: ID,
+        registration_id: ID,
         uploader: address,
         seal_policy_id: String,        // ✅ Safe to emit for decryption requests
         walrus_blob_id: String,        // ✅ For backend authenticated delivery
@@ -403,6 +444,156 @@ module sonar::marketplace {
     }
 
     // ========== Submission Functions ==========
+
+    /// Phase 1: Register blob intent on-chain (happens before Walrus upload)
+    /// Creates a BlobRegistration object that tracks the blob lifecycle
+    /// Returns the registration object to be used during upload
+    public entry fun register_blob_intent(
+        seal_policy_id: String,
+        duration_seconds: u64,
+        ctx: &mut TxContext
+    ) {
+        let registration_id = object::new(ctx);
+        let registration_id_copy = object::uid_to_inner(&registration_id);
+
+        let registration = BlobRegistration {
+            id: registration_id,
+            uploader: tx_context::sender(ctx),
+            created_at_epoch: tx_context::epoch(ctx),
+            walrus_blob_id: option::none(),
+            preview_blob_id: option::none(),
+            seal_policy_id: seal_policy_id,
+            preview_blob_hash: option::none(),
+            is_finalized: false,
+            submission_id: option::none(),
+            duration_seconds,
+            submitted_at_epoch: tx_context::epoch(ctx),
+        };
+
+        event::emit(BlobRegistrationCreated {
+            registration_id: registration_id_copy,
+            uploader: tx_context::sender(ctx),
+            seal_policy_id,
+            duration_seconds,
+            created_at_epoch: tx_context::epoch(ctx),
+        });
+
+        // Transfer registration to uploader for use during upload
+        transfer::transfer(registration, tx_context::sender(ctx));
+    }
+
+    /// Phase 2: Finalize blob upload and create submission atomically
+    /// Takes the registered blob info and creates the actual AudioSubmission
+    /// This ensures Walrus blob_id is always synchronized with Move object
+    public entry fun finalize_submission_with_blob(
+        marketplace: &mut QualityMarketplace,
+        mut submission_fee: Coin<SUI>,
+        registration: BlobRegistration,
+        walrus_blob_id: String,
+        preview_blob_id: String,
+        preview_blob_hash: Option<vector<u8>>,
+        ctx: &mut TxContext
+    ) {
+        // Validate registration is not already finalized
+        assert!(!registration.is_finalized, E_REGISTRATION_ALREADY_FINALIZED);
+
+        // Circuit breaker check
+        assert!(
+            !is_circuit_breaker_active(&marketplace.circuit_breaker, ctx),
+            E_CIRCUIT_BREAKER_ACTIVE
+        );
+
+        let uploader = tx_context::sender(ctx);
+        let registration_id = object::uid_to_inner(&registration.id);
+        let fee_paid = coin::value(&submission_fee);
+        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
+
+        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
+        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
+
+        if (coin::value(&submission_fee) > 0) {
+            transfer::public_transfer(submission_fee, uploader);
+        } else {
+            coin::destroy_zero(submission_fee);
+        };
+
+        // Check reward pool can cover minimum reward
+        let circulating = get_circulating_supply(marketplace);
+        let min_reward = economics::calculate_reward(circulating, 30);
+        let pool_balance = balance::value(&marketplace.reward_pool);
+        assert!(pool_balance >= min_reward, E_REWARD_POOL_DEPLETED);
+
+        // Emit finalization event for the registration
+        event::emit(BlobUploadFinalized {
+            registration_id,
+            walrus_blob_id: walrus_blob_id,
+            preview_blob_id: preview_blob_id,
+            seal_policy_id: registration.seal_policy_id,
+            finalized_at_epoch: tx_context::epoch(ctx),
+        });
+
+        // Create submission with finalized blob info
+        let submission_id = object::new(ctx);
+        let submission_id_copy = object::uid_to_inner(&submission_id);
+
+        let submission = AudioSubmission {
+            id: submission_id,
+            uploader,
+            walrus_blob_id: walrus_blob_id,
+            preview_blob_id: preview_blob_id,
+            seal_policy_id: registration.seal_policy_id,
+            preview_blob_hash,
+            duration_seconds: registration.duration_seconds,
+            quality_score: 0,
+            status: 0,
+            vested_balance: VestedBalance {
+                total_amount: 0,
+                unlock_start_epoch: 0,
+                unlock_duration_epochs: 90,
+                claimed_amount: 0
+            },
+            unlocked_balance: 0,
+            dataset_price: 0,
+            listed_for_sale: false,
+            purchase_count: 0,
+            submitted_at_epoch: tx_context::epoch(ctx)
+        };
+
+        marketplace.total_submissions = marketplace.total_submissions + 1;
+
+        // Emit creation event with link to registration
+        event::emit(SubmissionCreated {
+            submission_id: submission_id_copy,
+            registration_id,
+            uploader,
+            seal_policy_id: submission.seal_policy_id,
+            walrus_blob_id: submission.walrus_blob_id,
+            preview_blob_id: submission.preview_blob_id,
+            duration_seconds: submission.duration_seconds,
+            burn_fee_paid: SUBMISSION_FEE_SUI,
+            submitted_at_epoch: tx_context::epoch(ctx)
+        });
+
+        // Clean up registration object by destroying it
+        let BlobRegistration {
+            id,
+            uploader: _,
+            created_at_epoch: _,
+            walrus_blob_id: _,
+            preview_blob_id: _,
+            seal_policy_id: _,
+            preview_blob_hash: _,
+            is_finalized: _,
+            submission_id: _,
+            duration_seconds: _,
+            submitted_at_epoch: _,
+        } = registration;
+
+        object::delete(id);
+
+        // Transfer submission to uploader
+        transfer::transfer(submission, uploader);
+    }
 
     /// Submit audio with Walrus metadata
     /// Collects a fixed submission fee (0.25 SUI) that is forwarded to deployer
