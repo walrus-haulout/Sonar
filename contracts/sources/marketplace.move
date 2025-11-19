@@ -30,6 +30,8 @@ module sonar::marketplace {
     const E_INVALID_PARAMETER: u64 = 2006;
     const E_BLOB_NOT_REGISTERED: u64 = 2007;
     const E_REGISTRATION_ALREADY_FINALIZED: u64 = 2008;
+    const E_SUBMISSION_NOT_FOUND: u64 = 2009;
+    const E_NOT_SUBMISSION_OWNER: u64 = 2010;
 
     // Purchase errors (3000-3999)
     const E_NOT_LISTED: u64 = 3001;
@@ -250,6 +252,16 @@ module sonar::marketplace {
         reward_amount: u64,
         vesting_start_epoch: u64,
         vesting_duration_epochs: u64
+    }
+
+    public struct SubmissionReencrypted has copy, drop {
+        submission_id: ID,
+        uploader: address,
+        old_seal_policy_id: String,
+        new_seal_policy_id: String,
+        old_walrus_blob_id: String,
+        new_walrus_blob_id: String,
+        reencrypted_at_epoch: u64
     }
 
     public struct DatasetSubmissionCreated has copy, drop {
@@ -593,6 +605,50 @@ module sonar::marketplace {
 
         // Transfer submission to uploader
         transfer::transfer(submission, uploader);
+    }
+
+    /// Re-encrypt submission with new policy (policy rotation)
+    /// This enables:
+    /// - Changing access rules without re-uploading bulk data
+    /// - Key rotation
+    /// - Access revocation
+    ///
+    /// Atomically updates:
+    /// 1. Walrus blob_id (to new re-encrypted blob)
+    /// 2. Seal policy_id (to new access policy)
+    /// 3. Emits SubmissionReencrypted event for tracking
+    ///
+    /// The old blob should be cleaned up separately
+    public entry fun reencrypt_submission(
+        submission: &mut AudioSubmission,
+        new_walrus_blob_id: String,
+        new_seal_policy_id: String,
+        ctx: &TxContext
+    ) {
+        // Verify caller is the submission owner
+        assert!(
+            submission.uploader == tx_context::sender(ctx),
+            E_NOT_SUBMISSION_OWNER
+        );
+
+        // Store old values for event emission
+        let old_seal_policy_id = submission.seal_policy_id;
+        let old_walrus_blob_id = submission.walrus_blob_id;
+
+        // Atomic update of both blob references
+        submission.seal_policy_id = new_seal_policy_id;
+        submission.walrus_blob_id = new_walrus_blob_id;
+
+        // Emit re-encryption event with both old and new values
+        event::emit(SubmissionReencrypted {
+            submission_id: object::uid_to_inner(&submission.id),
+            uploader: submission.uploader,
+            old_seal_policy_id,
+            new_seal_policy_id: submission.seal_policy_id,
+            old_walrus_blob_id,
+            new_walrus_blob_id: submission.walrus_blob_id,
+            reencrypted_at_epoch: tx_context::epoch(ctx),
+        });
     }
 
     /// Submit audio with Walrus metadata
