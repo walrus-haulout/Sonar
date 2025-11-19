@@ -127,8 +127,10 @@ export function VerificationStep({
     setErrorMessage(null);
 
     try {
-      // Create session with wallet signature
+      // Create session with extended TTL for verification (30 min)
+      // Verification can take time on large files, so we need a longer window
       const session = await createSession({
+        ttlMin: 30,  // Extended from default 10 min for verification flow
         signMessage: async (message: Uint8Array) => {
           const result = await signPersonalMessage({ message });
           return { signature: result.signature };
@@ -143,7 +145,20 @@ export function VerificationStep({
       startVerification();
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
-      setErrorMessage(getErrorMessage(error) || 'Failed to create authorization session');
+      const errorMsg = getErrorMessage(error);
+
+      // Provide specific error messages for session creation failures
+      let displayError = errorMsg || 'Failed to create authorization session';
+
+      if (errorMsg.includes('user rejected') || errorMsg.includes('denied')) {
+        displayError = 'You rejected the authorization request. Please approve to continue.';
+      } else if (errorMsg.includes('wallet') || errorMsg.includes('not connected')) {
+        displayError = 'Wallet not connected. Please connect your wallet and try again.';
+      } else if (errorMsg.includes('timeout')) {
+        displayError = 'Authorization request timed out. Please try again.';
+      }
+
+      setErrorMessage(displayError);
       setIsCreatingSession(false);
     }
   };
@@ -449,9 +464,25 @@ export function VerificationStep({
     } catch (error) {
       console.error('[VerificationStep] Failed to decrypt and verify:', error);
       const errorMsg = getErrorMessage(error);
-      setErrorMessage(errorMsg || 'Failed to decrypt and verify audio');
+
+      // Provide specific error messages based on error type
+      let displayError = errorMsg || 'Failed to decrypt and verify audio';
+
+      if (errorMsg.includes('expired') || errorMsg.includes('Expired')) {
+        displayError = 'Authorization session expired. Please try again and complete verification within 30 minutes.';
+      } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
+        displayError = 'Access denied. Please check your wallet connection and try again.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('timeout')) {
+        displayError = 'Network error during verification. Please check your connection and retry.';
+      } else if (errorMsg.includes('corrupted') || errorMsg.includes('invalid')) {
+        displayError = 'The audio file appears corrupted. Please re-upload and try again.';
+      } else if (errorMsg.includes('HTTP')) {
+        displayError = 'Server error during verification. Please try again later.';
+      }
+
+      setErrorMessage(displayError);
       setVerificationState('failed');
-      onError(errorMsg || 'Decryption or verification failed');
+      onError(displayError);
     }
   };
 
