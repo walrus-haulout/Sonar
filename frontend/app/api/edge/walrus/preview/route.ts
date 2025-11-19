@@ -3,13 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mark as Edge Runtime
 export const runtime = 'edge';
 
-const WALRUS_PUBLISHER_URL =
-  process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL ||
-  'https://publisher.walrus-testnet.walrus.space';
+const WALRUS_PUBLISHER_URL = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL!;
+const WALRUS_AGGREGATOR_URL = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL!;
 
-const WALRUS_AGGREGATOR_URL =
-  process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
-  'https://aggregator.walrus-testnet.walrus.space';
+if (!WALRUS_PUBLISHER_URL || !WALRUS_AGGREGATOR_URL) {
+  throw new Error('Missing Walrus environment variables');
+}
 
 const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || '';
 

@@ -66,7 +66,7 @@ export const config = {
   // Walrus Storage
   walrus: {
     aggregatorUrl: getRequired('WALRUS_AGGREGATOR_URL'),
-    publisherUrl: getOptional('WALRUS_PUBLISHER_URL', process.env.WALRUS_AGGREGATOR_URL || ''),
+    publisherUrl: getRequired('WALRUS_PUBLISHER_URL'),
     mockMode: parseBoolean(process.env.MOCK_WALRUS, false),
 
     // Rate limiting configuration for aggregator

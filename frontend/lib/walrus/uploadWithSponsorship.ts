@@ -3,8 +3,11 @@ import type { SuiClient } from '@mysten/sui/client';
 import type { EphemeralSubWallet } from '@/hooks/useSubWalletOrchestrator';
 import { buildRegisterBlobTransaction, buildRegisterBlobTransactionAsync } from './buildRegisterBlobTransaction';
 
-const WALRUS_PUBLISHER_URL =
-  process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || 'https://publisher.walrus-mainnet.walrus.space';
+const WALRUS_PUBLISHER_URL = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL!;
+
+if (!WALRUS_PUBLISHER_URL) {
+  console.error('Missing NEXT_PUBLIC_WALRUS_PUBLISHER_URL environment variable');
+}
 
 export interface WalrusHttpUploadResult {
   blobId: string;
