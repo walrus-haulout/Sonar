@@ -370,12 +370,13 @@ export function VerificationStep({
 
       console.log('[VerificationStep] Decrypting blob with sessionKey...');
 
-      // For uploader verification, use open access (no policy module)
-      // Policy object is only created later when submitting to blockchain
+      // For uploader verification, use open access policy
+      // This allows the uploader to verify their encrypted content before blockchain submission
+      // After submission, access switches to HybridPolicy with purchase/admin controls
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
-        { policyModule: undefined }, // Explicitly skip policy check for verification
+        { policyModule: 'open_access_policy', policyArgs: [] },
         (progress) => {
           // Update progress: progress is 0-1, map to 30-80% for decryption stage
           const progressPercent = 30 + Math.floor(progress * 50);

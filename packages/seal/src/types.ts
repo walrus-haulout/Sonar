@@ -66,7 +66,8 @@ export type PolicyType =
   | 'allowlist'     // Requires address in allowlist
   | 'subscription'  // Requires valid subscription NFT
   | 'timelock'      // Public after timestamp
-  | 'private';      // Owner-only access
+  | 'private'       // Owner-only access
+  | 'open';         // Open access (verification phase)
 
 /**
  * Encryption options

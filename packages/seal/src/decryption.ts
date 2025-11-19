@@ -64,12 +64,14 @@ export async function decryptFile(
       ],
     });
 
-    txBytes = await tx.build({ client: suiClient });
+    txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
     onProgress?.(30, 'Checking access policy...');
   } else {
-    // No policy check - verification mode
-    onProgress?.(30, 'Skipping policy check (verification mode)...');
-    txBytes = new Uint8Array(0);
+    // No policy - build empty transaction
+    onProgress?.(30, 'Building empty transaction...');
+    const tx = new Transaction();
+    tx.setSender(sessionKey.getAddress());
+    txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
   }
 
   try {
