@@ -39,7 +39,7 @@ interface EncryptionStepProps {
   onError: (error: string) => void;
 }
 
-type EncryptionStage = 'encrypting' | 'generating-preview' | 'uploading-walrus' | 'finalizing' | 'completed';
+type EncryptionStage = 'encrypting' | 'generating-preview' | 'uploading-walrus' | 'registering' | 'finalizing' | 'completed';
 
 /**
  * EncryptionStep Component
@@ -99,6 +99,13 @@ export function EncryptionStep({
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [stage, progress]);
+
+  // Sync stage with upload progress
+  useEffect(() => {
+    if (uploadProgress.stage === 'registering') {
+      setStage('registering');
+    }
+  }, [uploadProgress.stage]);
 
   const performEncryptionAndUpload = async () => {
     try {
@@ -397,6 +404,11 @@ export function EncryptionStep({
       key: 'uploading-walrus',
       label: 'Uploading to Walrus',
       icon: <Upload className="w-5 h-5" />,
+    },
+    {
+      key: 'registering',
+      label: 'Registering on-chain',
+      icon: <Shield className="w-5 h-5" />,
     },
     {
       key: 'finalizing',
