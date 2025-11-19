@@ -241,6 +241,14 @@ sed "s|0x0000000000000000000000000000000000000000000000000000000000000000|${CLEA
 
 echo "✅ Config generated at /app/config/key-server-config.yaml"
 echo ""
+
+# Check if NEXT_PUBLIC_PACKAGE_ID env var is set (will override YAML config)
+if [ -n "${NEXT_PUBLIC_PACKAGE_ID:-}" ]; then
+  echo "✅ NEXT_PUBLIC_PACKAGE_ID environment variable detected"
+  echo "   Will override package_ids in config: ${NEXT_PUBLIC_PACKAGE_ID}"
+  echo ""
+fi
+
 echo "🚀 Starting key server..."
 echo ""
 

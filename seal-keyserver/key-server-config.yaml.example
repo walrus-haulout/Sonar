@@ -28,6 +28,8 @@ server_mode: !Permissioned
       key_server_object_id: "0x0000000000000000000000000000000000000000000000000000000000000000"
 
       # Allowed package IDs (only these can request derived keys)
+      # NOTE: Can be overridden at runtime with NEXT_PUBLIC_PACKAGE_ID environment variable
+      #       If NEXT_PUBLIC_PACKAGE_ID is set, it will replace the package_ids below
       # SONAR Mainnet package ID (published v2 on 2025-11-13)
       # Previous ID: 0xdff609ce3174576c8a0e81c9f65775e7e7fe5b11c5ef375345fab4ca4b837e9d
       # Testnet ID (for reference): 0x300b8182eea252a00d5ff19568126cc20c0bdd19c7e25f6c6953363393d344e6
