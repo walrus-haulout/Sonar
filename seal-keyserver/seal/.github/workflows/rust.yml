@@ -1,0 +1,102 @@
+name: Rust
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+
+jobs:
+  license-check:
+    name: license-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v4
+      - name: Install licensesnip
+        uses: taiki-e/install-action@5b5de1b4da26ad411330c0454bdd72929bfcbeb2 # pin@v2.62.29
+        with:
+          tool: licensesnip@1.7.0
+      - run: licensesnip check
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-ghcloud
+      fail-fast: false
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v4
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
+      - uses: taiki-e/install-action@5b5de1b4da26ad411330c0454bdd72929bfcbeb2 # pin@v2.62.29
+        with:
+          tool: cargo-nextest
+      - name: Run tests
+        run: cargo nextest run --all-features
+      - name: Run doctests
+        run: |
+          cargo test --doc --all-features
+      - name: Check for uncommitted changes
+        run: scripts/changed-files.sh
+
+  clippy:
+    runs-on: ubuntu-ghcloud
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v4
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
+      # See '.cargo/config' for list of enabled/disabled clippy lints
+      - name: cargo clippy
+        run: cargo xclippy -D warnings
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v4
+      - name: Install correct Rust toolchain
+        run: rustup update && rustup toolchain install
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  cargo-deny:
+    name: cargo-deny (advisories, licenses, bans, ...)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v4
+      - uses: EmbarkStudios/cargo-deny-action@f2ba7abc2abebaf185c833c3961145a3c275caad # pin@v2
+        with:
+          command: check
+          arguments: --all-features
+          log-level: warn
+        env:
+          CARGO_TERM_COLOR: always
+          CARGO_INCREMENTAL: 0
+          CARGO_NET_RETRY: 10
+          RUSTUP_MAX_RETRIES: 10
+          RUST_BACKTRACE: full
