@@ -184,6 +184,7 @@ export function useWalrusParallelUpload() {
     const formData = new FormData();
     formData.append('file', encryptedBlob, options.fileName ?? 'encrypted-audio.bin');
     formData.append('seal_policy_id', seal_policy_id);
+    formData.append('epochs', '26'); // Explicitly set to 1 year (26 epochs)
     if (metadata) {
       formData.append('metadata', JSON.stringify(metadata));
     }
