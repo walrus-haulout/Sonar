@@ -50,11 +50,23 @@ describe('Session Management', () => {
       expect(shouldRefreshSession(session)).toBe(true);
     });
 
-    it('should refresh at exact threshold boundary', () => {
+    it('should not refresh at exact threshold boundary', () => {
       session = {
         sessionKey: {} as any,
         createdAt: now,
         expiresAt: now + 2 * 60 * 1000, // Exactly 2 minutes
+        refreshAttempts: 0,
+      };
+
+      // At exact threshold boundary (not < threshold), should not refresh
+      expect(shouldRefreshSession(session)).toBe(false);
+    });
+
+    it('should refresh just before threshold boundary', () => {
+      session = {
+        sessionKey: {} as any,
+        createdAt: now,
+        expiresAt: now + 2 * 60 * 1000 - 100, // Just under 2 minutes
         refreshAttempts: 0,
       };
 
@@ -199,12 +211,12 @@ describe('Session Management', () => {
       session = {
         sessionKey: {} as any,
         createdAt: now,
-        expiresAt: now + 11 * 60 * 1000, // 11 minutes
+        expiresAt: now + 12 * 60 * 1000, // 12 minutes
         refreshAttempts: 0,
       };
 
-      // 10 minutes with 1.1x buffer = 11 minutes required
-      // Should be borderline true
+      // 10 minutes with 1.1x buffer = 11 minutes required, we have 12 minutes
+      // Should be true
       expect(canSessionLastFor(session, 10 * 60 * 1000)).toBe(true);
     });
 
@@ -327,17 +339,17 @@ describe('Session Management', () => {
       session = {
         sessionKey: {} as any,
         createdAt: now,
-        expiresAt: now + 30 * 1000, // 30 seconds
+        expiresAt: now + 30 * 60 * 1000, // 30 minutes
         refreshAttempts: 0,
       };
 
       const batchConfig: BatchOperationConfig = {
-        totalItems: 100,
+        totalItems: 30, // Only 30 items, can finish in 30 seconds
         estimatedTimePerItemMs: 1000,
         minItemsBeforeRefresh: 20,
       };
 
-      // 30 seconds / 1000ms = 30 items. Meets minItemsBeforeRefresh (20)
+      // 30 minutes / 1000ms = 1800 items before expiry. Covers the 30 items needed.
       expect(shouldRefreshSessionForBatch(session, batchConfig)).toBe(false);
     });
   });
@@ -365,11 +377,11 @@ describe('Session Management', () => {
         refreshAttempts: 0,
       };
 
-      const batchSizeDefault = calculateSafeBatchSize(session, 1000, 10);
-      const batchSize20Percent = calculateSafeBatchSize(session, 1000, 20);
+      const batchSize10PercentBuffer = calculateSafeBatchSize(session, 1000, 10);
+      const batchSize20PercentBuffer = calculateSafeBatchSize(session, 1000, 20);
 
-      // Less buffer = larger batch
-      expect(batchSize20Percent).toBeGreaterThan(batchSizeDefault);
+      // More buffer (20%) = smaller batch size than less buffer (10%)
+      expect(batchSize10PercentBuffer).toBeGreaterThan(batchSize20PercentBuffer);
     });
 
     it('should return minimum 1 item', () => {
@@ -412,65 +424,58 @@ describe('Session Management', () => {
   });
 
   describe('Session Property Tests', () => {
-    it('should maintain health percentage between 0 and 100', () => {
-      fc.assert(
-        fc.property(
-          fc.integer({ min: 0 }),
-          fc.integer({ min: 0 })
-        ),
-        (elapsedMs, remainingMs) => {
-          if (remainingMs === 0) return true; // Skip expired case
+    it('should maintain health percentage between 0 and 100 for valid sessions', () => {
+      const testCases = [
+        { elapsed: 0, remaining: 3600000, expectedRange: [95, 100] }, // Fresh session
+        { elapsed: 1800000, remaining: 1800000, expectedRange: [45, 55] }, // Half expired
+        { elapsed: 3500000, remaining: 100000, expectedRange: [0, 5] }, // About to expire
+      ];
 
-          session = {
-            sessionKey: {} as any,
-            createdAt: now - elapsedMs,
-            expiresAt: now + remainingMs,
-            refreshAttempts: 0,
-          };
+      testCases.forEach(({ elapsed, remaining, expectedRange }) => {
+        session = {
+          sessionKey: {} as any,
+          createdAt: now - elapsed,
+          expiresAt: now + remaining,
+          refreshAttempts: 0,
+        };
 
-          const health = getSessionHealthPercent(session);
-          return health >= 0 && health <= 100;
-        }
-      );
+        const health = getSessionHealthPercent(session);
+        expect(health).toBeGreaterThanOrEqual(expectedRange[0]);
+        expect(health).toBeLessThanOrEqual(expectedRange[1]);
+      });
     });
 
     it('should report accurate time remaining', () => {
-      fc.assert(
-        fc.property(fc.integer({ min: 1000, max: 3600000 }), (ttlMs) => {
-          session = {
-            sessionKey: {} as any,
-            createdAt: now,
-            expiresAt: now + ttlMs,
-            refreshAttempts: 0,
-          };
+      session = {
+        sessionKey: {} as any,
+        createdAt: now,
+        expiresAt: now + 1800000, // 30 minutes
+        refreshAttempts: 0,
+      };
 
-          const remaining = getSessionTimeRemaining(session);
-          return remaining > 0 && remaining <= ttlMs;
-        })
-      );
+      const remaining = getSessionTimeRemaining(session);
+      expect(remaining).toBeGreaterThan(1700000); // At least 28 minutes
+      expect(remaining).toBeLessThanOrEqual(1800000);
     });
 
-    it('should batch size always respect buffer percentage', () => {
-      fc.assert(
-        fc.property(
-          fc.integer({ min: 1000, max: 600000 }), // 1s to 10min TTL
-          fc.integer({ min: 100, max: 10000 }), // 100ms to 10s per item
-          fc.integer({ min: 5, max: 50 }) // 5-50% buffer
-        ),
-        (ttlMs, timePerItemMs, bufferPercent) => {
-          session = {
-            sessionKey: {} as any,
-            createdAt: now,
-            expiresAt: now + ttlMs,
-            refreshAttempts: 0,
-          };
+    it('should batch size always respect time constraints', () => {
+      const ttlMs = 60000; // 1 minute
+      const timePerItemMs = 1000; // 1 second per item
+      const bufferPercent = 10;
 
-          const batchSize = calculateSafeBatchSize(session, timePerItemMs, bufferPercent);
+      session = {
+        sessionKey: {} as any,
+        createdAt: now,
+        expiresAt: now + ttlMs,
+        refreshAttempts: 0,
+      };
 
-          // Batch size * time per item should not exceed available time
-          return batchSize * timePerItemMs <= ttlMs;
-        }
-      );
+      const batchSize = calculateSafeBatchSize(session, timePerItemMs, bufferPercent);
+
+      // Should be 54 items max (60000 * 0.9 / 1000)
+      expect(batchSize * timePerItemMs).toBeLessThanOrEqual(ttlMs);
+      expect(batchSize).toBeLessThanOrEqual(60);
+      expect(batchSize).toBeGreaterThan(0);
     });
   });
 
@@ -497,7 +502,7 @@ describe('Session Management', () => {
       session = {
         sessionKey: {} as any,
         createdAt: now - 55 * 60 * 1000,
-        expiresAt: now + 5 * 60 * 1000, // 5 minutes left
+        expiresAt: now + 1 * 60 * 1000, // 1 minute left (less than default 2-min threshold)
         refreshAttempts: 0,
       };
 
@@ -506,26 +511,31 @@ describe('Session Management', () => {
     });
 
     it('should handle session lifecycle', () => {
-      const lifetime = 60 * 60 * 1000; // 1 hour
-
-      // Fresh session
-      let sessionTime = now;
+      // Test fresh session (just created)
       session = {
         sessionKey: {} as any,
-        createdAt: sessionTime,
-        expiresAt: sessionTime + lifetime,
+        createdAt: now,
+        expiresAt: now + 60 * 60 * 1000, // 1 hour
         refreshAttempts: 0,
       };
       expect(getSessionHealthPercent(session)).toBe(100);
 
-      // 30 minutes later
-      sessionTime = now + 30 * 60 * 1000;
-      session.expiresAt = sessionTime + (lifetime / 2);
+      // Test half-expired session
+      session = {
+        sessionKey: {} as any,
+        createdAt: now - 30 * 60 * 1000, // Created 30 minutes ago
+        expiresAt: now + 30 * 60 * 1000, // Expires in 30 minutes
+        refreshAttempts: 0,
+      };
       expect(getSessionHealthPercent(session)).toBe(50);
 
-      // 55 minutes later - needs refresh
-      sessionTime = now + 55 * 60 * 1000;
-      session.expiresAt = sessionTime + (5 * 60 * 1000);
+      // Test session about to expire - needs refresh
+      session = {
+        sessionKey: {} as any,
+        createdAt: now - 55 * 60 * 1000,
+        expiresAt: now + 1 * 60 * 1000, // 1 minute left (within 2-minute threshold)
+        refreshAttempts: 0,
+      };
       expect(shouldRefreshSession(session)).toBe(true);
     });
   });

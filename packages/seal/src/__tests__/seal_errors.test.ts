@@ -44,7 +44,7 @@ describe('Seal Error Handling', () => {
 
       expect(classified.code).toBe(SealErrorCode.INVALID_PERSONAL_MESSAGE);
       expect(classified.isRetryable).toBe(true);
-      expect(classified.suggestedAction).toContain('authorize');
+      expect(classified.suggestedAction).toContain('authorization');
     });
 
     it('should classify decryption failures', () => {
@@ -72,7 +72,7 @@ describe('Seal Error Handling', () => {
     });
 
     it('should classify network errors', () => {
-      const error = new Error('Failed to fetch from key server');
+      const error = new Error('Failed to fetch data');
       const classified = classifySealError(error);
 
       expect(classified.code).toBe(SealErrorCode.NETWORK_ERROR);

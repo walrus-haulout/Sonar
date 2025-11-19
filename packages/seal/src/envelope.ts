@@ -136,6 +136,11 @@ export function migrateToVersionedEnvelope(legacyEnvelope: Uint8Array): Uint8Arr
   );
   const keyLength = keyLengthView.getUint32(0, true);
 
+  // Validate key length before migrating
+  if (keyLength < 150 || keyLength > 800) {
+    throw new Error(`Invalid sealed key length: ${keyLength}. Expected 150-800 bytes.`);
+  }
+
   const sealedKey = legacyEnvelope.slice(4, 4 + keyLength);
   const encryptedFile = legacyEnvelope.slice(4 + keyLength);
 

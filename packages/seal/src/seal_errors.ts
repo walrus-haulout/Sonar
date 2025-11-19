@@ -124,7 +124,7 @@ export function classifySealError(error: unknown): SealErrorContext {
   }
 
   // Cryptography errors
-  if (lowerMessage.includes('decryption') && lowerMessage.includes('failed')) {
+  if ((lowerMessage.includes('decryption') || lowerMessage.includes('decrypt')) && lowerMessage.includes('failed')) {
     return {
       code: SealErrorCode.DECRYPTION_FAILED,
       message: 'Failed to decrypt blob',
@@ -151,6 +151,17 @@ export function classifySealError(error: unknown): SealErrorContext {
       originalError: error instanceof Error ? error : undefined,
       isRetryable: false,
       suggestedAction: 'Verify blob integrity and re-upload if needed',
+    };
+  }
+
+  // Key server errors (check before generic timeout)
+  if (lowerMessage.includes('key server')) {
+    return {
+      code: SealErrorCode.KEY_SERVER_ERROR,
+      message: 'Key server error',
+      originalError: error instanceof Error ? error : undefined,
+      isRetryable: true,
+      suggestedAction: 'Try again. The key server may be temporarily unavailable.',
     };
   }
 
@@ -192,17 +203,6 @@ export function classifySealError(error: unknown): SealErrorContext {
       originalError: error instanceof Error ? error : undefined,
       isRetryable: true,
       suggestedAction: 'Check gas budget and try again',
-    };
-  }
-
-  // Key server errors
-  if (lowerMessage.includes('key server')) {
-    return {
-      code: SealErrorCode.KEY_SERVER_ERROR,
-      message: 'Key server error',
-      originalError: error instanceof Error ? error : undefined,
-      isRetryable: true,
-      suggestedAction: 'Try again. The key server may be temporarily unavailable.',
     };
   }
 

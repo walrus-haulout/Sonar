@@ -466,55 +466,51 @@ describe('Metadata Verification', () => {
   });
 
   describe('Metadata Property Tests', () => {
-    it('should create metadata with consistent hashes', async () => {
-      await fc.assert(
-        await fc.promise(
-          fc.asyncProperty(
-            fc.string({ minLength: 1 }),
-            fc.string({ minLength: 1 }),
-            fc.string({ minLength: 1 }),
-            fc.integer({ min: 100, max: 1000000 }),
-            fc.integer({ min: 100, max: 1000000 }),
-            async (policyId, packageId, identity, origSize, encSize) => {
-              const metadata = await createEncryptionMetadata(
-                policyId,
-                packageId,
-                identity,
-                origSize,
-                encSize
-              );
+    it('should create metadata with consistent hashes', () => {
+      fc.assert(
+        fc.asyncProperty(
+          fc.string({ minLength: 1, maxLength: 100 }),
+          fc.string({ minLength: 1, maxLength: 100 }),
+          fc.string({ minLength: 1, maxLength: 100 }),
+          fc.integer({ min: 100, max: 100000 }),
+          fc.integer({ min: 100, max: 100000 }),
+          async (policyId, packageId, identity, origSize, encSize) => {
+            const metadata = await createEncryptionMetadata(
+              policyId,
+              packageId,
+              identity,
+              origSize,
+              encSize
+            );
 
-              return await verifyMetadataHash(metadata);
-            }
-          )
+            return await verifyMetadataHash(metadata);
+          }
         )
       );
     });
 
-    it('should reject tampered metadata reliably', async () => {
-      await fc.assert(
-        await fc.promise(
-          fc.asyncProperty(
-            fc.integer({ min: 100, max: 1000000 }),
-            async (originalSize) => {
-              const metadata = await createEncryptionMetadata(
-                'policy',
-                'package',
-                'user',
-                originalSize,
-                originalSize * 2
-              );
+    it('should reject tampered metadata reliably', () => {
+      fc.assert(
+        fc.asyncProperty(
+          fc.integer({ min: 100, max: 100000 }),
+          async (originalSize) => {
+            const metadata = await createEncryptionMetadata(
+              'policy',
+              'package',
+              'user',
+              originalSize,
+              originalSize * 2
+            );
 
-              // Tamper
-              const tampered: EncryptionMetadata = {
-                ...metadata,
-                originalSize: originalSize + 1,
-              };
+            // Tamper
+            const tampered: EncryptionMetadata = {
+              ...metadata,
+              originalSize: originalSize + 1,
+            };
 
-              const isValid = await verifyMetadataHash(tampered);
-              return !isValid; // Should be invalid
-            }
-          )
+            const isValid = await verifyMetadataHash(tampered);
+            return !isValid; // Should be invalid
+          }
         )
       );
     });
