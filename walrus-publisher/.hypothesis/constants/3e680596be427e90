@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/walrus-publisher/src/transaction_builder.py
+# hypothesis_version: 6.148.2
+
+['blob_id', 'epochs', 'package', 'system_object', 'utf-8', 'wallet']

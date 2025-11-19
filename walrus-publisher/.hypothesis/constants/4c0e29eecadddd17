@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/walrus-publisher/src/orchestrator.py
+# hypothesis_version: 6.148.2
+
+['chunk_count', 'completed', 'created_at', 'file_size', 'in_progress', 'session_id', 'wallet_count']

@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/walrus-publisher/config/platform.py
+# hypothesis_version: 6.148.2
+
+['0.0.0.0', '0.1.0', '1048576', '256', '3600', '536870912', '8080', 'CHUNK_MAX_SIZE', 'CHUNK_MIN_SIZE', 'DD_ENV', 'DEBUG', 'FLY_APP_NAME', 'HOST', 'MAX_WALLETS', 'PORT', 'REDIS_URL', 'SESSION_TTL', 'SUI_NETWORK', 'SUI_RPC_URL', 'WALRUS_PACKAGE_ID', 'WALRUS_PUBLISHER_URL', 'WALRUS_SYSTEM_OBJECT', 'digitalocean', 'false', 'fly', 'generic', 'mainnet', 'railway', 'true']

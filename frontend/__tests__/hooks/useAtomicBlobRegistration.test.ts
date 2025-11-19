@@ -361,7 +361,7 @@ describe('useAtomicBlobRegistration Hook', () => {
   describe('Hook Property Tests', () => {
     it('should create unique registrations consistently', async () => {
       await fc.assert(
-        fc.asyncProperty(fc.integer({ min: 1, max: 100 }), async (count) => {
+        fc.asyncProperty(fc.integer({ min: 1, max: 100 }), async (count: number) => {
           const regIds = [];
           for (let i = 0; i < count; i++) {
             const regId = await hook.registerBlobIntent('policy-1', 86400);
@@ -375,7 +375,7 @@ describe('useAtomicBlobRegistration Hook', () => {
 
     it('should handle various policy ID formats', async () => {
       await fc.assert(
-        fc.asyncProperty(fc.string({ minLength: 1, maxLength: 100 }), async (policy) => {
+        fc.asyncProperty(fc.string({ minLength: 1, maxLength: 100 }), async (policy: string) => {
           const regId = await hook.registerBlobIntent(policy, 86400);
           const registration = hook.getRegistration(regId);
           return registration.seal_policy_id === policy;

@@ -1,0 +1,4 @@
+# file: /Users/angel/Projects/sonar/walrus-publisher/src/uploader.py
+# hypothesis_version: 6.148.2
+
+[300.0, 'Content-Type', 'blobId', 'blob_id']

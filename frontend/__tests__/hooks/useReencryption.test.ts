@@ -483,7 +483,7 @@ describe('useReencryption Hook', () => {
       await fc.assert(
         fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 100 }),
-          async (newPolicy) => {
+          async (newPolicy: string) => {
             hook.createSubmission('submission-1', 'policy-1', 'walrus-123', 'preview-456');
 
             if (newPolicy === 'policy-1') return true; // Skip identical policies
@@ -506,7 +506,7 @@ describe('useReencryption Hook', () => {
         fc.asyncProperty(
           fc.string({ minLength: 1 }),
           fc.string({ minLength: 1 }),
-          async (walrusId, previewId) => {
+          async (walrusId: string, previewId: string) => {
             hook.createSubmission('submission-1', 'policy-1', 'old-walrus', 'old-preview');
 
             const result = await hook.reencryptSubmission(

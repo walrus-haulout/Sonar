@@ -93,6 +93,16 @@ export {
 } from './decryption';
 
 // ============================================================================
+// Re-encryption APIs
+// ============================================================================
+
+export {
+  reencryptBlob,
+  reencryptBlobStreaming,
+  validateReencryptionOptions,
+} from './reencryption';
+
+// ============================================================================
 // Cache Management
 // ============================================================================
 
@@ -140,6 +150,12 @@ export type {
   CacheStrategy,
   KeyCacheEntry,
 } from './types';
+
+export type {
+  // Re-encryption
+  ReencryptionOptions,
+  ReencryptionStage,
+} from './reencryption';
 
 // Export SealErrorCode enum from types
 export { SealErrorCode } from './types';

@@ -140,9 +140,9 @@ export function PublishStep({
 
           // Proceed with object change detection
           onPublished({
+            txDigest: '',
             datasetId: result.submissionId,
-            epoch: 0, // Will be filled from transaction details if needed
-            message: 'Dataset published to blockchain',
+            confirmed: true,
           });
 
           return;
