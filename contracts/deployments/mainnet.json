@@ -1,18 +1,28 @@
 {
   "network": "mainnet",
-  "packageId": "0xdff609ce3174576c8a0e81c9f65775e7e7fe5b11c5ef375345fab4ca4b837e9d",
+  "packageId": "0x1084073ffefdb80fac657daae2d60895fac976ab6b85196c0ce86bcbce51edf6",
   "version": 1,
-  "upgradeDigest": "BnKYm5N6bkBDM1QMTD545DewnrDMbSCJ3Wi1GLhvVc1k",
-  "upgradedAt": "1762724836730",
-  "epoch": 942,
-  "modules": ["economics", "marketplace", "purchase_policy", "sonar_token"],
+  "upgradeDigest": "iW8aHGVxKzEkAsk9owvfxyQ1Dxt8a5Hikuux7Ae5Fhr",
+  "upgradedAt": "1763526817631",
+  "epoch": 951,
+  "modules": [
+    "economics",
+    "marketplace",
+    "purchase_policy",
+    "sonar_token",
+    "storage_lease",
+    "verification_session",
+    "deletion_proofs",
+    "hybrid_seal_policy",
+    "open_access_policy"
+  ],
   "objects": {
-    "upgradeCap": "0x40f4423dc9ad9129476863f3673345a14f9cd57b85b13e66650e903f6e695cbb",
-    "treasuryCap": "0x6675c9836c148300930ecb3f186e5ab04adbe135c4db6b7a65d0dfe058fe95a0",
-    "coinMetadata": "0xe970e1545ebdbb2d9e61ea488a60866fe88202e4950cd8ca999f6a23f477e192",
-    "marketplace": "0xb0c09e28efdf70ccdeff2f7ae008ee23961249802bab9682ad4c812957c6a8c6",
-    "adminCap": "0x1974db8484f69236e77136e2d5da6f2a753a2c07cc016085b8fa87ebc2cacdcf",
-    "validatorCap": "0xe6778a9d4433a8850672a278bb886a789b3335fd4e984a82bb0f7b59cfbd12dc"
+    "upgradeCap": "0x83f01796888c0d2167f6b23e7709a0275b20fdd89a99657aeb1b57db3cd8557d",
+    "treasuryCap": "0xa81d82c2adfe5a550618f707ff51caf1c5d30044450a1f7b98ad2054d24e19e2",
+    "coinMetadata": "0x4422293a3a2eb74d93ccaeacde8bf19e3e719ccea5d3b62228da91497bf9b547",
+    "marketplace": "0xb1c467213d96d3b2de78124cf10deebcefe7e19093cbbaac3b368b604112e5b4",
+    "adminCap": "0x04f6dc9112c2d69cbc130dde93b251048097469a3d66caeacf30a53d7a9a244f",
+    "validatorCap": "0x34da7b18becbbaa164173fde5cc528e3af87531f73d84df365b04ad0ca939e42"
   },
   "features": {
     "multiFileDatasets": true,
@@ -20,5 +30,5 @@
     "maxFilesPerDataset": 100,
     "maxBundleDiscountBps": 5000
   },
-  "upgradeNotes": "Added multi-file dataset support with submit_audio_dataset function, DatasetSubmission struct, and bundle discount economics"
+  "upgradeNotes": "Fresh deployment with open_access_policy and linter fixes"
 }

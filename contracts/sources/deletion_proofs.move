@@ -147,7 +147,7 @@ module sonar::deletion_proofs {
 
     /// Submit a deletion receipt from verifier
     /// Called by off-chain verifier after deleting plaintext from Walrus
-    public entry fun submit_deletion_receipt(
+    public fun submit_deletion_receipt(
         _cap: &VerifierCap,
         registry: &mut ProofRegistry,
         session_id: ID,
@@ -218,7 +218,7 @@ module sonar::deletion_proofs {
     /// Verify a deletion receipt
     /// Can be called by anyone to trigger verification logic
     /// In production, would verify Ed25519 signature and check Walrus deletion status
-    public entry fun verify_receipt(
+    public fun verify_receipt(
         registry: &mut ProofRegistry,
         receipt: &mut DeletionReceipt,
         ctx: &mut TxContext
@@ -249,7 +249,7 @@ module sonar::deletion_proofs {
     }
 
     /// Check if proof is expired
-    public entry fun check_expiry(
+    public fun check_expiry(
         registry: &mut ProofRegistry,
         receipt: &DeletionReceipt,
         ctx: &mut TxContext
@@ -269,7 +269,7 @@ module sonar::deletion_proofs {
 
     /// Authorize a new verifier
     /// Called by admin/governance to add trusted verifiers
-    public entry fun authorize_verifier(
+    public fun authorize_verifier(
         _cap: &VerifierCap,
         registry: &mut ProofRegistry,
         verifier_address: address,
@@ -289,7 +289,7 @@ module sonar::deletion_proofs {
     }
 
     /// Revoke a verifier's authorization
-    public entry fun revoke_verifier(
+    public fun revoke_verifier(
         _cap: &VerifierCap,
         registry: &mut ProofRegistry,
         verifier_address: address,

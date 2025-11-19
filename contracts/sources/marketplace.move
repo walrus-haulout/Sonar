@@ -1154,7 +1154,7 @@ module sonar::marketplace {
 
     /// Purchase dataset with SUI (temporary support, will be disabled in future)
     /// Buyers pay with SUI, which is converted to protocol revenue split
-    public entry fun purchase_dataset_with_sui(
+    public fun purchase_dataset_with_sui(
         marketplace: &mut QualityMarketplace,
         submission: &mut AudioSubmission,
         mut payment: Coin<SUI>,
@@ -1230,7 +1230,7 @@ module sonar::marketplace {
     // ========== Submission Management Functions ==========
 
     /// List submission for sale (uploader only)
-    public entry fun list_for_sale(
+    public fun list_for_sale(
         submission: &mut AudioSubmission,
         dataset_price: u64,
         ctx: &mut TxContext
@@ -1243,7 +1243,7 @@ module sonar::marketplace {
     }
 
     /// Unlist submission from sale (uploader only)
-    public entry fun unlist_from_sale(
+    public fun unlist_from_sale(
         submission: &mut AudioSubmission,
         ctx: &mut TxContext
     ) {
@@ -1253,7 +1253,7 @@ module sonar::marketplace {
     }
 
     /// Update dataset price (uploader only)
-    public entry fun update_price(
+    public fun update_price(
         submission: &mut AudioSubmission,
         new_price: u64,
         ctx: &mut TxContext
@@ -1267,7 +1267,7 @@ module sonar::marketplace {
 
     /// Activate circuit breaker for emergency protection
     /// Only AdminCap holder can activate
-    public entry fun activate_circuit_breaker(
+    public fun activate_circuit_breaker(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
         reason: String,
@@ -1289,7 +1289,7 @@ module sonar::marketplace {
     /// Deactivate circuit breaker manually
     /// Only AdminCap holder can deactivate
     /// Auto-deactivation happens after cooldown period via is_circuit_breaker_active check
-    public entry fun deactivate_circuit_breaker(
+    public fun deactivate_circuit_breaker(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
         ctx: &mut TxContext
@@ -1305,7 +1305,7 @@ module sonar::marketplace {
 
     /// Update economic configuration with individual parameters
     /// Externally callable entry point for AdminCap holders
-    public entry fun update_economic_config_entry(
+    public fun update_economic_config_entry(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
         tier_1_floor: u64,
@@ -1355,7 +1355,7 @@ module sonar::marketplace {
 
     /// Toggle SUI payment support (AdminCap required)
     /// Used to disable SUI payments when SNR liquidity is established
-    public entry fun toggle_sui_payments(
+    public fun toggle_sui_payments(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
         enabled: bool
@@ -1366,7 +1366,7 @@ module sonar::marketplace {
     /// Withdraw from liquidity vault
     /// Subject to withdrawal limits (10% per epoch, 7 epoch minimum between)
     /// CRITICAL: Checks cooldown BEFORE resetting epoch counter
-    public entry fun withdraw_liquidity_vault(
+    public fun withdraw_liquidity_vault(
         _cap: &AdminCap,
         marketplace: &mut QualityMarketplace,
         amount: u64,
@@ -1426,7 +1426,7 @@ module sonar::marketplace {
 
     /// Finalize submission from a verified session
     /// Creates AudioSubmission and StorageLease after verification completes
-    public entry fun finalize_submission_from_session(
+    public fun finalize_submission_from_session(
         marketplace: &mut QualityMarketplace,
         session: &mut VerificationSession,
         session_registry: &mut SessionRegistry,

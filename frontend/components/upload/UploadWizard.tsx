@@ -98,24 +98,24 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
       // Remove large File objects
       audioFile: state.audioFile
         ? {
-            duration: state.audioFile.duration,
-            id: state.audioFile.id,
-            // Skip 'file', 'waveform', 'preview' - these are large
-          }
+          duration: state.audioFile.duration,
+          id: state.audioFile.id,
+          // Skip 'file', 'waveform', 'preview' - these are large
+        }
         : null,
       audioFiles: Array.isArray(state.audioFiles)
         ? state.audioFiles.map((f) => ({
-            duration: f.duration,
-            id: f.id,
-          }))
+          duration: f.duration,
+          id: f.id,
+        }))
         : [],
       // Remove large binary data from encryption result
       encryption: state.encryption
         ? {
-            seal_policy_id: state.encryption.seal_policy_id,
-            metadata: state.encryption.metadata,
-            // Skip 'encryptedBlob', 'previewBlob', 'backupKey' - these are large or sensitive
-          }
+          seal_policy_id: state.encryption.seal_policy_id,
+          metadata: state.encryption.metadata,
+          // Skip 'encryptedBlob', 'previewBlob', 'backupKey' - these are large or sensitive
+        }
         : null,
       walrusUpload: sanitizeWalrusUpload(state.walrusUpload),
       verification: sanitizeVerification(state.verification),
@@ -366,6 +366,8 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
 
               {state.step === 'verification' && (
                 <VerificationStep
+                  audioFile={state.audioFile || undefined}
+                  audioFiles={state.audioFiles}
                   metadata={state.metadata!}
                   walrusUpload={state.walrusUpload!}
                   onVerificationComplete={(verification) => {

@@ -311,7 +311,7 @@ module sonar::storage_lease {
     /// Check if lease is expired and emit warning/expiry events
     /// Can be called by anyone (incentivized off-chain cron job)
     /// Takes &mut to prevent duplicate event emissions
-    public entry fun check_lease_expiry(
+    public fun check_lease_expiry(
         lease: &mut StorageLease,
         registry: &mut LeaseRegistry,
         ctx: &mut TxContext
