@@ -68,13 +68,82 @@ export async function decryptFile(
       // Handle policy arguments based on policy type
       const args: any[] = [tx.pure.vector('u8', hexToBytes(identity))];
 
-      if (policyModule === 'open_access_policy' && policyArgs.length >= 2) {
-        // open_access_policy expects: seal_id (vector<u8>), upload_timestamp_ms (u64), clock (Clock)
-        const uploadTimestampMs = BigInt(policyArgs[0]);
-        const clockObjectId = policyArgs[1];
+      if (policyModule === 'open_access_policy') {
+        // Validate argument count
+        if (!policyArgs || policyArgs.length < 2) {
+          throw new DecryptionError(
+            undefined,
+            'open_access_policy requires 2 arguments: [upload_timestamp_ms, clock_object_id]'
+          );
+        }
 
+        const timestampValue = policyArgs[0];
+        const clockValue = policyArgs[1];
+
+        // Validate timestamp parameter
+        if (timestampValue === null || timestampValue === undefined || timestampValue === '') {
+          throw new DecryptionError(
+            undefined,
+            `Invalid upload timestamp: expected non-empty string, got ${
+              timestampValue === null ? 'null' : timestampValue === undefined ? 'undefined' : 'empty string'
+            }`
+          );
+        }
+
+        if (typeof timestampValue !== 'string') {
+          throw new DecryptionError(
+            undefined,
+            `Invalid upload timestamp type: expected string, got ${typeof timestampValue}`
+          );
+        }
+
+        // Validate clock parameter
+        if (clockValue === null || clockValue === undefined || clockValue === '') {
+          throw new DecryptionError(
+            undefined,
+            `Invalid clock object ID: expected non-empty string, got ${
+              clockValue === null ? 'null' : clockValue === undefined ? 'undefined' : 'empty string'
+            }`
+          );
+        }
+
+        if (typeof clockValue !== 'string') {
+          throw new DecryptionError(
+            undefined,
+            `Invalid clock object ID type: expected string, got ${typeof clockValue}`
+          );
+        }
+
+        // Parse timestamp with range validation
+        let uploadTimestampMs: bigint;
+        try {
+          uploadTimestampMs = BigInt(timestampValue);
+        } catch (parseError) {
+          throw new DecryptionError(
+            undefined,
+            `Failed to parse upload timestamp "${timestampValue}": expected valid integer`,
+            parseError instanceof Error ? parseError : undefined
+          );
+        }
+
+        // Validate timestamp range (2000-01-01 to 2100-01-01 in milliseconds)
+        const MIN_TIMESTAMP_MS = 946684800000n; // 2000-01-01T00:00:00Z
+        const MAX_TIMESTAMP_MS = 4102444800000n; // 2100-01-01T00:00:00Z
+
+        if (uploadTimestampMs < MIN_TIMESTAMP_MS || uploadTimestampMs > MAX_TIMESTAMP_MS) {
+          const isLikelSeconds = uploadTimestampMs > 1000000000n && uploadTimestampMs < 1000000000000n;
+          throw new DecryptionError(
+            undefined,
+            `Invalid upload timestamp: ${uploadTimestampMs}. Expected milliseconds since epoch (2000-2100 range).${
+              isLikelSeconds ? ' Did you pass seconds instead of milliseconds?' : ''
+            }`
+          );
+        }
+
+        // Build arguments for open_access_policy::seal_approve
+        // Expects: seal_id (vector<u8>), upload_timestamp_ms (u64), clock (Clock)
         args.push(tx.pure.u64(uploadTimestampMs));
-        args.push(tx.object(clockObjectId));
+        args.push(tx.object(clockValue));
       } else {
         // Default: treat all remaining args as object IDs
         args.push(...policyArgs.map((arg) => tx.object(arg)));

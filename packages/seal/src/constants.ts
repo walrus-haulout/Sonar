@@ -142,3 +142,13 @@ export const IS_NODE = typeof process !== 'undefined' && process.versions?.node;
 export const HAS_CRYPTO = typeof crypto !== 'undefined';
 export const HAS_INDEXEDDB = IS_BROWSER && typeof indexedDB !== 'undefined';
 export const HAS_WEB_CRYPTO = HAS_CRYPTO && typeof crypto.subtle !== 'undefined';
+
+/**
+ * Sui Clock Object ID
+ * The canonical Clock object shared object on all Sui networks (mainnet, testnet, devnet)
+ * Can be overridden via NEXT_PUBLIC_SUI_CLOCK_ID environment variable for custom networks
+ */
+export const CLOCK_OBJECT_ID =
+  typeof window !== 'undefined' && typeof (process.env as any).NEXT_PUBLIC_SUI_CLOCK_ID === 'string'
+    ? (process.env as any).NEXT_PUBLIC_SUI_CLOCK_ID
+    : '0x6';

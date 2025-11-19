@@ -240,6 +240,9 @@ export {
   TESTNET_KEY_SERVERS,
   MAINNET_KEY_SERVERS,
 
+  // Sui objects
+  CLOCK_OBJECT_ID,
+
   // Platform
   HAS_INDEXEDDB,
 

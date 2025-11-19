@@ -3,6 +3,7 @@ module sonar::open_access_policy {
 
     // Error codes
     const E_EXPIRED: u64 = 1;
+    const E_INVALID_TIMESTAMP: u64 = 2;  // Timestamp is in the future
     const EXPIRATION_WINDOW_MS: u64 = 900_000; // 15 minutes in milliseconds
 
     /// Open access approval - allows decryption during upload verification phase
@@ -25,6 +26,11 @@ module sonar::open_access_policy {
     ) {
         // Validate the approval is within the expiration window
         let current_time_ms = sui::clock::timestamp_ms(clock);
+
+        // Ensure timestamp is not in the future (prevents underflow on subtraction)
+        assert!(current_time_ms >= upload_timestamp_ms, E_INVALID_TIMESTAMP);
+
+        // Calculate age and verify within expiration window
         let age_ms = current_time_ms - upload_timestamp_ms;
         assert!(age_ms <= EXPIRATION_WINDOW_MS, E_EXPIRED);
 

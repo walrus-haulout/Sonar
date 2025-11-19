@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
+import { CLOCK_OBJECT_ID } from '@sonar/seal';
 import { cn } from '@/lib/utils';
 import { useSeal } from '@/hooks/useSeal';
 import {
@@ -390,15 +391,14 @@ export function VerificationStep({
       // After submission, access switches to HybridPolicy with purchase/admin controls
       // Pass upload timestamp and Clock for time-window validation (15 minutes)
       const uploadTimestampMs = Date.now();
-      const clockObjectId = '0x6'; // Sui Clock immutable shared object
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,
         {
           policyModule: 'open_access_policy',
           policyArgs: [
-            uploadTimestampMs.toString(),  // upload_timestamp_ms parameter
-            clockObjectId,                  // Clock parameter
+            uploadTimestampMs.toString(),  // upload_timestamp_ms parameter (milliseconds since epoch)
+            CLOCK_OBJECT_ID,               // Sui Clock shared object ID
           ],
         },
         (progress) => {
@@ -468,10 +468,16 @@ export function VerificationStep({
       // Provide specific error messages based on error type
       let displayError = errorMsg || 'Failed to decrypt and verify audio';
 
-      if (errorMsg.includes('expired') || errorMsg.includes('Expired')) {
+      if (errorMsg.includes('E_EXPIRED')) {
+        displayError = 'Verification window expired (15 minutes exceeded). Please re-upload and try again.';
+      } else if (errorMsg.includes('E_INVALID_TIMESTAMP')) {
+        displayError = 'Invalid upload timestamp. Please make sure your system clock is correct and try again.';
+      } else if (errorMsg.includes('expired') || errorMsg.includes('Expired')) {
         displayError = 'Authorization session expired. Please try again and complete verification within 30 minutes.';
       } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
         displayError = 'Access denied. Please check your wallet connection and try again.';
+      } else if (errorMsg.includes('Invalid upload timestamp') || errorMsg.includes('Did you pass seconds')) {
+        displayError = 'Invalid timestamp format. Please refresh and try verification again.';
       } else if (errorMsg.includes('network') || errorMsg.includes('timeout')) {
         displayError = 'Network error during verification. Please check your connection and retry.';
       } else if (errorMsg.includes('corrupted') || errorMsg.includes('invalid')) {
