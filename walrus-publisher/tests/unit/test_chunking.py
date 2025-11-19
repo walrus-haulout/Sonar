@@ -74,11 +74,12 @@ class TestChunkingOrchestrator:
 
     def test_validate_chunks_valid(self):
         orch = ChunkingOrchestrator()
+        chunk_size = orch.min_chunk_size
         chunks = [
-            ChunkInfo(index=0, size=1024, wallet_index=0, offset=0),
-            ChunkInfo(index=1, size=1024, wallet_index=1, offset=1024),
+            ChunkInfo(index=0, size=chunk_size, wallet_index=0, offset=0),
+            ChunkInfo(index=1, size=chunk_size, wallet_index=1, offset=chunk_size),
         ]
-        assert orch.validate_chunks(2048, chunks) is True
+        assert orch.validate_chunks(chunk_size * 2, chunks) is True
 
     def test_validate_chunks_size_mismatch(self):
         orch = ChunkingOrchestrator()
