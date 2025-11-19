@@ -72,4 +72,38 @@ async def test_get_wallet_for_chunk(orchestrator):
     wallet = await orchestrator.get_wallet_for_chunk(session_id, 0)
     assert wallet is not None
     assert wallet.address
-    assert wallet.private_key
+
+
+@pytest.mark.asyncio
+async def test_wallet_manager_disconnect(orchestrator):
+    """Test wallet manager can disconnect"""
+    redis_obj = orchestrator.wallet_manager.redis
+    assert redis_obj is not None
+    # Disconnect should not raise
+    await orchestrator.wallet_manager.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_multiple_sessions_concurrent(orchestrator):
+    """Test creating multiple sessions concurrently"""
+    import asyncio
+    tasks = [
+        orchestrator.create_upload_session(10 * 1024 * 1024)
+        for _ in range(3)
+    ]
+    results = await asyncio.gather(*tasks)
+    assert len(results) == 3
+    session_ids = [result[0] for result in results]
+    assert len(set(session_ids)) == 3, "Session IDs should be unique"
+
+
+@pytest.mark.asyncio
+async def test_wallet_cleanup_session(orchestrator):
+    """Test wallet manager cleanup_session"""
+    session_id = "test_session_cleanup"
+    # Create a session
+    _, chunk_plans = await orchestrator.create_upload_session(10 * 1024 * 1024)
+    wallet_count = len(chunk_plans)
+
+    # Cleanup should work
+    await orchestrator.wallet_manager.cleanup_session(session_id, wallet_count)

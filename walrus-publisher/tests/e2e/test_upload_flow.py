@@ -189,3 +189,87 @@ async def test_concurrent_uploads():
         # All should have unique session IDs
         session_ids = [r.json()['session_id'] for r in responses]
         assert len(set(session_ids)) == len(session_ids), "Session IDs should be unique"
+
+
+@pytest.mark.asyncio
+async def test_chunk_upload_missing_session(test_client):
+    """Test /upload/chunk returns 404 for missing session"""
+    with patch('main.api_keys', set()):
+        response = test_client.post(
+            '/upload/nonexistent_session/chunk/0',
+            files={'file': ('test.bin', b'test_data')},
+        )
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_transactions_missing_session(test_client):
+    """Test /transactions returns 404 for missing session"""
+    with patch('main.api_keys', set()):
+        response = test_client.get('/upload/nonexistent_session/transactions')
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_transactions_incomplete_upload(test_client):
+    """Test /transactions returns 400 when chunks not uploaded"""
+    with patch('main.api_keys', set()):
+        # Create a session
+        init_resp = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        session_id = init_resp.json()['session_id']
+
+        # Try to get transactions without uploading chunks
+        response = test_client.get(f'/upload/{session_id}/transactions')
+        assert response.status_code == 400
+        assert 'Not all chunks uploaded' in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_finalize_missing_session(test_client):
+    """Test /finalize returns 404 for missing session"""
+    with patch('main.api_keys', set()):
+        response = test_client.post(
+            '/upload/nonexistent_session/finalize',
+            json={'signed_transactions': []},
+        )
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_finalize_no_transactions(test_client):
+    """Test /finalize returns 400 for empty transactions"""
+    with patch('main.api_keys', set()):
+        # Create a session
+        init_resp = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        session_id = init_resp.json()['session_id']
+
+        # Try to finalize without transactions
+        response = test_client.post(
+            f'/upload/{session_id}/finalize',
+            json={'signed_transactions': []},
+        )
+        assert response.status_code == 400
+        assert 'No transactions' in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_upload_status_endpoint(test_client):
+    """Test /status endpoint returns SSE stream response"""
+    with patch('main.api_keys', set()):
+        # Create a session
+        init_resp = test_client.post(
+            '/upload/init',
+            json={'file_size': 50 * 1024 * 1024},
+        )
+        session_id = init_resp.json()['session_id']
+
+        # Get status (SSE stream)
+        response = test_client.get(f'/upload/{session_id}/status')
+        assert response.status_code == 200
+        assert 'text/event-stream' in response.headers.get('content-type', '')
