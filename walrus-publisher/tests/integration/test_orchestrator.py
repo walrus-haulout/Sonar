@@ -128,7 +128,7 @@ async def test_get_wallet_for_valid_chunk(orchestrator):
     session_id, chunk_plans = await orchestrator.create_upload_session(10 * 1024 * 1024)
     # Get wallet for first chunk
     if chunk_plans:
-        first_chunk_index = chunk_plans[0]['index']
+        first_chunk_index = chunk_plans[0].index
         wallet = await orchestrator.get_wallet_for_chunk(session_id, first_chunk_index)
         assert wallet is not None
         assert wallet.address
