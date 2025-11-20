@@ -214,3 +214,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start server using start.sh script (handles PORT env var for Railway/cloud platforms)
 CMD ["/app/start.sh"]
+# Force rebuild to ensure seal-cli is installed - 20251119-221951
