@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SonarBackground } from '@/components/animations/SonarBackground';
 import {
   UploadStep,
   UploadWizardState,
@@ -22,6 +23,7 @@ import { SuccessStep } from './SuccessStep';
 interface UploadWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  fullscreen?: boolean;
 }
 
 const STEPS: UploadStep[] = [
@@ -60,7 +62,7 @@ const STORAGE_KEY = 'sonar-upload-wizard-state';
  * UploadWizard Component
  * Multi-step wizard for dataset upload with Walrus & Sui integration
  */
-export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
+export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadWizardProps) {
   const [state, setState] = useState<UploadWizardState>(INITIAL_STATE);
   const [persistenceDisabled, setPersistenceDisabled] = useState(false);
 
@@ -248,6 +250,232 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
     }
   };
 
+  // Reusable wizard content
+  const content = (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-mono font-bold text-sonar-highlight-bright">
+            {STEP_TITLES[state.step]}
+          </h2>
+          <p className="text-sonar-highlight/70 mt-1">
+            Step {currentStepIndex + 1} of {STEPS.length}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {state.step !== 'success' && (
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className={cn(
+                'text-xs uppercase tracking-wide font-mono',
+                'text-sonar-coral hover:text-sonar-coral/80',
+                'border border-sonar-coral/40 rounded-sonar px-3 py-1.5',
+                'transition-colors focus:outline-none focus:ring-2 focus:ring-sonar-coral/60'
+              )}
+            >
+              Discard Draft
+            </button>
+          )}
+          {!fullscreen && (
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                className={cn(
+                  'text-sonar-highlight hover:text-sonar-signal',
+                  'transition-colors p-2 rounded-sonar',
+                  'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
+                )}
+                aria-label="Close upload wizard"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </Dialog.Close>
+          )}
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="mb-4">
+        <div className="h-1 bg-sonar-blue/20 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-sonar-signal to-sonar-blue"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.3 }}
+          />
+        </div>
+      </div>
+
+      {persistenceDisabled && (
+        <div
+          className={cn(
+            'mb-6 p-3 rounded-sonar text-sm font-mono',
+            'bg-sonar-coral/15 border border-sonar-coral/60 text-sonar-coral'
+          )}
+        >
+          Browser storage is full. Autosave is temporarily disabled, but your current session
+          will continue. Close the wizard only after publishing or discarding the draft.
+        </div>
+      )}
+
+      {/* Step Content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={state.step}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          {state.step === 'file-upload' && (
+            <FileUploadStep
+              audioFile={state.audioFile}
+              audioFiles={state.audioFiles}
+              onFileSelected={(audioFile) => {
+                setState((prev) => ({ ...prev, audioFile }));
+                goToNextStep();
+              }}
+              onFilesSelected={(audioFiles) => {
+                setState((prev) => ({ ...prev, audioFiles }));
+              }}
+              onContinue={goToNextStep}
+              error={state.error}
+              multiFile={true}
+            />
+          )}
+
+          {state.step === 'metadata' && (
+            <MetadataStep
+              metadata={state.metadata}
+              audioFiles={state.audioFiles}
+              onSubmit={(metadata) => {
+                setState((prev) => ({ ...prev, metadata }));
+                goToNextStep();
+              }}
+              onBack={goToPreviousStep}
+              error={state.error}
+            />
+          )}
+
+          {state.step === 'verification' && (
+            <VerificationStep
+              audioFile={state.audioFile || undefined}
+              audioFiles={state.audioFiles}
+              metadata={state.metadata!}
+              walrusUpload={state.walrusUpload!}
+              onVerificationComplete={(verification) => {
+                setState((prev) => ({ ...prev, verification }));
+                goToNextStep();
+              }}
+              onError={(error) => setState((prev) => ({ ...prev, error }))}
+            />
+          )}
+
+          {state.step === 'encryption' && (
+            <EncryptionStep
+              audioFile={state.audioFile!}
+              audioFiles={state.audioFiles}
+              onEncrypted={(result) => {
+                console.log('[UploadWizard] Encryption completed, creating walrusUpload', {
+                  walrusBlobId: result.walrusBlobId,
+                  seal_policy_id: result.seal_policy_id?.slice(0, 20),
+                  encryptedObjectBcsHex: result.encryptedObjectBcsHex ? 'present' : 'missing',
+                  hasFiles: !!result.files,
+                  filesToProcess: result.files?.length ?? 'N/A',
+                });
+
+                // Extract walrusUpload info from encryption result
+                const walrusUpload: WalrusUploadResult = {
+                  blobId: result.walrusBlobId,
+                  previewBlobId: result.previewBlobId,
+                  seal_policy_id: result.seal_policy_id,
+                  encryptedObjectBcsHex: result.encryptedObjectBcsHex,
+                  files: result.files,
+                  bundleDiscountBps: result.bundleDiscountBps,
+                  mimeType: result.mimeType,
+                  previewMimeType: result.previewMimeType,
+                };
+
+                console.log('[UploadWizard] WalrusUploadResult created', {
+                  blobId: walrusUpload.blobId,
+                  encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex ? 'present' : 'missing',
+                  encryptedObjectBcsHexLength: walrusUpload.encryptedObjectBcsHex?.length ?? 0,
+                });
+
+                setState((prev) => {
+                  const nextState = {
+                    ...prev,
+                    encryption: result,
+                    walrusUpload,
+                  };
+                  console.log('[UploadWizard] State updated with walrusUpload', {
+                    walrusUploadPresent: !!nextState.walrusUpload,
+                    encryptedObjectBcsHexPresent: !!nextState.walrusUpload?.encryptedObjectBcsHex,
+                  });
+                  return nextState;
+                });
+                goToNextStep();
+              }}
+              onError={(error) => setState((prev) => ({ ...prev, error }))}
+            />
+          )}
+
+          {state.step === 'publish' && (
+            <PublishStep
+              walrusUpload={state.walrusUpload!}
+              metadata={state.metadata!}
+              verification={state.verification!}
+              onPublished={(publish) => {
+                setState((prev) => ({ ...prev, publish }));
+                goToNextStep();
+              }}
+              onError={(error) => setState((prev) => ({ ...prev, error }))}
+            />
+          )}
+
+          {state.step === 'success' && (
+            <SuccessStep
+              publish={state.publish!}
+              metadata={state.metadata!}
+              onClose={() => closeWizard({ clearDraft: true })}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Error Display */}
+      {state.error && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={cn(
+            'mt-6 p-4 rounded-sonar',
+            'bg-sonar-coral/10 border border-sonar-coral',
+            'text-sonar-coral'
+          )}
+        >
+          <p className="font-mono text-sm">{state.error}</p>
+        </motion.div>
+      )}
+    </>
+  );
+
+  // Return based on fullscreen mode
+  if (fullscreen) {
+    return (
+      <main className="relative min-h-screen">
+        <SonarBackground opacity={0.2} intensity={0.5} />
+        <div className="relative z-10 container mx-auto px-6 py-12">
+          <div className="max-w-4xl mx-auto glass-panel rounded-sonar p-8">
+            {content}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={handleDialogOpenChange}>
       <Dialog.Portal>
@@ -260,212 +488,7 @@ export function UploadWizard({ open, onOpenChange }: UploadWizardProps) {
             'focus:outline-none overflow-y-auto'
           )}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <Dialog.Title className="text-2xl font-mono font-bold text-sonar-highlight-bright">
-                {STEP_TITLES[state.step]}
-              </Dialog.Title>
-              <Dialog.Description className="text-sonar-highlight/70 mt-1">
-                Step {currentStepIndex + 1} of {STEPS.length}
-              </Dialog.Description>
-            </div>
-            <div className="flex items-center gap-3">
-              {state.step !== 'success' && (
-                <button
-                  type="button"
-                  onClick={handleDiscardDraft}
-                  className={cn(
-                    'text-xs uppercase tracking-wide font-mono',
-                    'text-sonar-coral hover:text-sonar-coral/80',
-                    'border border-sonar-coral/40 rounded-sonar px-3 py-1.5',
-                    'transition-colors focus:outline-none focus:ring-2 focus:ring-sonar-coral/60'
-                  )}
-                >
-                  Discard Draft
-                </button>
-              )}
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'text-sonar-highlight hover:text-sonar-signal',
-                    'transition-colors p-2 rounded-sonar',
-                    'focus:outline-none focus:ring-2 focus:ring-sonar-signal'
-                  )}
-                  aria-label="Close upload wizard"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </Dialog.Close>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mb-4">
-            <div className="h-1 bg-sonar-blue/20 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-sonar-signal to-sonar-blue"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.3 }}
-              />
-            </div>
-          </div>
-
-          {persistenceDisabled && (
-            <div
-              className={cn(
-                'mb-6 p-3 rounded-sonar text-sm font-mono',
-                'bg-sonar-coral/15 border border-sonar-coral/60 text-sonar-coral'
-              )}
-            >
-              Browser storage is full. Autosave is temporarily disabled, but your current session
-              will continue. Close the wizard only after publishing or discarding the draft.
-            </div>
-          )}
-
-          {/* Step Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={state.step}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              {state.step === 'file-upload' && (
-                <FileUploadStep
-                  audioFile={state.audioFile}
-                  audioFiles={state.audioFiles}
-                  onFileSelected={(audioFile) => {
-                    setState((prev) => ({ ...prev, audioFile }));
-                    goToNextStep();
-                  }}
-                  onFilesSelected={(audioFiles) => {
-                    setState((prev) => ({ ...prev, audioFiles }));
-                  }}
-                  onContinue={goToNextStep}
-                  error={state.error}
-                  multiFile={true}
-                />
-              )}
-
-              {state.step === 'metadata' && (
-                <MetadataStep
-                  metadata={state.metadata}
-                  audioFiles={state.audioFiles}
-                  onSubmit={(metadata) => {
-                    setState((prev) => ({ ...prev, metadata }));
-                    goToNextStep();
-                  }}
-                  onBack={goToPreviousStep}
-                  error={state.error}
-                />
-              )}
-
-              {state.step === 'verification' && (
-                <VerificationStep
-                  audioFile={state.audioFile || undefined}
-                  audioFiles={state.audioFiles}
-                  metadata={state.metadata!}
-                  walrusUpload={state.walrusUpload!}
-                  onVerificationComplete={(verification) => {
-                    setState((prev) => ({ ...prev, verification }));
-                    goToNextStep();
-                  }}
-                  onError={(error) => setState((prev) => ({ ...prev, error }))}
-                />
-              )}
-
-              {state.step === 'encryption' && (
-                <EncryptionStep
-                  audioFile={state.audioFile!}
-                  audioFiles={state.audioFiles}
-                  onEncrypted={(result) => {
-                    console.log('[UploadWizard] Encryption completed, creating walrusUpload', {
-                      walrusBlobId: result.walrusBlobId,
-                      seal_policy_id: result.seal_policy_id?.slice(0, 20),
-                      encryptedObjectBcsHex: result.encryptedObjectBcsHex ? 'present' : 'missing',
-                      hasFiles: !!result.files,
-                      filesToProcess: result.files?.length ?? 'N/A',
-                    });
-
-                    // Extract walrusUpload info from encryption result
-                    const walrusUpload: WalrusUploadResult = {
-                      blobId: result.walrusBlobId,
-                      previewBlobId: result.previewBlobId,
-                      seal_policy_id: result.seal_policy_id,
-                      encryptedObjectBcsHex: result.encryptedObjectBcsHex, // Include for verifier
-                      // backupKey: result.backupKey, // TODO: Add to WalrusUploadResult type when backup key encryption is implemented
-                      files: result.files, // Multi-file results
-                      bundleDiscountBps: result.bundleDiscountBps,
-                      mimeType: result.mimeType,
-                      previewMimeType: result.previewMimeType,
-                    };
-
-                    console.log('[UploadWizard] WalrusUploadResult created', {
-                      blobId: walrusUpload.blobId,
-                      encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex ? 'present' : 'missing',
-                      encryptedObjectBcsHexLength: walrusUpload.encryptedObjectBcsHex?.length ?? 0,
-                    });
-
-                    // Store both encryption metadata and walrus upload info
-                    setState((prev) => {
-                      const nextState = {
-                        ...prev,
-                        encryption: result,
-                        walrusUpload,
-                      };
-                      console.log('[UploadWizard] State updated with walrusUpload', {
-                        walrusUploadPresent: !!nextState.walrusUpload,
-                        encryptedObjectBcsHexPresent: !!nextState.walrusUpload?.encryptedObjectBcsHex,
-                      });
-                      return nextState;
-                    });
-                    goToNextStep();
-                  }}
-                  onError={(error) => setState((prev) => ({ ...prev, error }))}
-                />
-              )}
-
-              {state.step === 'publish' && (
-                <PublishStep
-                  walrusUpload={state.walrusUpload!}
-                  metadata={state.metadata!}
-                  verification={state.verification!}
-                  onPublished={(publish) => {
-                    setState((prev) => ({ ...prev, publish }));
-                    goToNextStep();
-                  }}
-                  onError={(error) => setState((prev) => ({ ...prev, error }))}
-                />
-              )}
-
-              {state.step === 'success' && (
-                <SuccessStep
-                  publish={state.publish!}
-                  metadata={state.metadata!}
-                  onClose={() => closeWizard({ clearDraft: true })}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Error Display */}
-          {state.error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                'mt-6 p-4 rounded-sonar',
-                'bg-sonar-coral/10 border border-sonar-coral',
-                'text-sonar-coral'
-              )}
-            >
-              <p className="font-mono text-sm">{state.error}</p>
-            </motion.div>
-          )}
+          {content}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

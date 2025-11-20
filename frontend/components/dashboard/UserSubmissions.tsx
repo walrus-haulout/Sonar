@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSuiClient } from '@mysten/dapp-kit';
+import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { Clock, Calendar, Plus, AlertCircle, Loader2, Database } from 'lucide-react';
@@ -31,6 +32,7 @@ const EPOCH_DURATION_DAYS = 14; // Mainnet epoch = 14 days
 
 export function UserSubmissions({ walletAddress, filters }: UserSubmissionsProps) {
   const suiClient = useSuiClient();
+  const router = useRouter();
   const [leases, setLeases] = useState<StorageLease[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +210,7 @@ export function UserSubmissions({ walletAddress, filters }: UserSubmissionsProps
           <p className="text-sonar-highlight/70 mb-6">
             Upload your first audio dataset to get started
           </p>
-          <SonarButton onClick={() => window.location.href = '/upload'}>
+          <SonarButton onClick={() => router.push('/upload')}>
             Upload Dataset
           </SonarButton>
         </GlassCard>
