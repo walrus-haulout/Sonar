@@ -260,11 +260,26 @@ export function EncryptionStep({
         }
 
         // Create BCS-compatible encrypted object
-        // We used to convert the full encrypted data to hex, but for large files (e.g. 100MB)
-        // this causes memory crashes and localStorage overflow.
-        // Since VerificationStep fetches from Walrus and PublishStep doesn't use this,
-        // we can safely omit it or use a placeholder.
-        const encryptedObjectBcsHex = ''; // Placeholder to save memory
+        // For envelope encryption, we only need the sealed key (which is the encrypted object)
+        // This is small (~200-800 bytes) and safe to pass around.
+        let encryptedObjectBcsHex = '';
+
+        if (encryptionResult.metadata.isEnvelope) {
+          const keyLengthView = new DataView(
+            encryptionResult.encryptedData.buffer,
+            encryptionResult.encryptedData.byteOffset,
+            4
+          );
+          const sealedKeyLength = keyLengthView.getUint32(0, true);
+          const sealedKey = encryptionResult.encryptedData.slice(4, 4 + sealedKeyLength);
+          encryptedObjectBcsHex = bytesToHex(sealedKey);
+
+          addLog(`[File ${index + 1}/${totalFiles}] Extracted sealed key for verification (${sealedKey.length} bytes)`);
+        } else {
+          // Fallback for non-envelope (should not happen with current config)
+          // We don't want to send the whole file as hex
+          console.warn('Non-envelope encryption detected, skipping encryptedObjectBcsHex');
+        }
 
         // Generate preview
         setStage('generating-preview');
