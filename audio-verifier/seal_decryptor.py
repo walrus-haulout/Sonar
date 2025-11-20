@@ -345,9 +345,14 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key
         stdout_output = e.stdout if isinstance(e.stdout, str) else (e.stdout.decode('utf-8', errors='ignore') if e.stdout else '')
         
         # Sanitize error messages to prevent leaking secret keys
-        # Remove any hex strings that look like keys (0x followed by 40+ hex chars)
+        # Replace each unique key with SEAL_SECRET_KEY_N placeholder
         import re
-        sanitized_error = re.sub(r'0x[0-9a-fA-F]{40,}', '[REDACTED_KEY]', error_output)
+        
+        # Find all hex keys and replace with numbered placeholders
+        hex_keys = re.findall(r'0x[0-9a-fA-F]{40,}', error_output)
+        sanitized_error = error_output
+        for i, key in enumerate(set(hex_keys), 1):
+            sanitized_error = sanitized_error.replace(key, f'SEAL_SECRET_KEY_{i}')
         
         logger.error(f"seal-cli decrypt failed (exit {e.returncode}): {sanitized_error}")
         if stdout_output:
