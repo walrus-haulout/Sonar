@@ -332,38 +332,16 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     suiPaymentCoin = coin;
   }
 
-  // Get WAL coin object for storage payments
+  // Get WAL coin object for storage payment (user pays for storage)
   const walCoin = tx.object(walCoinIdSafe);
-
-  // Reserve storage space for main blob
-  const [storageMain] = tx.moveCall({
-    target: `${packageId}::system::reserve_space`,
-    arguments: [
-      tx.object(systemObjectSafe),
-      tx.pure.u64(mainBlob.size),
-      tx.pure.u32(26), // epochs (1 year)
-      walCoin,
-    ],
-  });
-
-  // Reserve storage space for preview blob
-  const [storagePreview] = tx.moveCall({
-    target: `${packageId}::system::reserve_space`,
-    arguments: [
-      tx.object(systemObjectSafe),
-      tx.pure.u64(previewBlob.size),
-      tx.pure.u32(26), // epochs (1 year)
-      walCoin,
-    ],
-  });
 
   tx.moveCall({
     target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
     arguments: [
       tx.object(systemObjectSafe),
 
-      // Main Blob
-      storageMain,
+      // Main Blob - use storage from publisher
+      mainArgs.storage,
       mainArgs.blobId,
       mainArgs.rootHash,
       mainArgs.size,
@@ -371,8 +349,8 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       mainArgs.deletable,
       mainArgs.blobIdStr,
 
-      // Preview Blob
-      storagePreview,
+      // Preview Blob - use storage from publisher
+      previewArgs.storage,
       previewArgs.blobId,
       previewArgs.rootHash,
       previewArgs.size,

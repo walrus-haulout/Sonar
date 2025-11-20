@@ -21,11 +21,15 @@ interface StorageLease {
 
 interface UserSubmissionsProps {
   walletAddress: string;
+  filters?: {
+    status?: 'all' | 'active' | 'warning' | 'expired';
+    listing?: 'all' | 'listed' | 'unlisted';
+  };
 }
 
 const EPOCH_DURATION_DAYS = 14; // Mainnet epoch = 14 days
 
-export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
+export function UserSubmissions({ walletAddress, filters }: UserSubmissionsProps) {
   const suiClient = useSuiClient();
   const [leases, setLeases] = useState<StorageLease[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,7 +38,7 @@ export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
 
   useEffect(() => {
     fetchUserSubmissions();
-  }, [walletAddress]);
+  }, [walletAddress, filters]);
 
   const fetchUserSubmissions = async () => {
     setIsLoading(true);
@@ -151,37 +155,97 @@ export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
     );
   }
 
+  // Apply filters
+  const filteredLeases = leases.filter((lease) => {
+    const status = getExpiryStatus(lease.expires_at_epoch);
+
+    if (filters?.status && filters.status !== 'all' && status !== filters.status) {
+      return false;
+    }
+
+    // Note: listing filter would require AudioSubmission data
+    // For now, we'll just filter by storage status
+    return true;
+  });
+
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-mono font-bold text-sonar-highlight-bright mb-4">
-        My Submissions ({leases.length})
-      </h2>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-mono text-sonar-highlight">
+          {isLoading
+            ? 'Loading...'
+            : `${filteredLeases.length} Storage Lease${filteredLeases.length !== 1 ? 's' : ''}`}
+        </h3>
+      </div>
 
-      <div className="space-y-3">
-        {leases.map((lease) => {
-          const status = getExpiryStatus(lease.expires_at_epoch);
-          const currentEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * EPOCH_DURATION_DAYS));
-          const daysRemaining = calculateDaysUntilExpiry(lease.expires_at_epoch, currentEpoch);
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-8 h-8 text-sonar-signal animate-spin" />
+        </div>
+      )}
 
-          return (
-            <GlassCard
-              key={lease.id}
-              className={
-                status === 'expired'
-                  ? 'bg-sonar-coral/10 border-sonar-coral/30'
-                  : status === 'warning'
-                  ? 'bg-yellow-500/10 border-yellow-500/30'
-                  : 'bg-sonar-signal/5 border-sonar-signal/30'
-              }
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <h3 className="font-mono font-semibold text-sonar-highlight-bright">
-                      {lease.walrus_blob_id.slice(0, 16)}...
-                    </h3>
+      {/* Error State */}
+      {error && (
+        <GlassCard className="bg-sonar-coral/10 border border-sonar-coral/30">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-6 h-6 text-sonar-coral" />
+            <div>
+              <p className="font-mono font-semibold text-sonar-coral">Error Loading Submissions</p>
+              <p className="text-sm text-sonar-highlight/70 mt-1">{error}</p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !error && leases.length === 0 && (
+        <GlassCard className="text-center py-12">
+          <Database className="w-16 h-16 text-sonar-highlight/30 mx-auto mb-4" />
+          <h3 className="text-xl font-mono font-bold text-sonar-highlight-bright mb-2">
+            No Submissions Yet
+          </h3>
+          <p className="text-sonar-highlight/70 mb-6">
+            Upload your first audio dataset to get started
+          </p>
+          <SonarButton onClick={() => window.location.href = '/upload'}>
+            Upload Dataset
+          </SonarButton>
+        </GlassCard>
+      )}
+
+      {/* Dataset Grid */}
+      {!isLoading && !error && filteredLeases.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredLeases.map((lease) => {
+            const status = getExpiryStatus(lease.expires_at_epoch);
+            const currentEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * EPOCH_DURATION_DAYS));
+            const daysRemaining = calculateDaysUntilExpiry(lease.expires_at_epoch, currentEpoch);
+
+            return (
+              <GlassCard
+                key={lease.id}
+                className={`overflow-hidden transition-all sonar-glow-hover ${
+                  status === 'expired'
+                    ? 'bg-sonar-coral/10 border-sonar-coral/30'
+                    : status === 'warning'
+                    ? 'bg-yellow-500/10 border-yellow-500/30'
+                    : 'bg-sonar-signal/5 border-sonar-signal/30'
+                }`}
+              >
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-mono font-semibold text-sonar-highlight-bright truncate">
+                        {lease.walrus_blob_id.slice(0, 16)}...
+                      </h3>
+                      <p className="text-xs text-sonar-highlight/50 font-mono mt-1 truncate">
+                        {lease.walrus_blob_id}
+                      </p>
+                    </div>
                     <span
-                      className={`text-xs font-mono px-2 py-1 rounded ${
+                      className={`text-xs font-mono px-2 py-1 rounded whitespace-nowrap ml-2 ${
                         status === 'expired'
                           ? 'bg-sonar-coral/20 text-sonar-coral'
                           : status === 'warning'
@@ -197,15 +261,16 @@ export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-sonar-highlight/50 font-mono mb-1">Storage Size</p>
-                      <p className="text-sonar-highlight font-mono">
+                  {/* Stats Grid */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-sonar-highlight/60 font-mono">Storage</p>
+                      <p className="text-sonar-highlight font-mono font-semibold">
                         {formatBytes(lease.capacity_bytes)}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-sonar-highlight/50 font-mono mb-1">Expires</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-sonar-highlight/60 font-mono">Expires</p>
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-4 h-4 text-sonar-highlight/70" />
                         <p className="text-sonar-highlight font-mono">
@@ -213,38 +278,47 @@ export function UserSubmissions({ walletAddress }: UserSubmissionsProps) {
                         </p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sonar-highlight/50 font-mono mb-1">Time Remaining</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-sonar-highlight/60 font-mono">Remaining</p>
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-sonar-highlight/70" />
                         <p className="text-sonar-highlight font-mono">
-                          {daysRemaining > 0 ? `${daysRemaining} days` : 'Expired'}
+                          {daysRemaining > 0 ? `${daysRemaining}d` : 'Expired'}
                         </p>
                       </div>
                     </div>
                   </div>
 
                   {lease.total_renewals > 0 && (
-                    <p className="text-xs text-sonar-highlight/50 font-mono mt-3">
-                      Renewed {lease.total_renewals} time{lease.total_renewals !== 1 ? 's' : ''}
+                    <p className="text-xs text-sonar-highlight/50 font-mono py-2 border-t border-sonar-highlight/10">
+                      Renewed {lease.total_renewals}x
                     </p>
                   )}
-                </div>
 
-                <div className="ml-4">
+                  {/* Action Button */}
                   <SonarButton
                     variant={status === 'expired' ? 'primary' : 'secondary'}
                     onClick={() => setSelectedLease(lease)}
+                    className="w-full"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    {status === 'expired' ? 'Renew' : 'Extend'}
+                    {status === 'expired' ? 'Renew Storage' : 'Extend Storage'}
                   </SonarButton>
                 </div>
-              </div>
-            </GlassCard>
-          );
-        })}
-      </div>
+              </GlassCard>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No Results After Filter */}
+      {!isLoading && !error && leases.length > 0 && filteredLeases.length === 0 && (
+        <GlassCard className="text-center py-12">
+          <p className="text-sonar-highlight text-lg">
+            No submissions match your filters
+          </p>
+        </GlassCard>
+      )}
 
       {/* Extend Storage Modal */}
       {selectedLease && (
