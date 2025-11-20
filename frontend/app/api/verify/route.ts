@@ -9,8 +9,8 @@ import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
  * with the auth token.
  */
 
-// Use Edge runtime for better performance and compatibility
-export const runtime = 'edge';
+// Explicitly set Node.js runtime for server-side operations
+export const runtime = 'nodejs';
 
 // Force dynamic rendering to ensure route is always treated as a serverless function
 export const dynamic = 'force-dynamic';

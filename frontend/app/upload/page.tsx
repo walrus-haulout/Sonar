@@ -10,61 +10,72 @@ export default function UploadPage() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
   const hasMounted = useRef(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Mark component as mounted after first render
+  // Mark component as mounted and start auth grace period
   useEffect(() => {
-    console.group('[UploadPage] 🎯 Component Mounted - Setting hasMounted=true');
+    console.group('[UploadPage] 🎯 Component Mounted');
     console.log('Timestamp:', new Date().toISOString());
     console.log('Account at mount:', account?.address || 'undefined');
-    console.log('Reason: Allow wallet to hydrate before redirect check');
+    console.log('Starting 500ms grace period for wallet connection...');
     console.groupEnd();
 
     hasMounted.current = true;
+
+    // Give wallet 500ms to connect before checking auth
+    const authTimer = setTimeout(() => {
+      console.log('[UploadPage] ⏰ Auth grace period expired - checking account status');
+      setIsCheckingAuth(false);
+    }, 500);
+
+    return () => {
+      clearTimeout(authTimer);
+    };
   }, []);
 
-  // Only redirect after wallet hydration is complete
+  // Only redirect AFTER grace period and if still no account
   useEffect(() => {
-    console.group('[UploadPage] 🔄 Auth Effect Running');
+    console.group('[UploadPage] 🔄 Auth Effect');
     console.log('Timestamp:', new Date().toISOString());
     console.log('hasMounted:', hasMounted.current);
+    console.log('isCheckingAuth:', isCheckingAuth);
     console.log('Account:', account?.address || 'undefined');
-    console.log('isOpen:', isOpen);
 
-    if (hasMounted.current && !account) {
-      console.warn('⚠️ [UploadPage] No account found after hydration - REDIRECTING to home');
+    if (!isCheckingAuth && !account) {
+      console.warn('⚠️ [UploadPage] No account after grace period - REDIRECTING to home');
       router.push('/');
-    } else if (hasMounted.current && account) {
+    } else if (account) {
       console.log('✅ [UploadPage] Account connected - Ready to upload');
+      setIsCheckingAuth(false);
     } else {
-      console.log('⏳ [UploadPage] Waiting for hydration...');
+      console.log('⏳ [UploadPage] Wallet still connecting...');
     }
     console.groupEnd();
-  }, [account, router]);
+  }, [account, router, isCheckingAuth]);
 
-  // Log render state
   console.log('[UploadPage] 📊 Render:', {
     timestamp: new Date().toISOString(),
     hasMounted: hasMounted.current,
+    isCheckingAuth,
     hasAccount: !!account,
     accountAddress: account?.address || 'undefined',
     isOpen,
   });
 
-  // Show loading during initial hydration
-  if (!hasMounted.current) {
-    console.log('[UploadPage] ⏳ Still hydrating (hasMounted=false)');
+  // Show loading during auth grace period
+  if (isCheckingAuth) {
+    console.log('[UploadPage] ⏳ Waiting for wallet connection...');
     return null;
   }
 
   if (!account) {
-    console.log('[UploadPage] ❌ No account after hydration - will redirect');
+    console.log('[UploadPage] ❌ No account - redirect pending');
     return null;
   }
 
   const handleClose = () => {
     console.group('[UploadPage] 🔔 handleClose called');
     console.log('Timestamp:', new Date().toISOString());
-    console.log('Setting isOpen=false');
     console.groupEnd();
     setIsOpen(false);
   };
