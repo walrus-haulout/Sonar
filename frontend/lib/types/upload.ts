@@ -116,6 +116,20 @@ export interface WalrusUploadResult {
   bundleDiscountBps?: number; // Basis points (e.g., 2000 = 20%)
   mimeType?: string;
   previewMimeType?: string;
+  // User-paid registration support
+  txDigest?: string;
+  strategy?: 'user-paid';
+  // Preview metadata for batch registration
+  previewStorageId?: string;
+  previewSize?: number;
+  previewEncodingType?: string;
+  previewDeletable?: boolean;
+  // Prototype metadata for legacy support
+  prototypeMetadata?: {
+    walletCount: number;
+    chunkCount: number;
+    estimatedChunkSize: number;
+  };
 }
 
 export interface VerificationStage {

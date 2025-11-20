@@ -278,11 +278,16 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
   if (!sonarPackageId) {
     throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
   }
+  if (!systemObject) {
+    throw new Error('Walrus system object is not configured');
+  }
   if (!walCoinId) {
     throw new Error('WAL coin ID is required');
   }
 
   const tx = new Transaction();
+  const walCoinIdSafe: string = walCoinId; // Type assertion after validation
+  const systemObjectSafe: string = systemObject; // Type assertion after validation
 
   // Helper to prepare blob args
   const prepareBlobArgs = (blobParams: RegisterBlobParams) => {
@@ -337,7 +342,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
   tx.moveCall({
     target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
     arguments: [
-      tx.object(systemObject),
+      tx.object(systemObjectSafe),
 
       // Main Blob
       mainArgs.storage,
@@ -363,7 +368,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.pure.u64(submission.durationSeconds),
 
       // Payments
-      tx.object(walCoinId),
+      tx.object(walCoinIdSafe),
       suiPaymentCoin,
     ],
   });

@@ -183,6 +183,10 @@ export function useWalrusParallelUpload() {
     storageId?: string;
     deletable?: boolean;
     previewBlobId?: string;
+    previewStorageId?: string;
+    previewSize?: number;
+    previewEncodingType?: string;
+    previewDeletable?: boolean;
     mimeType?: string;
     previewMimeType?: string;
   }> => {
