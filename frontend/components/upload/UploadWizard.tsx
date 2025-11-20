@@ -66,6 +66,14 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
   const [state, setState] = useState<UploadWizardState>(INITIAL_STATE);
   const [persistenceDisabled, setPersistenceDisabled] = useState(false);
 
+  // Lifecycle logging
+  console.log('[UploadWizard] 📊 Render:', {
+    timestamp: new Date().toISOString(),
+    open,
+    fullscreen,
+    step: state.step,
+  });
+
   const sanitizeWalrusUpload = (walrusUpload: WalrusUploadResult | null) => {
     if (!walrusUpload) return null;
     return {
@@ -139,43 +147,68 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
   };
 
   const closeWizard = (options?: { clearDraft?: boolean }) => {
-    // In fullscreen mode, don't call parent onOpenChange (page handles navigation)
+    console.group('[UploadWizard] 🔔 closeWizard called');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Fullscreen mode:', fullscreen);
+    console.log('Options:', options);
+    console.log('Current step:', state.step);
+
     if (!fullscreen) {
+      console.log('📞 [UploadWizard] Calling onOpenChange(false) - modal mode');
       onOpenChange(false);
+    } else {
+      console.log('⏭️ [UploadWizard] Skipping onOpenChange - fullscreen mode');
     }
+
     if (options?.clearDraft) {
+      console.log('🗑️ [UploadWizard] Clearing draft state');
       clearStoredWizardState();
       resetWizardState();
     }
+    console.groupEnd();
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
+    console.log('[UploadWizard] 🔄 handleDialogOpenChange:', { nextOpen, step: state.step });
     if (!nextOpen) {
       closeWizard({ clearDraft: state.step === 'success' });
     } else {
+      console.log('📞 [UploadWizard] Calling onOpenChange(true)');
       onOpenChange(true);
     }
   };
 
   const handleDiscardDraft = () => {
+    console.group('[UploadWizard] 🗑️ handleDiscardDraft called');
+    console.log('Current step:', state.step);
+
     if (state.step === 'success') {
+      console.log('At success step - closing wizard');
       handleDialogOpenChange(false);
+      console.groupEnd();
       return;
     }
 
     const confirmed = typeof window === 'undefined' ? true : window.confirm('Discard current draft? This cannot be undone.');
+    console.log('User confirmed discard:', confirmed);
+
     if (!confirmed) {
+      console.log('Discard cancelled by user');
+      console.groupEnd();
       return;
     }
 
+    console.log('🗑️ Clearing state and calling onOpenChange(false)');
     clearStoredWizardState();
     resetWizardState();
     setPersistenceDisabled(false);
-    onOpenChange(false); // Close wizard after discarding draft
+    onOpenChange(false);
+    console.groupEnd();
   };
 
-  // Persist wizard state to localStorage for recovery
+  // Restore wizard state from localStorage
   useEffect(() => {
+    console.log('[UploadWizard] 💾 State restoration effect - open:', open);
     if (!open || typeof window === 'undefined') {
       return;
     }
@@ -184,6 +217,7 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
+        console.log('[UploadWizard] ✅ Restored state from localStorage, step:', parsed.step);
         // Only restore verification and publish steps (long-running processes)
         // File-upload and metadata steps always start fresh (file data can't be restored from localStorage)
         // Note: We can't restore full file data, user will need to re-upload
@@ -200,16 +234,21 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             }
           }
 
+          console.log('[UploadWizard] 🔄 Restoring state to step:', parsed.step);
           setState((prev) => ({
             ...prev,
             ...parsed,
             audioFiles: Array.isArray(parsed.audioFiles) ? parsed.audioFiles : [],
           }));
+        } else {
+          console.log('[UploadWizard] ⏭️ Skipping restore - step is', parsed.step);
         }
       } catch (e) {
-        console.error('Failed to restore wizard state:', e);
+        console.error('[UploadWizard] ❌ Failed to restore wizard state:', e);
         localStorage.removeItem(STORAGE_KEY);
       }
+    } else {
+      console.log('[UploadWizard] 📝 No saved state in localStorage');
     }
   }, [open]);
 
