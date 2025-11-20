@@ -343,10 +343,16 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key
     except subprocess.CalledProcessError as e:
         error_output = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='ignore') if e.stderr else '')
         stdout_output = e.stdout if isinstance(e.stdout, str) else (e.stdout.decode('utf-8', errors='ignore') if e.stdout else '')
-        logger.error(f"seal-cli decrypt failed (exit {e.returncode}): {error_output}")
+        
+        # Sanitize error messages to prevent leaking secret keys
+        # Remove any hex strings that look like keys (0x followed by 40+ hex chars)
+        import re
+        sanitized_error = re.sub(r'0x[0-9a-fA-F]{40,}', '[REDACTED_KEY]', error_output)
+        
+        logger.error(f"seal-cli decrypt failed (exit {e.returncode}): {sanitized_error}")
         if stdout_output:
             logger.debug(f"seal-cli stdout: {stdout_output}")
-        raise RuntimeError(f"Seal decryption failed: {error_output}") from e
+        raise RuntimeError(f"Seal decryption failed: {sanitized_error}") from e
     except subprocess.TimeoutExpired:
         raise RuntimeError("Seal decryption timed out after 60 seconds") from None
 
