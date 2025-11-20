@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["SONAR Protocol <team@sonar.xyz>"]
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "bd272b07244d" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet" }
 # Explicitly including Walrus dependencies for SONAR marketplace
 Walrus = { local = "./dependencies/walrus" }
 WAL = { local = "./dependencies/wal" }

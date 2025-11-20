@@ -79,13 +79,23 @@ export async function POST(request: NextRequest) {
 
     const walrusResult = await uploadResponse.json();
 
-    // Extract blobId
+    // Extract blobId and metadata
     let previewBlobId: string;
+    let storageId: string | undefined;
+    let encodingType: string | undefined;
+    let deletable: boolean | undefined;
+    let certifiedEpoch: number | undefined;
 
     if (walrusResult.newlyCreated) {
-      previewBlobId = walrusResult.newlyCreated.blobObject.blobId;
+      const blobObject = walrusResult.newlyCreated.blobObject;
+      previewBlobId = blobObject.blobId;
+      storageId = blobObject.storage?.id;
+      encodingType = blobObject.encodingType;
+      deletable = blobObject.deletable;
+      certifiedEpoch = blobObject.certifiedEpoch;
     } else if (walrusResult.alreadyCertified) {
       previewBlobId = walrusResult.alreadyCertified.blobId;
+      certifiedEpoch = walrusResult.alreadyCertified.certifiedEpoch;
     } else {
       return NextResponse.json(
         { error: 'Unexpected Walrus response format' },
@@ -96,6 +106,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       previewBlobId,
       fileSize: file.size,
+      storageId,
+      encodingType,
+      deletable,
+      certifiedEpoch,
     });
   } catch (error) {
     console.error('Walrus preview upload error:', error);

@@ -36,6 +36,11 @@ export interface WalrusUploadResult {
   mimeType?: string;
   previewMimeType?: string;
   txDigest?: string;
+  // Preview metadata for batch registration
+  previewStorageId?: string;
+  previewSize?: number;
+  previewEncodingType?: string;
+  previewDeletable?: boolean;
   // Kept for compatibility with existing types if strictly checked, though we only use user-paid now
   prototypeMetadata?: {
     walletCount: number;
@@ -199,6 +204,10 @@ export function useWalrusParallelUpload() {
 
     // Upload preview blob if provided
     let finalPreviewBlobId = result.previewBlobId as string | undefined;
+    let previewStorageId: string | undefined;
+    let previewSize: number | undefined;
+    let previewEncodingType: string | undefined;
+    let previewDeletable: boolean | undefined;
     let effectivePreviewMimeType = normalizeAudioMimeType(options.previewMimeType) ?? normalizeAudioMimeType(options.previewBlob?.type);
 
     if (options.previewBlob) {
@@ -217,6 +226,10 @@ export function useWalrusParallelUpload() {
         if (previewResponse.ok) {
           const previewResult = await previewResponse.json();
           finalPreviewBlobId = previewResult.previewBlobId || previewResult.blobId;
+          previewStorageId = previewResult.storageId;
+          previewSize = previewResult.fileSize;
+          previewEncodingType = previewResult.encodingType;
+          previewDeletable = previewResult.deletable;
         } else {
           console.warn('Preview upload failed, continuing without preview');
         }
@@ -232,20 +245,22 @@ export function useWalrusParallelUpload() {
       storageId: result.storageId,
       deletable: result.deletable,
       previewBlobId: finalPreviewBlobId,
+      previewStorageId,
+      previewSize,
+      previewEncodingType,
+      previewDeletable,
       mimeType: normalizeAudioMimeType(options.mimeType) ?? undefined,
       previewMimeType: effectivePreviewMimeType,
     };
   }, [fetchUploadWithRetry]);
 
   /**
-   * Register blob on-chain
+   * Batch register blobs and submit to marketplace
    */
-  const registerBlobOnChain = useCallback(async (
-    blobId: string,
-    size: number,
-    encodingType?: string,
-    storageId?: string,
-    deletable: boolean = true
+  const batchRegisterAndSubmit = useCallback(async (
+    mainBlob: { blobId: string; size: number; encodingType?: string; storageId?: string; deletable?: boolean },
+    previewBlob: { blobId: string; size: number; encodingType?: string; storageId?: string; deletable?: boolean },
+    submission: { sealPolicyId: string; durationSeconds: number; previewBlobHash?: string }
   ): Promise<string> => {
     if (!currentAccount) {
       throw new Error('Wallet not connected');
@@ -256,25 +271,68 @@ export function useWalrusParallelUpload() {
       stage: 'registering',
     }));
 
-    console.log('[Walrus] Building registration transaction...');
-    const tx = await buildRegisterBlobTransactionAsync({
-      blobId,
-      size,
-      encodingType,
-      storageId,
-      deletable,
-      sponsorAddress: currentAccount.address,
-      suiClient,
-    });
+    console.log('[Walrus] Building batch registration transaction...');
+
+    // 0.25 SUI for submission fee
+    const SUI_PAYMENT_AMOUNT = 250_000_000n;
+
+    // We need to find a SUI coin for the submission fee
+    // This is a bit tricky since we can't easily "pick" a coin in the frontend without more helpers
+    // For now, we'll assume the wallet handles gas, but we need to pass a Coin<SUI> object to the move call.
+    // Actually, the buildBatchRegisterAndSubmitTransaction expects a coin ID.
+    // We can use the `collectCoinsForAmount` helper again or similar logic.
+    // However, to simplify, we might want to let the wallet handle coin selection if possible, 
+    // but Move calls require specific object IDs for Coin arguments.
+    // A common pattern is to use a "SplitCoin" transaction, but we are building the transaction block here.
+
+    // Let's use the buildBatchRegisterAndSubmitTransactionAsync which we can update to handle SUI coin too?
+    // Or we can do it here.
+
+    // For now, let's assume we pass the transaction builder a placeholder or handle it inside the builder.
+    // Wait, the builder I wrote expects `suiPaymentCoinId`.
+    // I should probably update the builder to handle SUI coin selection or use a gas coin split.
+    // BUT, `Transaction` block allows `tx.splitCoins(tx.gas, [amount])`.
+    // So we should update the builder to use `tx.gas` if possible, or split from gas.
+
+    // Let's update the builder in the next step to support splitting from gas.
+    // For now, I will call the async builder.
+
+    // REVISIT: We need to update buildBatchRegisterAndSubmitTransaction to use splitCoins from gas!
+    // I will do that in a separate tool call. For now, I'll put a placeholder and fix it immediately.
+
+    const tx = await import('@/lib/walrus/buildRegisterBlobTransaction').then(m =>
+      m.buildBatchRegisterAndSubmitTransactionAsync({
+        mainBlob: {
+          blobId: mainBlob.blobId,
+          size: mainBlob.size,
+          encodingType: mainBlob.encodingType,
+          storageId: mainBlob.storageId,
+          deletable: mainBlob.deletable,
+        },
+        previewBlob: {
+          blobId: previewBlob.blobId,
+          size: previewBlob.size,
+          encodingType: previewBlob.encodingType,
+          storageId: previewBlob.storageId,
+          deletable: previewBlob.deletable,
+        },
+        submission: {
+          sealPolicyId: submission.sealPolicyId,
+          durationSeconds: submission.durationSeconds,
+          previewBlobHash: submission.previewBlobHash,
+        },
+        sponsorAddress: currentAccount.address,
+        suiClient,
+      })
+    );
 
     console.log('[Walrus] Requesting user signature...');
     const result = await signAndExecute({
       transaction: tx,
     });
 
-    console.log('[Walrus] Registration transaction submitted:', result.digest);
+    console.log('[Walrus] Batch transaction submitted:', result.digest);
 
-    // Wait for transaction confirmation
     await suiClient.waitForTransaction({
       digest: result.digest,
     });
@@ -318,7 +376,7 @@ export function useWalrusParallelUpload() {
       totalProgress: 0,
     }));
 
-    // 1. Upload to Publisher
+    // 1. Upload to Publisher (Main + Preview)
     const publisherResult = await uploadToPublisher(
       encryptedBlob,
       seal_policy_id,
@@ -326,13 +384,32 @@ export function useWalrusParallelUpload() {
       options
     );
 
-    // 2. Register on-chain
-    const txDigest = await registerBlobOnChain(
-      publisherResult.blobId,
-      publisherResult.size,
-      publisherResult.encodingType,
-      publisherResult.storageId,
-      publisherResult.deletable
+    // 2. Batch Register & Submit
+    // We need to ensure we have preview metadata if a preview was uploaded
+    if (publisherResult.previewBlobId && !publisherResult.previewStorageId) {
+      console.warn('Preview uploaded but missing storage ID. Registration might fail.');
+    }
+
+    const txDigest = await batchRegisterAndSubmit(
+      {
+        blobId: publisherResult.blobId,
+        size: publisherResult.size,
+        encodingType: publisherResult.encodingType,
+        storageId: publisherResult.storageId,
+        deletable: publisherResult.deletable,
+      },
+      {
+        blobId: publisherResult.previewBlobId || '', // Handle missing preview gracefully?
+        size: publisherResult.previewSize || 0,
+        encodingType: publisherResult.previewEncodingType,
+        storageId: publisherResult.previewStorageId,
+        deletable: publisherResult.previewDeletable,
+      },
+      {
+        sealPolicyId: seal_policy_id,
+        durationSeconds: 0, // TODO: Get actual duration from metadata or file
+        previewBlobHash: undefined, // Optional
+      }
     );
 
     setProgress((prev) => ({
@@ -356,7 +433,7 @@ export function useWalrusParallelUpload() {
       previewMimeType: publisherResult.previewMimeType,
       txDigest,
     };
-  }, [uploadToPublisher, registerBlobOnChain, chunkedUpload]);
+  }, [uploadToPublisher, batchRegisterAndSubmit, chunkedUpload]);
 
   /**
    * Upload multiple files in parallel

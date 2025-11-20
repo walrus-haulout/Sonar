@@ -208,3 +208,165 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
   console.log('[Walrus] Transaction built successfully');
   return tx;
 }
+
+export interface BatchRegisterAndSubmitParams {
+  // Main Blob
+  mainBlob: RegisterBlobParams;
+  // Preview Blob
+  previewBlob: RegisterBlobParams;
+  // Submission
+  submission: {
+    sealPolicyId: string;
+    previewBlobHash?: string; // hex string
+    durationSeconds: number;
+    suiPaymentCoinId?: string; // Optional: if not provided, will split from gas
+  };
+  // Payment
+  walCoinId?: string;
+  sponsorAddress?: string;
+  suiClient?: SuiClient;
+}
+
+/**
+ * Build a batch transaction to register both blobs and submit to marketplace
+ */
+export async function buildBatchRegisterAndSubmitTransactionAsync(params: BatchRegisterAndSubmitParams): Promise<Transaction> {
+  let resolvedWalCoinId = params.walCoinId;
+
+  // If no coin ID provided, fetch one from the sponsor address
+  if (!resolvedWalCoinId && params.sponsorAddress && params.suiClient) {
+    console.log('[Walrus] Fetching WAL coin for sponsor:', params.sponsorAddress);
+    const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
+
+    try {
+      const coinsResult = await collectCoinsForAmount(
+        params.suiClient,
+        params.sponsorAddress,
+        walCoinType,
+        1n // Minimum 1 unit needed
+      );
+
+      if (coinsResult.coins.length === 0) {
+        throw new Error(
+          'No WAL coins found in sponsor wallet. Please ensure you have WAL tokens to pay for blob storage.'
+        );
+      }
+
+      resolvedWalCoinId = coinsResult.coins[0].coinObjectId;
+      console.log('[Walrus] Found WAL coin:', resolvedWalCoinId);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch WAL coins';
+      throw new Error(`[Walrus] Could not obtain WAL payment coin: ${errorMsg}`);
+    }
+  }
+
+  if (!resolvedWalCoinId) {
+    throw new Error(
+      '[Walrus] WAL coin ID not provided and unable to fetch. ' +
+      'Either provide walCoinId or provide sponsorAddress with suiClient.'
+    );
+  }
+
+  return buildBatchRegisterAndSubmitTransaction({ ...params, walCoinId: resolvedWalCoinId });
+}
+
+export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndSubmitParams): Transaction {
+  const { mainBlob, previewBlob, submission, walCoinId } = params;
+  const { packageId, systemObject } = getWalrusConfig();
+  const sonarPackageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
+
+  if (!sonarPackageId) {
+    throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
+  }
+  if (!walCoinId) {
+    throw new Error('WAL coin ID is required');
+  }
+
+  const tx = new Transaction();
+
+  // Helper to prepare blob args
+  const prepareBlobArgs = (blobParams: RegisterBlobParams) => {
+    const blobIdBigInt = base64UrlToBigInt(blobParams.blobId);
+    const encodingTypeU8 = encodingTypeToU8(blobParams.encodingType);
+    let rootHashBigInt = blobIdBigInt;
+    if (blobParams.rootHash) {
+      try {
+        rootHashBigInt = base64UrlToBigInt(blobParams.rootHash);
+      } catch (err) {
+        console.error('[Walrus] Failed to convert root hash:', err);
+        throw new Error(`Invalid root hash format: ${blobParams.rootHash}`);
+      }
+    }
+
+    if (!blobParams.storageId) {
+      throw new Error(`Storage ID missing for blob ${blobParams.blobId}`);
+    }
+
+    return {
+      storage: tx.object(blobParams.storageId),
+      blobId: tx.pure.u256(blobIdBigInt),
+      rootHash: tx.pure.u256(rootHashBigInt),
+      size: tx.pure.u64(blobParams.size),
+      encodingType: tx.pure.u8(encodingTypeU8),
+      deletable: tx.pure.bool(blobParams.deletable ?? true),
+      blobIdStr: tx.pure.string(blobParams.blobId)
+    };
+  };
+
+  const mainArgs = prepareBlobArgs(mainBlob);
+  const previewArgs = prepareBlobArgs(previewBlob);
+
+  // Prepare submission args
+  let previewHashBytes: Uint8Array = new Uint8Array();
+  if (submission.previewBlobHash) {
+    // Convert hex string to bytes
+    const hex = submission.previewBlobHash.startsWith('0x') ? submission.previewBlobHash.slice(2) : submission.previewBlobHash;
+    previewHashBytes = new Uint8Array(Buffer.from(hex, 'hex'));
+  }
+
+  // Handle SUI payment (0.25 SUI)
+  let suiPaymentCoin;
+  if (submission.suiPaymentCoinId && submission.suiPaymentCoinId !== 'GAS_COIN_PLACEHOLDER') {
+    suiPaymentCoin = tx.object(submission.suiPaymentCoinId);
+  } else {
+    // Split from gas
+    const [coin] = tx.splitCoins(tx.gas, [250_000_000]); // 0.25 SUI
+    suiPaymentCoin = coin;
+  }
+
+  tx.moveCall({
+    target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
+    arguments: [
+      tx.object(systemObject),
+
+      // Main Blob
+      mainArgs.storage,
+      mainArgs.blobId,
+      mainArgs.rootHash,
+      mainArgs.size,
+      mainArgs.encodingType,
+      mainArgs.deletable,
+      mainArgs.blobIdStr,
+
+      // Preview Blob
+      previewArgs.storage,
+      previewArgs.blobId,
+      previewArgs.rootHash,
+      previewArgs.size,
+      previewArgs.encodingType,
+      previewArgs.deletable,
+      previewArgs.blobIdStr,
+
+      // Metadata
+      tx.pure.string(submission.sealPolicyId),
+      tx.pure(previewHashBytes),
+      tx.pure.u64(submission.durationSeconds),
+
+      // Payments
+      tx.object(walCoinId),
+      suiPaymentCoin,
+    ],
+  });
+
+  return tx;
+}
