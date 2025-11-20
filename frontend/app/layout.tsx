@@ -4,6 +4,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { Navbar } from '@/components/layout/Navbar';
 
+import { DeploymentGuard } from '@/components/layout/DeploymentGuard';
+
 const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
@@ -50,6 +52,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${ibmPlexMono.variable} ${inter.variable}`}>
       <body>
+        <DeploymentGuard />
         <Providers>
           <Navbar />
           <div className="pt-18">{children}</div>
