@@ -6,7 +6,12 @@ const resolveVerifierBase = () => {
 
   if (candidate && !PLACEHOLDER_PATTERN.test(candidate)) {
     try {
-      const url = new URL(candidate);
+      let urlString = candidate;
+      if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+        urlString = `https://${urlString}`;
+      }
+
+      const url = new URL(urlString);
 
       // Ensure trailing slash so relative paths append correctly
       if (!url.pathname.endsWith('/')) {
