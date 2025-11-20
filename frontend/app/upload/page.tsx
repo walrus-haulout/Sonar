@@ -22,7 +22,7 @@ export default function UploadPage() {
 
   const handleClose = () => {
     setIsOpen(false);
-    router.back();
+    // User stays on page; let them navigate manually via back button
   };
 
   return (

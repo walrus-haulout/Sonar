@@ -139,7 +139,10 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
   };
 
   const closeWizard = (options?: { clearDraft?: boolean }) => {
-    onOpenChange(false);
+    // In fullscreen mode, don't call parent onOpenChange (page handles navigation)
+    if (!fullscreen) {
+      onOpenChange(false);
+    }
     if (options?.clearDraft) {
       clearStoredWizardState();
       resetWizardState();
