@@ -234,6 +234,13 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             }
           }
 
+          // Validate critical data for encrypted flow
+          if (parsed.walrusUpload && !parsed.walrusUpload.encryptedObjectBcsHex) {
+            console.warn('[UploadWizard] ⚠️ Found stale state with missing encryptedObjectBcsHex. Discarding to force re-upload.');
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+          }
+
           console.log('[UploadWizard] 🔄 Restoring state to step:', parsed.step);
           setState((prev) => ({
             ...prev,
