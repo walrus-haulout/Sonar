@@ -1,84 +1,66 @@
 'use client';
 
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { ConnectButton } from '@mysten/dapp-kit';
+import { useState } from 'react';
 import { UploadWizard } from '@/components/upload/UploadWizard';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { SonarBackground } from '@/components/animations/SonarBackground';
+import { Wallet } from 'lucide-react';
 
 export default function UploadPage() {
   const account = useCurrentAccount();
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
-  const hasMounted = useRef(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-
-  // Mark component as mounted and start auth grace period
-  useEffect(() => {
-    console.group('[UploadPage] 🎯 Component Mounted');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Account at mount:', account?.address || 'undefined');
-    console.log('Starting 500ms grace period for wallet connection...');
-    console.groupEnd();
-
-    hasMounted.current = true;
-
-    // Give wallet 500ms to connect before checking auth
-    const authTimer = setTimeout(() => {
-      console.log('[UploadPage] ⏰ Auth grace period expired - checking account status');
-      setIsCheckingAuth(false);
-    }, 500);
-
-    return () => {
-      clearTimeout(authTimer);
-    };
-  }, []);
-
-  // Only redirect AFTER grace period and if still no account
-  useEffect(() => {
-    console.group('[UploadPage] 🔄 Auth Effect');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('hasMounted:', hasMounted.current);
-    console.log('isCheckingAuth:', isCheckingAuth);
-    console.log('Account:', account?.address || 'undefined');
-
-    if (!isCheckingAuth && !account) {
-      console.warn('⚠️ [UploadPage] No account after grace period - REDIRECTING to home');
-      router.push('/');
-    } else if (account) {
-      console.log('✅ [UploadPage] Account connected - Ready to upload');
-      setIsCheckingAuth(false);
-    } else {
-      console.log('⏳ [UploadPage] Wallet still connecting...');
-    }
-    console.groupEnd();
-  }, [account, router, isCheckingAuth]);
 
   console.log('[UploadPage] 📊 Render:', {
     timestamp: new Date().toISOString(),
-    hasMounted: hasMounted.current,
-    isCheckingAuth,
     hasAccount: !!account,
     accountAddress: account?.address || 'undefined',
     isOpen,
   });
 
-  // Show loading during auth grace period
-  if (isCheckingAuth) {
-    console.log('[UploadPage] ⏳ Waiting for wallet connection...');
-    return null;
-  }
-
-  if (!account) {
-    console.log('[UploadPage] ❌ No account - redirect pending');
-    return null;
-  }
-
   const handleClose = () => {
-    console.group('[UploadPage] 🔔 handleClose called');
-    console.log('Timestamp:', new Date().toISOString());
-    console.groupEnd();
+    console.log('[UploadPage] 🔔 handleClose called');
     setIsOpen(false);
   };
+
+  // If no account, show wallet connection prompt
+  if (!account) {
+    console.log('[UploadPage] 📱 No wallet connected - showing connection prompt');
+    return (
+      <main className="relative min-h-screen">
+        <SonarBackground opacity={0.2} intensity={0.5} />
+        <div className="relative z-10 container mx-auto px-6 py-12">
+          <div className="max-w-2xl mx-auto">
+            <GlassCard className="p-12 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="p-6 rounded-full bg-sonar-signal/10">
+                  <Wallet className="w-12 h-12 text-sonar-signal" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h1 className="text-3xl font-mono font-bold text-sonar-highlight-bright">
+                  Connect Your Wallet
+                </h1>
+                <p className="text-sonar-highlight/70">
+                  You need to connect your Sui wallet to upload datasets to SONAR Protocol
+                </p>
+              </div>
+
+              <div className="flex justify-center pt-4">
+                <ConnectButton />
+              </div>
+
+              <p className="text-xs text-sonar-highlight/50 pt-4">
+                Don't have a wallet? Install one of the supported Sui wallets to get started
+              </p>
+            </GlassCard>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   console.log('[UploadPage] ✨ Rendering UploadWizard fullscreen');
   return (
