@@ -264,63 +264,14 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(params: BatchR
 }
 
 export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndSubmitParams): Transaction {
-  const { mainBlob, previewBlob, submission, walCoinId } = params;
-  const { packageId, systemObject } = getWalrusConfig();
+  const { mainBlob, previewBlob, submission } = params;
   const sonarPackageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
 
   if (!sonarPackageId) {
     throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
   }
-  if (!systemObject) {
-    throw new Error('Walrus system object is not configured');
-  }
-  if (!walCoinId) {
-    throw new Error('WAL coin ID is required');
-  }
 
   const tx = new Transaction();
-  const systemObjectSafe: string = systemObject; // Type assertion after validation
-  const walCoinIdSafe: string = walCoinId; // Type assertion after validation
-
-  // Helper to prepare blob args
-  const prepareBlobArgs = (blobParams: RegisterBlobParams) => {
-    const blobIdBigInt = base64UrlToBigInt(blobParams.blobId);
-    const encodingTypeU8 = encodingTypeToU8(blobParams.encodingType);
-    let rootHashBigInt = blobIdBigInt;
-    if (blobParams.rootHash) {
-      try {
-        rootHashBigInt = base64UrlToBigInt(blobParams.rootHash);
-      } catch (err) {
-        console.error('[Walrus] Failed to convert root hash:', err);
-        throw new Error(`Invalid root hash format: ${blobParams.rootHash}`);
-      }
-    }
-
-    if (!blobParams.storageId) {
-      throw new Error(`Storage ID missing for blob ${blobParams.blobId}`);
-    }
-
-    return {
-      storage: tx.object(blobParams.storageId),
-      blobId: tx.pure.u256(blobIdBigInt),
-      rootHash: tx.pure.u256(rootHashBigInt),
-      size: tx.pure.u64(blobParams.size),
-      encodingType: tx.pure.u8(encodingTypeU8),
-      deletable: tx.pure.bool(blobParams.deletable ?? true),
-      blobIdStr: tx.pure.string(blobParams.blobId)
-    };
-  };
-
-  const mainArgs = prepareBlobArgs(mainBlob);
-  const previewArgs = prepareBlobArgs(previewBlob);
-
-  // Prepare submission args
-  let previewHashBytes: Uint8Array = new Uint8Array();
-  if (submission.previewBlobHash) {
-    // Convert hex string to bytes
-    const hex = submission.previewBlobHash.startsWith('0x') ? submission.previewBlobHash.slice(2) : submission.previewBlobHash;
-    previewHashBytes = new Uint8Array(Buffer.from(hex, 'hex'));
-  }
 
   // Handle SUI payment (0.25 SUI)
   let suiPaymentCoin;
@@ -332,39 +283,15 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     suiPaymentCoin = coin;
   }
 
-  // Get WAL coin object for storage payment (user pays for storage)
-  const walCoin = tx.object(walCoinIdSafe);
-
+  // Simple submission - just collect fee and emit event
+  // Publisher already registered the blobs on Walrus
   tx.moveCall({
-    target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
+    target: `${sonarPackageId}::blob_manager::submit_blobs`,
     arguments: [
-      tx.object(systemObjectSafe),
-
-      // Main Blob - use storage from publisher
-      mainArgs.storage,
-      mainArgs.blobId,
-      mainArgs.rootHash,
-      mainArgs.size,
-      mainArgs.encodingType,
-      mainArgs.deletable,
-      mainArgs.blobIdStr,
-
-      // Preview Blob - use storage from publisher
-      previewArgs.storage,
-      previewArgs.blobId,
-      previewArgs.rootHash,
-      previewArgs.size,
-      previewArgs.encodingType,
-      previewArgs.deletable,
-      previewArgs.blobIdStr,
-
-      // Metadata
+      tx.pure.string(mainBlob.blobId),
+      tx.pure.string(previewBlob.blobId),
       tx.pure.string(submission.sealPolicyId),
-      tx.pure(previewHashBytes),
       tx.pure.u64(submission.durationSeconds),
-
-      // Payments
-      walCoin,
       suiPaymentCoin,
     ],
   });
