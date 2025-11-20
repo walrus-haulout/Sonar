@@ -66,17 +66,6 @@ SEAL_PACKAGE_ID = os.getenv("SEAL_PACKAGE_ID")
 # Feature flag for legacy upload support
 ENABLE_LEGACY_UPLOAD = os.getenv("ENABLE_LEGACY_UPLOAD", "false").lower() == "true"
 
-if not OPENROUTER_API_KEY:
-    raise RuntimeError("OPENROUTER_API_KEY must be set for audio transcription and analysis")
-
-if not ACOUSTID_API_KEY:
-    raise RuntimeError("ACOUSTID_API_KEY must be set for copyright detection")
-
-if not VERIFIER_AUTH_TOKEN:
-    raise RuntimeError("VERIFIER_AUTH_TOKEN must be set for authenticated access")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL must be set for session storage (Railway provides this automatically)")
 
 # Validate Seal configuration (required for encrypted blob flow)
 if not SEAL_PACKAGE_ID:
@@ -95,6 +84,39 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+# Startup validation: Check required environment variables at application startup
+@app.on_event("startup")
+async def validate_environment():
+    """
+    Validate required environment variables at application startup.
+
+    This validation runs when the application starts, not at import time.
+    This allows the module to be imported during build verification without
+    requiring environment variables.
+    """
+    missing = []
+
+    if not OPENROUTER_API_KEY:
+        missing.append("OPENROUTER_API_KEY (required for audio transcription and analysis)")
+
+    if not ACOUSTID_API_KEY:
+        missing.append("ACOUSTID_API_KEY (required for copyright detection)")
+
+    if not VERIFIER_AUTH_TOKEN:
+        missing.append("VERIFIER_AUTH_TOKEN (required for authenticated access)")
+
+    if not DATABASE_URL:
+        missing.append("DATABASE_URL (required for session storage - Railway provides this automatically)")
+
+    if missing:
+        error_msg = "Missing required environment variables:\n  - " + "\n  - ".join(missing)
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    logger.info("Environment validation passed: all required variables configured")
+
 
 # Initialize clients (lazy initialization to avoid startup errors)
 _session_store: Optional[SessionStore] = None
