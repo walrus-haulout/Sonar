@@ -271,11 +271,16 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
   if (!sonarPackageId) {
     throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
   }
+  if (!systemObject) {
+    throw new Error('Walrus system object is not configured');
+  }
   if (!walCoinId) {
     throw new Error('WAL coin ID is required');
   }
 
   const tx = new Transaction();
+  const systemObjectSafe: string = systemObject; // Type assertion after validation
+  const walCoinIdSafe: string = walCoinId; // Type assertion after validation
 
   // Helper to prepare blob args
   const prepareBlobArgs = (blobParams: RegisterBlobParams) => {
@@ -327,13 +332,35 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     suiPaymentCoin = coin;
   }
 
+  // Reserve storage space for main blob
+  const [storageMain] = tx.moveCall({
+    target: `${packageId}::system::reserve_space`,
+    arguments: [
+      tx.object(systemObjectSafe),
+      tx.pure.u64(mainBlob.size),
+      tx.pure.u32(26), // epochs (1 year)
+      tx.object(walCoinIdSafe),
+    ],
+  });
+
+  // Reserve storage space for preview blob
+  const [storagePreview] = tx.moveCall({
+    target: `${packageId}::system::reserve_space`,
+    arguments: [
+      tx.object(systemObjectSafe),
+      tx.pure.u64(previewBlob.size),
+      tx.pure.u32(26), // epochs (1 year)
+      tx.object(walCoinIdSafe),
+    ],
+  });
+
   tx.moveCall({
     target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
     arguments: [
-      tx.object(systemObject),
+      tx.object(systemObjectSafe),
 
       // Main Blob
-      mainArgs.storage,
+      storageMain,
       mainArgs.blobId,
       mainArgs.rootHash,
       mainArgs.size,
@@ -342,7 +369,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       mainArgs.blobIdStr,
 
       // Preview Blob
-      previewArgs.storage,
+      storagePreview,
       previewArgs.blobId,
       previewArgs.rootHash,
       previewArgs.size,
@@ -356,7 +383,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.pure.u64(submission.durationSeconds),
 
       // Payments
-      tx.object(walCoinId),
+      tx.object(walCoinIdSafe),
       suiPaymentCoin,
     ],
   });
