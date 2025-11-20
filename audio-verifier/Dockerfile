@@ -20,7 +20,7 @@ RUN mkdir -p /etc/nix && \
 WORKDIR /build
 
 # Install Python 3.13 (includes pip), build tools, and system dependencies via nix-env
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.git nixpkgs.openssl nixpkgs.zlib nixpkgs.bun
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.openssl nixpkgs.zlib nixpkgs.bun
 
 # Copy project files
 COPY pyproject.toml .
