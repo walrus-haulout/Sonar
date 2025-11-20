@@ -21,6 +21,7 @@ export function Navbar() {
     { href: '/', label: 'Home' },
     { href: '/docs', label: 'Docs' },
     { href: '/marketplace', label: 'Marketplace' },
+    ...(currentAccount ? [{ href: '/dashboard', label: 'Dashboard' }] : []),
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/roadmap', label: 'Roadmap' },
     { href: '/tokenomics', label: 'Tokenomics' },

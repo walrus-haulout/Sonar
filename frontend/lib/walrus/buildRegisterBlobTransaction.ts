@@ -332,6 +332,9 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     suiPaymentCoin = coin;
   }
 
+  // Get WAL coin object for storage payments
+  const walCoin = tx.object(walCoinIdSafe);
+
   // Reserve storage space for main blob
   const [storageMain] = tx.moveCall({
     target: `${packageId}::system::reserve_space`,
@@ -339,7 +342,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.object(systemObjectSafe),
       tx.pure.u64(mainBlob.size),
       tx.pure.u32(26), // epochs (1 year)
-      tx.object(walCoinIdSafe),
+      walCoin,
     ],
   });
 
@@ -350,7 +353,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.object(systemObjectSafe),
       tx.pure.u64(previewBlob.size),
       tx.pure.u32(26), // epochs (1 year)
-      tx.object(walCoinIdSafe),
+      walCoin,
     ],
   });
 
@@ -383,7 +386,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.pure.u64(submission.durationSeconds),
 
       // Payments
-      tx.object(walCoinIdSafe),
+      walCoin,
       suiPaymentCoin,
     ],
   });
