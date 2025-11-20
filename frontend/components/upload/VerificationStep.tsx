@@ -467,6 +467,12 @@ export function VerificationStep({
         displayError = 'The audio file appears corrupted. Please re-upload and try again.';
       } else if (errorMsg.includes('HTTP')) {
         displayError = 'Server error during verification. Please try again later.';
+      } else if (errorMsg.includes('DEPLOYMENT_NOT_FOUND') || errorMsg.includes('deployment could not be found')) {
+        displayError = 'Deployment update detected. Refreshing page to get latest version...';
+        // Force reload to fix stale deployment
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
 
       setErrorMessage(displayError);
