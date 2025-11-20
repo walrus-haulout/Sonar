@@ -24,15 +24,28 @@ SEAL_CLI_PATH = os.getenv("SEAL_CLI_PATH", "/usr/local/bin/seal-cli")
 
 
 def is_valid_seal_key(key: str) -> bool:
-    """Check if a key is valid (not a placeholder)."""
+    """Check if a key is valid (not a placeholder and valid hex)."""
     # Reject common placeholder keys
     if key.lower() in ['key1', 'key2', 'key3', 'placeholder', 'changeme', 'example', 'test']:
         logger.warning(f"Ignoring placeholder key: {key}")
         return False
+    
     # Valid keys should have reasonable length (32+ chars)
     if len(key) < 32:
         logger.warning(f"Ignoring short key (length {len(key)}): {key[:10]}...")
         return False
+
+    # Check if it's a valid hex string (with optional 0x prefix)
+    clean_key = key.lower()
+    if clean_key.startswith('0x'):
+        clean_key = clean_key[2:]
+    
+    try:
+        int(clean_key, 16)
+    except ValueError:
+        logger.warning(f"Ignoring non-hex key: {key[:10]}...")
+        return False
+        
     return True
 
 

@@ -47,7 +47,7 @@ class TestIsValidSealKey:
         """Test that valid long keys are accepted."""
         valid_keys = [
             'a' * 32,
-            'valid_key_' + 'a' * 50,
+            '0x' + 'a' * 50,
             '0x' + 'f' * 64,
         ]
         for key in valid_keys:
@@ -333,7 +333,7 @@ class TestDecryptWithSealCli:
         seal_cli = tmp_path / "seal-cli"
         seal_cli.write_text("#!/bin/bash\n")
         monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "key1-secret-123456789abcdef,key2-secret-123456789abcdef")
+        monkeypatch.setenv("SEAL_SECRET_KEYS", "0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222")
         monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "")
         importlib.reload(seal_decryptor)
         
@@ -346,8 +346,8 @@ class TestDecryptWithSealCli:
         result = seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
         
         call_args = mock_run.call_args[0][0]
-        assert "key1-secret-123456789abcdef" in call_args
-        assert "key2-secret-123456789abcdef" in call_args
+        assert "0x1111111111111111111111111111111111111111" in call_args
+        assert "0x2222222222222222222222222222222222222222" in call_args
         assert result == bytes.fromhex("cafebabe")
 
     @patch('seal_decryptor.subprocess.run')
