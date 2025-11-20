@@ -372,7 +372,8 @@ export function VerificationStep({
       // This allows the uploader to verify their encrypted content before blockchain submission
       // After submission, access switches to HybridPolicy with purchase/admin controls
       // Pass upload timestamp and Clock for time-window validation (15 minutes)
-      const uploadTimestampMs = Date.now();
+      // Subtract 60 seconds buffer to account for client-validator clock skew
+      const uploadTimestampMs = Date.now() - 60000;
       const decryptionResult = await decrypt(
         encryptedBlob,
         sealIdentity,

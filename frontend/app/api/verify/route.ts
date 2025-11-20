@@ -9,8 +9,8 @@ import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
  * with the auth token.
  */
 
-// Explicitly set Node.js runtime for server-side operations
-export const runtime = 'nodejs';
+// Use Edge runtime for better performance and compatibility
+export const runtime = 'edge';
 
 // Force dynamic rendering to ensure route is always treated as a serverless function
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   const requestId = crypto.randomUUID();
-  
+
   try {
     console.log(`[${requestId}] [GET] /api/verify - Health check requested`, {
       url: request.url,
@@ -30,12 +30,12 @@ export async function GET(request: NextRequest) {
     });
 
     const response = NextResponse.json(
-      { 
-        status: 'ok', 
+      {
+        status: 'ok',
         route: '/api/verify',
         requestId,
         timestamp: new Date().toISOString(),
-      }, 
+      },
       { status: 200 }
     );
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { 
+      {
         error: 'Health check failed',
         detail: error.message,
         requestId,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   const requestId = crypto.randomUUID();
-  
+
   try {
     console.log(`[${requestId}] [POST] /api/verify - Request received`, {
       url: request.url,
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     // Check if request is JSON (encrypted blob flow) or FormData (legacy flow)
     if (contentType.includes('application/json')) {
       console.log(`[${requestId}] Processing JSON payload flow`);
-      
+
       try {
         const payload = await request.json();
         console.log(`[${requestId}] JSON payload parsed successfully`, {
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     } else {
       console.log(`[${requestId}] Processing FormData payload flow`);
-      
+
       try {
         const formData = await request.formData();
         const formDataKeys = Array.from(formData.keys());
@@ -208,10 +208,10 @@ export async function POST(request: NextRequest) {
     };
 
     console.error(`[${requestId}] [POST] /api/verify - Request failed`, errorDetails);
-    
+
     // Provide more detailed error information
     const errorMessage = error.message || 'Failed to start verification';
-    const errorResponse = { 
+    const errorResponse = {
       error: errorMessage,
       detail: errorMessage,
       requestId,
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
         cause: error.cause,
       } : {}),
     };
-    
+
     return NextResponse.json(errorResponse, { status: 500 });
   }
 }

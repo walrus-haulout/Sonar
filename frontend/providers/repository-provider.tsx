@@ -16,10 +16,8 @@ const RepositoryContext = createContext<DataRepository | null>(null);
 export function RepositoryProvider({ children }: { children: React.ReactNode }) {
   const repository = useMemo(() => {
     if (USE_BLOCKCHAIN) {
-      console.log('Using Sui blockchain repository');
       return new SuiRepository();
     } else {
-      console.log('Using seed data repository');
       return new SeedDataRepository();
     }
   }, []);
