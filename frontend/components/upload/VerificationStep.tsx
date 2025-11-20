@@ -412,20 +412,21 @@ export function VerificationStep({
         )
       );
 
-      // Stage 3: Send decrypted audio to backend for verification
-      console.log('[VerificationStep] Sending decrypted audio to backend for verification');
-
-      const decryptedBlob = new Blob([new Uint8Array(decryptionResult.data)], {
-        type: 'audio/mpeg',
-      });
-
-      const formData = new FormData();
-      formData.append('file', decryptedBlob, 'decrypted-audio.mp3');
-      formData.append('metadata', JSON.stringify(metadata));
+      // Stage 3: Send verification request to backend
+      // We send the blob ID and identity so the backend can fetch and decrypt it securely
+      console.log('[VerificationStep] Sending verification request to backend');
 
       const response = await fetch('/api/verify', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walrusBlobId,
+          sealIdentity,
+          encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
+          metadata,
+        }),
       });
 
       if (!response.ok) {
