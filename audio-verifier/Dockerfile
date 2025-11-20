@@ -48,8 +48,7 @@ RUN LIBSTDCPP=$(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1) &&
     . /build/.venv/bin/activate && \
     python -c "import main; print('✓ Application installed successfully')" && \
     python -c "import fastapi; print('✓ FastAPI available')" && \
-    python -c "import librosa; print('✓ Librosa available')" && \
-    python -c "import pysui; print('✓ PySui available')"
+    python -c "import librosa; print('✓ Librosa available')"
 
 # Stage 2: Runtime image (NixOS-based for library compatibility)
 FROM nixos/nix:latest AS runtime
@@ -61,7 +60,7 @@ RUN mkdir -p /etc/nix && \
     echo "sandbox = false" >> /etc/nix/nix.conf
 
 # Install runtime dependencies using nix-env
-# Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
+# Python 3.13 with pip, build tools for C extensions, and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
 # bash is required for start.sh script execution
 # Added bun for TS bridge
