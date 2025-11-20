@@ -34,13 +34,18 @@ RUN cd seal-decryptor-ts && bun install
 
 # Create virtual environment and install Python dependencies using pip
 # Nix-managed Python is immutable, so we must use a venv
-RUN python3.13 -m venv /build/.venv && \
+# Set LD_LIBRARY_PATH for C extensions (numpy, etc.) to find libstdc++
+RUN LIBSTDCPP=$(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1) && \
+    export LD_LIBRARY_PATH="$(dirname "$LIBSTDCPP"):${LD_LIBRARY_PATH}" && \
+    python3.13 -m venv /build/.venv && \
     . /build/.venv/bin/activate && \
     pip install --upgrade pip && \
     pip install .
 
 # Verify installation
-RUN . /build/.venv/bin/activate && \
+RUN LIBSTDCPP=$(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1) && \
+    export LD_LIBRARY_PATH="$(dirname "$LIBSTDCPP"):${LD_LIBRARY_PATH}" && \
+    . /build/.venv/bin/activate && \
     python -c "import main; print('✓ Application installed successfully')" && \
     python -c "import fastapi; print('✓ FastAPI available')" && \
     python -c "import librosa; print('✓ Librosa available')" && \
