@@ -166,60 +166,61 @@ The service runs a 6-stage pipeline:
 
 ## Dependencies
 
-The service requires `seal-cli` binary for decrypting encrypted audio blobs during verification. The Dockerfile automatically builds and installs `seal-cli` from the MystenLabs Seal repository. If deploying without Docker, ensure `seal-cli` is installed and available in your PATH or set the `SEAL_CLI_PATH` environment variable to point to the binary location.
+The service uses:
+- **TypeScript bridge** (`bun run`): Handles SessionKey-based decryption via @mysten/seal SDK
+- **Database**: PostgreSQL for session storage (Railway provides automatically)
+- **Walrus**: For retrieving encrypted audio blobs
+- **Sui RPC**: For SessionKey validation and on-chain verification
 
-## Seal Encrypted Blob Configuration (Production)
+## Seal Encrypted Blob Configuration (SessionKey-Based Authentication)
 
-This service can verify encrypted audio blobs that are stored on Walrus and encrypted with Seal. Proper configuration of Seal keys is **critical** for production deployments.
+This service verifies encrypted audio blobs stored on Walrus using **SessionKey-based authentication**. Users authorize verification with their wallet signature - no offline master keys required.
 
-### Understanding the Issue
+### How It Works
 
-If you see errors like `seal-cli decrypt failed: Error: InvalidInput`, it usually means:
-1. **Placeholder keys are configured** - `SEAL_SECRET_KEYS=key1,key2,key3` (these are filtered out)
-2. **No real secret keys are set** - seal-cli requires actual encryption keys to decrypt blobs
-3. **Environment variable not set in deployment** - The key was in `.env` but not passed to the runtime
+1. **User uploads audio** → Frontend encrypts with Seal (4-of-6 threshold)
+2. **User authorizes verification** → Frontend creates SessionKey (wallet signature)
+3. **SessionKey exported** → Sent to backend with verification request
+4. **Backend decrypts** → Uses SessionKey to request decryption from key servers
+5. **Audio verified** → Quality, copyright, transcription, AI analysis
 
-### Setting Up Seal Keys
+### Configuration
 
-1. **Get Your Keys from Seal Keyservers**
-   - Contact your Seal deployment operator or access your keyserver instances (e.g., seal-4, seal-5, seal-6)
-   - Extract the `CLIENT_MASTER_KEY` from each keyserver's configuration
-   - You typically need at least 2 keys (configured by `SEAL_THRESHOLD`)
+Only one environment variable is required:
 
-2. **Format the Keys**
-   - Keys should be hex-encoded, 32+ characters, starting with `0x`
-   - Join multiple keys with commas (no spaces)
-   - Example: `0x1d0792389049f3a6960b5fc15dfde2f4681e7f50318aa5b0b38fa7f020f40728,0x1f45de951368b56b8323cd7320612ebd2d84127ac760cc580ee7ec25c14a53c5`
+- **`SEAL_PACKAGE_ID`** (Required): Sui blockchain object ID of deployed Seal package
+  - Example: `SEAL_PACKAGE_ID=0x8ed5834faad055067328dd44577e5fb7a6c6c61299483616061e642c465eda`
+  - Get from: `sui client publish` output when deploying Seal contracts
 
-3. **Set in Your Deployment Environment (NOT in .env)**
-   - **Vercel**: Project Settings → Environment Variables → Add `SEAL_SECRET_KEYS`
-   - **Railway**: Railway Dashboard → Variables → Add `SEAL_SECRET_KEYS`
-   - **Fly.io**: `fly secrets set SEAL_SECRET_KEYS=...`
-   - **Docker**: Pass with `-e SEAL_SECRET_KEYS=...` flag
-   - **Local Testing**: `export SEAL_SECRET_KEYS=your_keys_here` before running
+### Security
 
-4. **Optional: Seal Key Server IDs**
-   - For verification against the blockchain, optionally set `SEAL_KEY_SERVER_IDS`
-   - These are object IDs from your Seal keyserver instances on-chain
-   - Format: Comma-separated hex values (same format as secret keys)
+✅ **No offline master keys** - Eliminates key management risk
+✅ **User-authorized decryption** - Every decrypt requires wallet signature
+✅ **Ephemeral credentials** - SessionKeys expire (30-min TTL)
+✅ **Key server validation** - Decryption requests validated on-chain
+✅ **Audit trail** - Session creation timestamped and signed
 
-5. **Verify Configuration**
-   - The service will log warnings at startup if keys are missing or invalid
-   - Look for: `WARNING: No SEAL_SECRET_KEYS configured` in logs
-   - Health check endpoint: `GET /health` shows configuration status
+### Frontend Integration
 
-### Troubleshooting Seal Errors
+The frontend already handles:
+1. SessionKey creation with wallet signature
+2. Caching session (30-min TTL)
+3. Exporting SessionKey as JSON
+4. Sending with verification request
 
-**Error: `seal-cli decrypt failed: Error: InvalidInput`**
-- ✓ Check that `SEAL_SECRET_KEYS` is set in your deployment environment
-- ✓ Verify keys are NOT placeholder values (key1, key2, key3)
-- ✓ Ensure keys are properly formatted (hex, 32+ chars, comma-separated)
-- ✓ Check that blob ID and encrypted data are valid
+No additional configuration needed on the frontend - SessionKey-based decryption is transparent to the user.
 
-**Error: `No valid SEAL_SECRET_KEYS configured`**
-- ✓ Environment variable `SEAL_SECRET_KEYS` is not set in your runtime
-- ✓ Or all configured keys were filtered as placeholders
-- ✓ Set real keys in your deployment platform's secrets/environment section
+### Troubleshooting
+
+**Error: `SessionKey is required for decryption`**
+- Verify frontend is creating and exporting SessionKey
+- Check that `sessionKeyData` is included in POST /verify request
+- Ensure wallet is connected and authorization completed
+
+**Error: `SessionKey import failed`**
+- Verify SessionKey JSON format is valid
+- Check that SuiClient can reach RPC endpoint
+- Ensure network configuration matches (mainnet/testnet)
 
 ## Deployment
 
@@ -243,10 +244,7 @@ railway variables set SUI_VALIDATOR_CAP_ID=0x...
 railway variables set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
 railway variables set WALRUS_UPLOAD_TOKEN=secrettoken
 
-# SEAL ENCRYPTED BLOB CONFIGURATION (CRITICAL - see "Seal Encrypted Blob Configuration" section above)
-railway variables set SEAL_SECRET_KEYS=0x...,0x...  # Comma-separated hex-encoded keys
-railway variables set SEAL_KEY_SERVER_IDS=0x...,0x... # Optional
-railway variables set SEAL_THRESHOLD=2
+# SEAL ENCRYPTED BLOB CONFIGURATION (see "Seal Encrypted Blob Configuration" section above)
 railway variables set SEAL_PACKAGE_ID=0x...
 railway variables set WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443
 ```
@@ -270,10 +268,7 @@ fly secrets set SUI_VALIDATOR_CAP_ID=0x...
 fly secrets set WALRUS_UPLOAD_URL=https://walrus.yourdomain.com/upload
 fly secrets set WALRUS_UPLOAD_TOKEN=secrettoken
 
-# SEAL ENCRYPTED BLOB CONFIGURATION (CRITICAL - see "Seal Encrypted Blob Configuration" section)
-fly secrets set SEAL_SECRET_KEYS=0x...,0x...  # Comma-separated hex-encoded keys
-fly secrets set SEAL_KEY_SERVER_IDS=0x...,0x... # Optional
-fly secrets set SEAL_THRESHOLD=2
+# SEAL ENCRYPTED BLOB CONFIGURATION (see "Seal Encrypted Blob Configuration" section)
 fly secrets set SEAL_PACKAGE_ID=0x...
 fly secrets set WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443
 
@@ -283,10 +278,8 @@ fly deploy
 
 ### Docker (Production)
 
-The Dockerfile automatically builds and installs `seal-cli` during the build process. The binary is installed to `/usr/local/bin/seal-cli` by default.
-
 ```bash
-# Build image (includes seal-cli build)
+# Build image
 docker build -t sonar-audio-verifier .
 
 # Run with environment file
@@ -296,9 +289,6 @@ docker run -p 8000:8000 \
 
 # Or run with individual environment variables (recommended for production)
 docker run -p 8000:8000 \
-  -e SEAL_SECRET_KEYS=0x...,0x... \
-  -e SEAL_KEY_SERVER_IDS=0x...,0x... \
-  -e SEAL_THRESHOLD=2 \
   -e SEAL_PACKAGE_ID=0x... \
   -e WALRUS_AGGREGATOR_URL=https://wal-aggregator-mainnet.staketab.org:443 \
   -e OPENROUTER_API_KEY=xxx \
@@ -307,12 +297,7 @@ docker run -p 8000:8000 \
   sonar-audio-verifier
 ```
 
-**Note**: The Docker build includes a multi-stage build that:
-1. Builds `seal-cli` from the MystenLabs Seal repository
-2. Copies the binary to the runtime image at `/usr/local/bin/seal-cli`
-3. Makes it executable and verifies installation
-
-**Important**: For encrypted blob support, ensure `SEAL_SECRET_KEYS` is set in your Docker environment. Do NOT put real keys in `.env` file - use Docker secrets or environment variables instead.
+**Note**: No master keys required - SessionKey-based authentication is handled by the frontend and validated on-chain.
 
 ## Frontend Integration
 

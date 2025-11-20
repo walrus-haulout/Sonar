@@ -331,28 +331,6 @@ def mock_fingerprinter():
     return fingerprinter
 
 
-# Configuration fixtures
-
-@pytest.fixture
-def valid_seal_config():
-    """Valid SEAL configuration."""
-    return {
-        "SEAL_PACKAGE_ID": "0x123456789abcdef",
-        "SEAL_THRESHOLD": "2",
-        "SEAL_KEY_SERVER_IDS": "key-server-1,key-server-2",
-        "WALRUS_AGGREGATOR_URL": "https://wal-aggregator.example.com"
-    }
-
-
-@pytest.fixture
-def invalid_seal_config_missing_keys():
-    """SEAL config missing required keys."""
-    return {
-        "SEAL_PACKAGE_ID": "0x123456789abcdef",
-        "WALRUS_AGGREGATOR_URL": "https://wal-aggregator.example.com"
-    }
-
-
 @pytest.fixture
 def mock_environ(monkeypatch):
     """Fixture to set environment variables in tests."""

@@ -413,8 +413,11 @@ export function VerificationStep({
       );
 
       // Stage 3: Send verification request to backend
-      // We send the blob ID and identity so the backend can fetch and decrypt it securely
+      // We send the blob ID, identity, and SessionKey for user-authorized decryption
       console.log('[VerificationStep] Sending verification request to backend');
+
+      // Export SessionKey for backend to use during decryption
+      const sessionKeyData = sessionKey.export();
 
       const response = await fetch('/api/verify', {
         method: 'POST',
@@ -426,6 +429,7 @@ export function VerificationStep({
           sealIdentity,
           encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
           metadata,
+          sessionKeyData,
         }),
       });
 

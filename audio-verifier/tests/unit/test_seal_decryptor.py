@@ -1,7 +1,7 @@
 """
 Unit tests for seal_decryptor.py
 
-Tests configuration validation, Walrus blob fetching, seal-cli execution,
+Tests configuration validation, Walrus blob fetching, TS bridge execution,
 and decryption logic. Critical for diagnosing 502 errors.
 """
 
@@ -24,35 +24,7 @@ from seal_decryptor import (
     _is_envelope_format,
     _decrypt_with_seal_cli,
     _decrypt_aes,
-    is_valid_seal_key,
 )
-
-
-class TestIsValidSealKey:
-    """Test placeholder key filtering."""
-
-    def test_rejects_placeholder_keys(self):
-        """Test that common placeholder keys are rejected."""
-        placeholders = ['key1', 'KEY1', 'key2', 'Key3', 'placeholder', 'changeme', 'example', 'test', 'TEST']
-        for key in placeholders:
-            assert is_valid_seal_key(key) is False
-
-    def test_rejects_short_keys(self):
-        """Test that keys shorter than 32 chars are rejected."""
-        short_keys = ['a' * 10, 'b' * 20, 'c' * 31]
-        for key in short_keys:
-            assert is_valid_seal_key(key) is False
-
-    def test_accepts_valid_keys(self):
-        """Test that valid long keys are accepted."""
-        valid_keys = [
-            'a' * 32,
-            '0x' + 'a' * 50,
-            '0x' + 'f' * 64,
-        ]
-        for key in valid_keys:
-            assert is_valid_seal_key(key) is True
-
 
 class TestConfigurationValidation:
     """Test configuration validation in decrypt_encrypted_blob."""
@@ -61,14 +33,13 @@ class TestConfigurationValidation:
     async def test_requires_walrus_aggregator_url(self, monkeypatch):
         """Test that WALRUS_AGGREGATOR_URL is required."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "")
-        # Reload module to pick up env changes
-        importlib.reload(seal_decryptor)
-        
+
         with pytest.raises(ValueError, match="WALRUS_AGGREGATOR_URL"):
             await seal_decryptor.decrypt_encrypted_blob(
                 "blob-id",
                 b"encrypted-data",
-                "identity"
+                "identity",
+                "mock-session-key-data"
             )
 
     @pytest.mark.asyncio
@@ -77,51 +48,15 @@ class TestConfigurationValidation:
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "")
         importlib.reload(seal_decryptor)
-        
+
         with pytest.raises(ValueError, match="SEAL_PACKAGE_ID"):
             await seal_decryptor.decrypt_encrypted_blob(
                 "blob-id",
                 b"encrypted-data",
-                "identity"
+                "identity",
+                "mock-session-key-data"
             )
 
-    @pytest.mark.asyncio
-    async def test_requires_seal_cli_binary(self, monkeypatch):
-        """Test that seal-cli binary must exist."""
-        monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        monkeypatch.setenv("SEAL_CLI_PATH", "/nonexistent/path/seal-cli")
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        importlib.reload(seal_decryptor)
-        
-        with pytest.raises(ValueError, match="seal-cli not found"):
-            await seal_decryptor.decrypt_encrypted_blob(
-                "blob-id",
-                b"encrypted-data",
-                "identity"
-            )
-
-    @pytest.mark.asyncio
-    async def test_requires_sufficient_key_server_ids(self, monkeypatch, tmp_path):
-        """Test that enough key server IDs are configured."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\necho 'Decrypted message: abcd'\n")
-        seal_cli.chmod(0o755)
-        
-        monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        monkeypatch.setenv("SEAL_THRESHOLD", "2")
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1")  # Only 1, need 2
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        importlib.reload(seal_decryptor)
-        
-        with pytest.raises(ValueError, match="Not enough Seal key server IDs"):
-            await seal_decryptor.decrypt_encrypted_blob(
-                "blob-id",
-                b"encrypted-data",
-                "identity"
-            )
 
 
 class TestIsEnvelopeFormat:
@@ -167,7 +102,8 @@ class TestFetchWalrusBlob:
         """Test that fetch waits 15 seconds before first attempt."""
         # Setup
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        
+        importlib.reload(seal_decryptor)
+
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -176,10 +112,10 @@ class TestFetchWalrusBlob:
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
+
         # Execute
-        result = _fetch_walrus_blob("blob-123")
-        
+        result = seal_decryptor._fetch_walrus_blob("blob-123")
+
         # Assert
         assert result == b"blob-content"
         # First sleep call should be 15 seconds
@@ -190,18 +126,19 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_retries_on_404(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch retries on 404 (blob propagation delay)."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        
+        importlib.reload(seal_decryptor)
+
         mock_client = MagicMock()
         mock_response_404 = MagicMock()
         mock_response_404.status_code = 404
         mock_response_404.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=mock_response_404
         )
-        
+
         mock_response_200 = MagicMock()
         mock_response_200.status_code = 200
         mock_response_200.content = b"blob-content"
-        
+
         # First 2 calls return 404, third succeeds
         mock_client.get.side_effect = [
             mock_response_404,
@@ -211,9 +148,9 @@ class TestFetchWalrusBlob:
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
-        result = _fetch_walrus_blob("blob-123")
-        
+
+        result = seal_decryptor._fetch_walrus_blob("blob-123")
+
         assert result == b"blob-content"
         # Should have called get 3 times
         assert mock_client.get.call_count == 3
@@ -223,14 +160,15 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_fails_after_max_retries(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch fails after 10 retries."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        
+        importlib.reload(seal_decryptor)
+
         mock_client = MagicMock()
         mock_response_404 = MagicMock()
         mock_response_404.status_code = 404
         mock_response_404.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=mock_response_404
         )
-        
+
         # Always return 404
         mock_client.get.side_effect = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=mock_response_404
@@ -238,10 +176,10 @@ class TestFetchWalrusBlob:
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
+
         with pytest.raises(httpx.HTTPStatusError):
-            _fetch_walrus_blob("blob-123")
-        
+            seal_decryptor._fetch_walrus_blob("blob-123")
+
         # Should have tried 10 times
         assert mock_client.get.call_count == 10
 
@@ -250,24 +188,25 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_does_not_retry_on_500(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch does NOT retry on 500 errors."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        
+        importlib.reload(seal_decryptor)
+
         mock_client = MagicMock()
         mock_response_500 = MagicMock()
         mock_response_500.status_code = 500
         mock_response_500.raise_for_status.side_effect = httpx.HTTPStatusError(
             "500", request=MagicMock(), response=mock_response_500
         )
-        
+
         mock_client.get.side_effect = httpx.HTTPStatusError(
             "500", request=MagicMock(), response=mock_response_500
         )
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
+
         with pytest.raises(httpx.HTTPStatusError):
-            _fetch_walrus_blob("blob-123")
-        
+            seal_decryptor._fetch_walrus_blob("blob-123")
+
         # Should have tried only once (no retry on 500)
         assert mock_client.get.call_count == 1
 
@@ -277,7 +216,8 @@ class TestFetchWalrusBlob:
         """Test that bearer token is included in request headers."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("WALRUS_AGGREGATOR_TOKEN", "token-123")
-        
+        importlib.reload(seal_decryptor)
+
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -286,140 +226,66 @@ class TestFetchWalrusBlob:
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
-        _fetch_walrus_blob("blob-123")
-        
+
+        seal_decryptor._fetch_walrus_blob("blob-123")
+
         # Check that Authorization header was sent
         call_kwargs = mock_client.get.call_args[1]
         assert call_kwargs['headers']['Authorization'] == "Bearer token-123"
 
 
-class TestDecryptWithSealCli:
-    """Test seal-cli subprocess execution."""
+class TestDecryptWithTsBridge:
+    """Test TS bridge subprocess execution (bun run decrypt.ts)."""
 
     @patch('seal_decryptor.subprocess.run')
-    def test_decrypt_with_key_server_ids(self, mock_run, tmp_path, monkeypatch):
-        """Test seal-cli invocation with key server IDs."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        importlib.reload(seal_decryptor)
-        
+    def test_decrypt_with_session_key(self, mock_run):
+        """Test TS bridge invocation with SessionKey."""
         mock_result = MagicMock()
-        mock_result.stdout = "Decrypted message: deadbeef"
+        mock_result.stdout = "deadbeef"
         mock_result.stderr = ""
         mock_result.returncode = 0
         mock_run.return_value = mock_result
-        
-        result = seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
-        
-        # Verify command structure
+
+        result = _decrypt_with_seal_cli(
+            "encrypted-hex",
+            "identity",
+            '{"keyType":"SessionKey","address":"0x123"}'
+        )
+
+        # Verify command structure (bun run decrypt.ts)
         call_args = mock_run.call_args[0][0]
-        assert call_args[0] == str(seal_cli)
-        assert call_args[1] == "decrypt"
-        assert call_args[2] == "encrypted-hex"
-        assert "--" in call_args
-        assert "id1" in call_args
-        assert "id2" in call_args
-        
+        assert call_args[0] == "bun"
+        assert call_args[1] == "run"
+        assert "decrypt.ts" in call_args[2]
+
         # Verify decrypted output
         assert result == bytes.fromhex("deadbeef")
 
     @patch('seal_decryptor.subprocess.run')
-    def test_decrypt_with_secret_keys(self, mock_run, tmp_path, monkeypatch):
-        """Test seal-cli invocation with secret keys."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "0x1111111111111111111111111111111111111111,0x2222222222222222222222222222222222222222")
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "")
-        importlib.reload(seal_decryptor)
-        
-        mock_result = MagicMock()
-        mock_result.stdout = "Decrypted message: cafebabe"
-        mock_result.stderr = ""
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
-        
-        result = seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
-        
-        call_args = mock_run.call_args[0][0]
-        assert "0x1111111111111111111111111111111111111111" in call_args
-        assert "0x2222222222222222222222222222222222222222" in call_args
-        assert result == bytes.fromhex("cafebabe")
-
-    @patch('seal_decryptor.subprocess.run')
-    def test_seal_cli_timeout_raises_error(self, mock_run, tmp_path, monkeypatch):
-        """Test that seal-cli timeout is properly handled."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        importlib.reload(seal_decryptor)
-        
+    def test_ts_bridge_timeout_raises_error(self, mock_run):
+        """Test that TS bridge timeout is properly handled."""
         mock_run.side_effect = subprocess.TimeoutExpired("cmd", 60)
-        
+
         with pytest.raises(RuntimeError, match="timed out"):
-            seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
+            _decrypt_with_seal_cli(
+                "encrypted-hex",
+                "identity",
+                '{"keyType":"SessionKey"}'
+            )
 
     @patch('seal_decryptor.subprocess.run')
-    def test_seal_cli_failure_includes_stderr(self, mock_run, tmp_path, monkeypatch):
-        """Test that seal-cli errors include stderr output."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        importlib.reload(seal_decryptor)
-        
+    def test_ts_bridge_failure_includes_stderr(self, mock_run):
+        """Test that TS bridge errors include stderr output."""
         mock_run.side_effect = subprocess.CalledProcessError(
-            1, "seal-cli", stderr="Invalid encrypted object"
+            1, "bun run", stderr="Invalid encrypted object"
         )
-        
+
         with pytest.raises(RuntimeError, match="Invalid encrypted object"):
-            seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
-
-    @patch('seal_decryptor.subprocess.run')
-    def test_parses_decrypted_hex_output(self, mock_run, tmp_path, monkeypatch):
-        """Test that various seal-cli output formats are parsed correctly."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        
-        test_cases = [
-            ("Decrypted message: 0102030405", bytes.fromhex("0102030405")),
-            ("Decrypted message:0102030405", bytes.fromhex("0102030405")),  # No space
-            ("Some debug line\nDecrypted message: deadbeef\nOther line", bytes.fromhex("deadbeef")),
-        ]
-        
-        for output, expected in test_cases:
-            mock_result = MagicMock()
-            mock_result.stdout = output
-            mock_result.stderr = ""
-            mock_result.returncode = 0
-            mock_run.return_value = mock_result
-            importlib.reload(seal_decryptor)
-            
-            result = seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
-            assert result == expected, f"Failed for output: {output}"
-
-    @patch('seal_decryptor.subprocess.run')
-    def test_no_keys_configured_raises_error(self, mock_run, tmp_path, monkeypatch):
-        """Test that missing keys and key server IDs raises error."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
-        importlib.reload(seal_decryptor)
-        
-        with pytest.raises(ValueError, match="No secret keys or key server IDs"):
-            seal_decryptor._decrypt_with_seal_cli("encrypted-hex", "identity")
+            _decrypt_with_seal_cli(
+                "encrypted-hex",
+                "identity",
+                '{"keyType":"SessionKey"}'
+            )
 
 
 class TestDecryptAes:
@@ -482,16 +348,16 @@ class TestDecryptSync:
         sealed_key = b'k' * 300
         encrypted_file = b'd' * 500
         envelope = key_length + sealed_key + encrypted_file
-        
+
         mock_fetch.return_value = envelope
         mock_seal.return_value = b'decrypted-aes-key'
         mock_aes.return_value = b'plaintext'
-        
-        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity")
-        
+
+        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity", "mock-session-key-data")
+
         assert result == b'plaintext'
         mock_fetch.assert_called_once_with("blob-id")
-        mock_seal.assert_called_once_with("encrypted-object-hex", "identity")
+        mock_seal.assert_called_once_with("encrypted-object-hex", "identity", "mock-session-key-data")
         mock_aes.assert_called_once()
 
     @patch('seal_decryptor._fetch_walrus_blob')
@@ -502,20 +368,20 @@ class TestDecryptSync:
         encrypted_blob = b'not-envelope-format' * 100
         mock_fetch.return_value = encrypted_blob
         mock_seal.return_value = b'plaintext'
-        
-        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity")
-        
+
+        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity", "mock-session-key-data")
+
         assert result == b'plaintext'
         mock_fetch.assert_called_once_with("blob-id")
-        mock_seal.assert_called_once_with("encrypted-object-hex", "identity")
+        mock_seal.assert_called_once_with("encrypted-object-hex", "identity", "mock-session-key-data")
 
     @patch('seal_decryptor._fetch_walrus_blob')
     def test_fetch_failure_wrapped_in_runtime_error(self, mock_fetch):
         """Test that fetch failures are wrapped properly."""
         mock_fetch.side_effect = Exception("Walrus error")
-        
+
         with pytest.raises(RuntimeError, match="Failed to decrypt encrypted blob"):
-            _decrypt_sync("blob-id", "encrypted-object-hex", "identity")
+            _decrypt_sync("blob-id", "encrypted-object-hex", "identity", "mock-session-key-data")
 
 
 class TestDecryptEncryptedBlob:
@@ -523,26 +389,22 @@ class TestDecryptEncryptedBlob:
 
     @pytest.mark.asyncio
     @patch('seal_decryptor._decrypt_sync')
-    async def test_converts_bytes_to_hex(self, mock_decrypt, monkeypatch, tmp_path):
+    async def test_converts_bytes_to_hex(self, mock_decrypt, monkeypatch):
         """Test that bytes are converted to hex before passing to sync function."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
         importlib.reload(seal_decryptor)
-        
+
         mock_decrypt.return_value = b'plaintext'
-        
+
         encrypted_bytes = b'encrypted-data'
         result = await seal_decryptor.decrypt_encrypted_blob(
             "blob-id",
             encrypted_bytes,
-            "identity"
+            "identity",
+            "mock-session-key-data"
         )
-        
+
         assert result == b'plaintext'
         # Check that the encrypted data was converted to hex
         call_args = mock_decrypt.call_args[0]
@@ -550,26 +412,22 @@ class TestDecryptEncryptedBlob:
 
     @pytest.mark.asyncio
     @patch('seal_decryptor._decrypt_sync')
-    async def test_accepts_hex_string(self, mock_decrypt, monkeypatch, tmp_path):
+    async def test_accepts_hex_string(self, mock_decrypt, monkeypatch):
         """Test that hex strings are passed through unchanged."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
-        monkeypatch.setenv("SEAL_SECRET_KEYS", "")
         importlib.reload(seal_decryptor)
-        
+
         mock_decrypt.return_value = b'plaintext'
-        
+
         hex_string = "deadbeef"
         result = await seal_decryptor.decrypt_encrypted_blob(
             "blob-id",
             hex_string,
-            "identity"
+            "identity",
+            "mock-session-key-data"
         )
-        
+
         assert result == b'plaintext'
         call_args = mock_decrypt.call_args[0]
         assert call_args[1] == hex_string
@@ -585,26 +443,22 @@ class TestTimeoutScenarios:
         """Test that decryption completes quickly without hanging."""
         mock_fetch.return_value = b'small-blob'
         mock_seal.return_value = b'plaintext'
-        
-        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity")
+
+        result = _decrypt_sync("blob-id", "encrypted-object-hex", "identity", "mock-session-key-data")
         assert result == b'plaintext'
 
     @pytest.mark.asyncio
     @pytest.mark.timeout(5)
     @patch('seal_decryptor._decrypt_sync')
-    async def test_async_decryption_completes_quickly(self, mock_decrypt, monkeypatch, tmp_path):
+    async def test_async_decryption_completes_quickly(self, mock_decrypt, monkeypatch):
         """Test that async wrapper completes quickly."""
-        seal_cli = tmp_path / "seal-cli"
-        seal_cli.write_text("#!/bin/bash\n")
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        monkeypatch.setenv("SEAL_CLI_PATH", str(seal_cli))
-        monkeypatch.setenv("SEAL_KEY_SERVER_IDS", "id1,id2")
         importlib.reload(seal_decryptor)
-        
+
         mock_decrypt.return_value = b'plaintext'
-        
-        result = await seal_decryptor.decrypt_encrypted_blob("blob-id", b"data", "identity")
+
+        result = await seal_decryptor.decrypt_encrypted_blob("blob-id", b"data", "identity", "mock-session-key-data")
         assert result == b'plaintext'
 
     @patch('seal_decryptor.httpx.Client')
@@ -613,30 +467,31 @@ class TestTimeoutScenarios:
     def test_walrus_fetch_timeout_bounded(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that Walrus fetch timeout is bounded (not 350+ seconds)."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        
+        importlib.reload(seal_decryptor)
+
         # Track that sleep is called with 30s delays
         sleep_times = []
         def track_sleep(seconds):
             sleep_times.append(seconds)
         mock_sleep.side_effect = track_sleep
-        
+
         mock_client = MagicMock()
         mock_response_404 = MagicMock()
         mock_response_404.status_code = 404
         mock_response_404.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=mock_response_404
         )
-        
+
         mock_client.get.side_effect = httpx.HTTPStatusError(
             "404", request=MagicMock(), response=mock_response_404
         )
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = None
         mock_client_class.return_value = mock_client
-        
+
         with pytest.raises(httpx.HTTPStatusError):
-            _fetch_walrus_blob("blob-id")
-        
+            seal_decryptor._fetch_walrus_blob("blob-id")
+
         # Initial sleep is 15s, then 9 retries * 30s each = 270s total
         # But the test should complete within 20 seconds with mocked time.sleep
         assert sleep_times[0] == 15  # Initial wait

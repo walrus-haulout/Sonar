@@ -8,42 +8,7 @@
 # - AI transcription (Gemini)
 # - Content safety & quality analysis (Gemini)
 
-# Stage 1: Build seal-cli binary
-FROM nixos/nix:latest AS seal-cli-builder
-
-# Enable Nix flakes and configure cache
-RUN mkdir -p /etc/nix && \
-    echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf && \
-    echo "auto-optimise-store = true" >> /etc/nix/nix.conf && \
-    echo "sandbox = false" >> /etc/nix/nix.conf
-
-WORKDIR /build
-
-# Install dependencies for building seal-cli
-# Remove git-minimal first to avoid conflicts, then install full git
-# Install rustup from Nix (properly patched for NixOS) and other build dependencies
-RUN nix-env -e git-minimal 2>/dev/null || true && \
-    nix-env -iA nixpkgs.git nixpkgs.gcc nixpkgs.rustup nixpkgs.pkg-config nixpkgs.openssl nixpkgs.openssl.dev nixpkgs.zlib nixpkgs.glibc nixpkgs.curl && \
-    rustup default nightly
-
-# Clone seal repository and build seal-cli (configure OpenSSL paths via nix eval)
-RUN set -eux; \
-    git clone https://github.com/MystenLabs/seal.git seal; \
-    cd seal; \
-    git checkout main; \
-    export PATH="$HOME/.cargo/bin:/root/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:$PATH"; \
-    OPENSSL_DEV=$(nix eval --impure --raw --expr 'let pkgs = import <nixpkgs> {}; in pkgs.openssl.dev.outPath'); \
-    export PKG_CONFIG_PATH="$OPENSSL_DEV/lib/pkgconfig:${PKG_CONFIG_PATH:-}"; \
-    export OPENSSL_NO_VENDOR=1; \
-    export CARGO_NET_GIT_FETCH_WITH_CLI=true; \
-    cargo build --bin seal-cli --release --config net.git-fetch-with-cli=true
-
-# Verify seal-cli was built
-RUN test -f /build/seal/target/release/seal-cli && \
-    echo "✓ seal-cli built successfully" || \
-    (echo "✗ seal-cli build failed" && exit 1)
-
-# Stage 2: Nix-based builder for Python app
+# Stage 1: Nix-based builder for Python app
 FROM nixos/nix:latest AS builder
 
 # Enable Nix flakes and configure cache
@@ -55,11 +20,17 @@ RUN mkdir -p /etc/nix && \
 WORKDIR /build
 
 # Install Python 3.13 (includes pip), build tools, and system dependencies via nix-env
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.git nixpkgs.openssl nixpkgs.zlib
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.git nixpkgs.openssl nixpkgs.zlib nixpkgs.bun
 
 # Copy project files
 COPY pyproject.toml .
 COPY *.py .
+
+# Copy TS bridge
+COPY seal-decryptor-ts ./seal-decryptor-ts
+
+# Install TS bridge dependencies
+RUN cd seal-decryptor-ts && bun install
 
 # Create virtual environment and install Python dependencies using pip
 # Nix-managed Python is immutable, so we must use a venv
@@ -75,7 +46,7 @@ RUN . /build/.venv/bin/activate && \
     python -c "import librosa; print('✓ Librosa available')" && \
     python -c "import pysui; print('✓ PySui available')"
 
-# Stage 3: Runtime image (NixOS-based for library compatibility)
+# Stage 2: Runtime image (NixOS-based for library compatibility)
 FROM nixos/nix:latest AS runtime
 
 # Enable Nix flakes and configure cache (same as builder stage)
@@ -88,7 +59,8 @@ RUN mkdir -p /etc/nix && \
 # Python 3.13 with pip, build tools (needed for pysui-fastcrypto), and system libraries for audio processing
 # Note: pip comes with python313, so we don't need to install it separately
 # bash is required for start.sh script execution
-RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash nixpkgs.gawk
+# Added bun for TS bridge
+RUN nix-env -iA nixpkgs.python313 nixpkgs.gcc nixpkgs.rustc nixpkgs.cargo nixpkgs.pkg-config nixpkgs.ffmpeg nixpkgs.chromaprint nixpkgs.libsndfile nixpkgs.curl nixpkgs.shadow nixpkgs.coreutils nixpkgs.openssl nixpkgs.zlib nixpkgs.bash nixpkgs.gawk nixpkgs.bun
 
 # Install gcc.cc.lib separately to ensure libstdc++ is available
 # This is the runtime library package for GCC's C++ standard library
@@ -156,6 +128,9 @@ COPY pyproject.toml .
 COPY *.py .
 COPY migrations/ ./migrations/
 
+# Copy TS bridge from builder (includes node_modules)
+COPY --from=builder /build/seal-decryptor-ts ./seal-decryptor-ts
+
 # Create virtual environment and install Python dependencies in runtime stage
 # Nix-managed Python is immutable, so we must use a venv
 RUN python3.13 -m venv /app/.venv && \
@@ -176,21 +151,6 @@ RUN mkdir -p /bin && \
     else \
         echo "❌ Error: bash not found after installation" && exit 1; \
     fi
-
-# Install seal-cli binary from seal-cli-builder stage
-# Create /usr/local/bin directory and copy seal-cli there
-RUN mkdir -p /usr/local/bin
-
-# Copy seal-cli binary from seal-cli-builder stage
-COPY --from=seal-cli-builder /build/seal/target/release/seal-cli /usr/local/bin/seal-cli
-
-# Verify seal-cli is installed and executable
-RUN test -f /usr/local/bin/seal-cli && \
-    chmod +x /usr/local/bin/seal-cli && \
-    /usr/local/bin/seal-cli --version > /dev/null 2>&1 && \
-    echo "✓ seal-cli installed successfully" || \
-    (echo "⚠️  Warning: seal-cli verification failed (may need runtime libraries)" && \
-     ls -lh /usr/local/bin/seal-cli || true)
 
 # Copy user setup script and start script
 COPY setup_user.py /tmp/setup_user.py

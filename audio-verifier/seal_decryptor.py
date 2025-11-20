@@ -1,13 +1,15 @@
 """
 Seal Decryptor Helper
-Fetches encrypted blobs from Walrus and decrypts them using seal-cli
+Fetches encrypted blobs from Walrus and decrypts them using TypeScript bridge with SessionKey authentication.
 """
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
 import tempfile
+import time
 from typing import Optional
 import httpx
 
@@ -17,80 +19,23 @@ logger = logging.getLogger(__name__)
 WALRUS_AGGREGATOR_URL = os.getenv("WALRUS_AGGREGATOR_URL")
 WALRUS_AGGREGATOR_TOKEN = os.getenv("WALRUS_AGGREGATOR_TOKEN")
 SEAL_PACKAGE_ID = os.getenv("SEAL_PACKAGE_ID")
-SEAL_THRESHOLD = int(os.getenv("SEAL_THRESHOLD", "2"))
-
-# Path to seal-cli binary
-SEAL_CLI_PATH = os.getenv("SEAL_CLI_PATH", "/usr/local/bin/seal-cli")
-
-
-def is_valid_seal_key(key: str) -> bool:
-    """Check if a key is valid (not a placeholder and valid hex)."""
-    # Reject common placeholder keys
-    if key.lower() in ['key1', 'key2', 'key3', 'placeholder', 'changeme', 'example', 'test']:
-        logger.warning(f"Ignoring placeholder key: {key}")
-        return False
-    
-    # Valid keys should have reasonable length (32+ chars)
-    if len(key) < 32:
-        logger.warning(f"Ignoring short key (length {len(key)}): {key[:10]}...")
-        return False
-
-    # Check if it's a valid hex string (with optional 0x prefix)
-    clean_key = key.lower()
-    if clean_key.startswith('0x'):
-        clean_key = clean_key[2:]
-    
-    try:
-        int(clean_key, 16)
-    except ValueError:
-        logger.warning(f"Ignoring non-hex key: {key[:10]}...")
-        return False
-        
-    return True
-
-
-# Load and validate keys after is_valid_seal_key is defined
-SEAL_SECRET_KEYS = [k.strip() for k in os.getenv("SEAL_SECRET_KEYS", "").split(",") if k.strip() and is_valid_seal_key(k.strip())]
-SEAL_KEY_SERVER_IDS = [k.strip() for k in os.getenv("SEAL_KEY_SERVER_IDS", "").split(",") if k.strip()]
-
-# Validate key configuration at startup
-if not SEAL_SECRET_KEYS and os.getenv("SEAL_SECRET_KEYS"):
-    logger.warning(
-        "All SEAL_SECRET_KEYS were filtered out (likely placeholder values). "
-        "Please set SEAL_SECRET_KEYS environment variable with real seal secret keys."
-    )
-if not SEAL_SECRET_KEYS and not SEAL_KEY_SERVER_IDS:
-    logger.warning(
-        "WARNING: No SEAL_SECRET_KEYS configured. "
-        "Set SEAL_SECRET_KEYS environment variable with comma-separated seal secret keys (each 32+ chars). "
-        "Expected format: 0x... (hex string). Decryption will fail without valid keys."
-    )
 
 
 async def decrypt_encrypted_blob(
     walrus_blob_id: str,
     encrypted_object_bcs: bytes,
     identity: str,
-    session_key_data: Optional[str] = None
+    session_key_data: str
 ) -> bytes:
     """
-    Decrypt an encrypted blob from Walrus using Seal with optional key server authentication.
-
-    Supports two modes:
-    1. NEW (recommended): With session_key_data (user-signed SessionKey from frontend)
-       - Uses seal-keyservers for secure key derivation
-       - User authorized via wallet signature
-    2. LEGACY (fallback): Without session_key_data (uses SEAL_SECRET_KEYS env var)
-       - Works offline with pre-shared master keys
-       - No key server authentication
+    Decrypt an encrypted blob from Walrus using Seal with SessionKey authentication.
 
     Args:
         walrus_blob_id: Walrus blob ID to fetch encrypted data from
         encrypted_object_bcs: BCS-serialized encrypted object (hex string will be converted)
         identity: Seal identity (hex string) used for encryption
-        session_key_data: Optional user-signed SessionKey (base64-encoded) from frontend
-                         If provided, uses key server authentication.
-                         If not provided, falls back to SEAL_SECRET_KEYS env var.
+        session_key_data: User-signed SessionKey (JSON-encoded ExportedSessionKey) from frontend
+                         Required for user-authorized decryption via key servers
 
     Returns:
         Decrypted plaintext bytes
@@ -104,8 +49,7 @@ async def decrypt_encrypted_blob(
         raise ValueError("WALRUS_AGGREGATOR_URL not configured")
     if not SEAL_PACKAGE_ID:
         raise ValueError("SEAL_PACKAGE_ID not configured")
-    if not os.path.exists(SEAL_CLI_PATH):
-        raise ValueError(f"seal-cli not found at {SEAL_CLI_PATH}")
+
 
     # Convert encrypted_object_bcs to hex if it's bytes
     if isinstance(encrypted_object_bcs, bytes):
@@ -113,10 +57,9 @@ async def decrypt_encrypted_blob(
     else:
         encrypted_object_hex = encrypted_object_bcs
 
-    mode = 'key-server' if session_key_data else 'legacy-keys'
     logger.info(
         f"Decrypting blob {walrus_blob_id[:16]}... with identity {identity[:16]}... "
-        f"(mode: {mode})"
+        f"using SessionKey authentication"
     )
 
     # Run decryption in thread pool to avoid blocking event loop
@@ -133,7 +76,7 @@ def _decrypt_sync(
     walrus_blob_id: str,
     encrypted_object_hex: str,
     identity: str,
-    session_key_data: Optional[str] = None
+    session_key_data: str
 ) -> bytes:
     """
     Synchronous decryption helper (runs in thread pool).
@@ -141,14 +84,12 @@ def _decrypt_sync(
     Flow:
     1. Fetch encrypted blob from Walrus aggregator
     2. Check if it's envelope encryption (has sealed key + encrypted file)
-    3. If envelope: decrypt sealed key with Seal (using provided encrypted_object_hex),
+    3. If envelope: decrypt sealed key with Seal using SessionKey,
        then decrypt file with AES
-    4. If direct: decrypt entire blob with Seal (using provided encrypted_object_hex)
+    4. If direct: decrypt entire blob with Seal using SessionKey
 
     Args:
-        session_key_data: Optional user-signed SessionKey for key server auth.
-                         If provided, passes to seal-cli for key server lookup.
-                         If not provided, uses SEAL_SECRET_KEYS env var (legacy mode).
+        session_key_data: User-signed SessionKey for user-authorized key server decryption.
     """
     try:
         # Step 1: Fetch encrypted blob from Walrus
@@ -188,8 +129,6 @@ def _decrypt_sync(
 
 def _fetch_walrus_blob(blob_id: str) -> bytes:
     """Fetch encrypted blob from Walrus aggregator with retry logic for propagation delays."""
-    import time
-
     url = f"{WALRUS_AGGREGATOR_URL.rstrip('/')}/v1/blobs/{blob_id}"
 
     headers = {}
@@ -250,127 +189,72 @@ def _is_envelope_format(data: bytes) -> bool:
     return 200 <= key_length <= 400 and len(data) > key_length + 4
 
 
-def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key_data: Optional[str] = None) -> bytes:
-    """
-    Decrypt using seal-cli command-line tool.
+# Path to TS bridge script
+TS_BRIDGE_PATH = os.path.join(os.path.dirname(__file__), "seal-decryptor-ts", "decrypt.ts")
 
-    Supports two authentication modes:
-    1. NEW: With session_key_data (user-signed SessionKey for key server auth)
-    2. LEGACY: With SEAL_SECRET_KEYS (pre-shared master keys, environment variable)
+def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key_data: str) -> bytes:
+    """
+    Decrypt using the TypeScript bridge script with SessionKey authentication.
 
     Args:
         encrypted_object_hex: Hex-encoded BCS-serialized encrypted object
-        identity: Seal identity (hex string) - not used by seal-cli but kept for logging
-        session_key_data: Optional user-signed SessionKey for key server authentication
+        identity: Seal identity (hex string)
+        session_key_data: Exported SessionKey (JSON-encoded ExportedSessionKey) from frontend
 
     Returns:
         Decrypted plaintext bytes
 
     Raises:
-        ValueError: If neither session_key_data nor SEAL_SECRET_KEYS are available
+        ValueError: If session_key_data is missing
+        RuntimeError: If decryption fails
     """
-    # Determine which authentication method to use
-    if session_key_data:
-        logger.debug(f"Using key-server authentication mode with SessionKey for identity {identity[:16]}...")
-        # TODO: Implement key server authentication flow
-        # For now, this would call the backend seal-key-service HTTP endpoint
-        # and use the returned key shares for decryption
-        # Fall back to master keys as temporary solution
-        logger.warning("Key-server auth mode not yet fully implemented, falling back to master keys")
-        keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
-    else:
-        logger.debug(f"Using legacy master-keys mode for identity {identity[:16]}...")
-        keys_to_use = SEAL_SECRET_KEYS[:SEAL_THRESHOLD] if SEAL_SECRET_KEYS else []
-
-    # Use threshold number of key server IDs for decryption
-    key_server_ids_to_use = SEAL_KEY_SERVER_IDS[:SEAL_THRESHOLD] if SEAL_KEY_SERVER_IDS else []
-
-    # Secret keys are required for decryption (until key-server mode is fully implemented)
-    if not keys_to_use:
+    if not session_key_data:
         raise ValueError(
-            "No valid SEAL_SECRET_KEYS configured. "
-            "Set the SEAL_SECRET_KEYS environment variable with comma-separated hex-encoded keys (each 32+ chars). "
-            "Example: SEAL_SECRET_KEYS=0x123abc...,0x456def... "
-            "Do not use placeholder values like 'key1', 'key2', etc."
+            "SessionKey is required for decryption. "
+            "Please provide session_key_data from the frontend."
         )
 
-    # Build seal-cli decrypt command
-    # Format: seal-cli decrypt <encrypted_object_hex> <secret_key_1> <secret_key_2> ... [-- <key_server_id_1> <key_server_id_2> ...]
-    # Note: With envelope encryption, encrypted_object_hex is small (~400 bytes), so no argument limit issues
-    cmd = [SEAL_CLI_PATH, "decrypt", encrypted_object_hex]
-    cmd.extend(keys_to_use)
+    # Prepare input for TS script
+    request_data = {
+        "encrypted_object_hex": encrypted_object_hex,
+        "identity": identity,
+        "session_key_data": session_key_data,
+        "network": "mainnet"  # Default to mainnet
+    }
 
-    # Optionally add key server IDs if available (for verification)
-    if key_server_ids_to_use and len(key_server_ids_to_use) >= len(keys_to_use):
-        cmd.append("--")
-        cmd.extend(key_server_ids_to_use[:len(keys_to_use)])
-
-    logger.debug(f"Running seal-cli decrypt with {len(keys_to_use)} keys for identity {identity[:16]}...")
-
+    input_json = json.dumps(request_data)
+    
+    # Command to run TS script
+    # We use 'bun run' to execute the TS file directly
+    cmd = ["bun", "run", TS_BRIDGE_PATH, input_json]
+    
+    logger.debug(f"Running TS bridge decrypt for identity {identity[:16]}...")
+    
     try:
-        # Run seal-cli
         result = subprocess.run(
             cmd,
             capture_output=True,
-            text=True,  # Capture as text for easier parsing
+            text=True,
             check=True,
             timeout=60.0
         )
+        
+        # Output should be the hex encoded plaintext on first line
+        output_hex = result.stdout.strip()
 
-        # Parse output
-        # seal-cli outputs: "Decrypted message: <hex>"
-        output = result.stdout.strip()
-        stderr_output = result.stderr.strip()
+        if not output_hex:
+            raise ValueError("No output from TS bridge decryption")
 
-        # Look for "Decrypted message:" line
-        for line in output.split('\n'):
-            if 'Decrypted message:' in line:
-                # Extract hex string after colon
-                hex_part = line.split('Decrypted message:')[-1].strip()
-                # Remove any whitespace and non-hex characters (keep only 0-9a-fA-F)
-                hex_clean = ''.join(c for c in hex_part if c in '0123456789abcdefABCDEF')
-                if hex_clean:
-                    try:
-                        return bytes.fromhex(hex_clean)
-                    except ValueError as e:
-                        logger.warning(f"Failed to parse hex output: {e}, trying alternative parsing")
-                        continue
+        # Validate that output is valid hex
+        if not all(c in '0123456789abcdefABCDEF' for c in output_hex):
+            raise ValueError(f"Invalid hex output from TS bridge. Got: {output_hex[:200]}")
 
-        # If no "Decrypted message:" line found, try parsing entire output as hex
-        # (some versions might output differently)
-        output_clean = ''.join(c for c in output if c in '0123456789abcdefABCDEF')
-        if output_clean and len(output_clean) >= 2:
-            try:
-                return bytes.fromhex(output_clean)
-            except ValueError:
-                pass
-
-        # If stderr has output, include it in error
-        error_msg = f"seal-cli output did not contain decrypted data"
-        if stderr_output:
-            error_msg += f". stderr: {stderr_output}"
-        if output:
-            error_msg += f". stdout: {output[:200]}"
-        raise ValueError(error_msg)
+        return bytes.fromhex(output_hex)
 
     except subprocess.CalledProcessError as e:
-        error_output = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='ignore') if e.stderr else '')
-        stdout_output = e.stdout if isinstance(e.stdout, str) else (e.stdout.decode('utf-8', errors='ignore') if e.stdout else '')
-        
-        # Sanitize error messages to prevent leaking secret keys
-        # Replace each unique key with SEAL_SECRET_KEY_N placeholder
-        import re
-        
-        # Find all hex keys and replace with numbered placeholders
-        hex_keys = re.findall(r'0x[0-9a-fA-F]{40,}', error_output)
-        sanitized_error = error_output
-        for i, key in enumerate(set(hex_keys), 1):
-            sanitized_error = sanitized_error.replace(key, f'SEAL_SECRET_KEY_{i}')
-        
-        logger.error(f"seal-cli decrypt failed (exit {e.returncode}): {sanitized_error}")
-        if stdout_output:
-            logger.debug(f"seal-cli stdout: {stdout_output}")
-        raise RuntimeError(f"Seal decryption failed: {sanitized_error}") from e
+        error_output = e.stderr if e.stderr else ""
+        logger.error(f"TS bridge failed (exit {e.returncode}): {error_output}")
+        raise RuntimeError(f"Seal decryption failed via bridge: {error_output}") from e
     except subprocess.TimeoutExpired:
         raise RuntimeError("Seal decryption timed out after 60 seconds") from None
 

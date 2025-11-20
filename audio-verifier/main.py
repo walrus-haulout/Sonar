@@ -62,13 +62,6 @@ WALRUS_AGGREGATOR_TOKEN = os.getenv("WALRUS_AGGREGATOR_TOKEN")  # Optional beare
 
 # Seal decryption configuration
 SEAL_PACKAGE_ID = os.getenv("SEAL_PACKAGE_ID")
-SEAL_THRESHOLD = int(os.getenv("SEAL_THRESHOLD", "2"))
-SEAL_SECRET_KEYS = os.getenv("SEAL_SECRET_KEYS", "").split(",") if os.getenv("SEAL_SECRET_KEYS") else []
-SEAL_KEY_SERVER_IDS = os.getenv("SEAL_KEY_SERVER_IDS", "").split(",") if os.getenv("SEAL_KEY_SERVER_IDS") else []
-
-# Filter out empty strings from lists
-SEAL_SECRET_KEYS = [k.strip() for k in SEAL_SECRET_KEYS if k.strip()]
-SEAL_KEY_SERVER_IDS = [k.strip() for k in SEAL_KEY_SERVER_IDS if k.strip()]
 
 # Feature flag for legacy upload support
 ENABLE_LEGACY_UPLOAD = os.getenv("ENABLE_LEGACY_UPLOAD", "false").lower() == "true"
@@ -88,11 +81,6 @@ if not DATABASE_URL:
 # Validate Seal configuration (required for encrypted blob flow)
 if not SEAL_PACKAGE_ID:
     logger.warning("SEAL_PACKAGE_ID not set - encrypted blob verification will be disabled")
-if len(SEAL_SECRET_KEYS) < SEAL_THRESHOLD:
-    logger.warning(
-        f"SEAL_SECRET_KEYS has {len(SEAL_SECRET_KEYS)} keys but threshold is {SEAL_THRESHOLD} - "
-        "encrypted blob verification may fail"
-    )
 if not WALRUS_AGGREGATOR_URL:
     logger.warning("WALRUS_AGGREGATOR_URL not set - encrypted blob verification will be disabled")
 
@@ -223,6 +211,11 @@ class EncryptedVerificationRequest(BaseModel):
     sealIdentity: str = Field(..., description="Seal identity (hex string) used for encryption")
     encryptedObjectBcsHex: str = Field(..., description="BCS-serialized encrypted object (hex)")
     metadata: Dict[str, Any] = Field(..., description="Dataset metadata")
+    sessionKeyData: Optional[str] = Field(None, description="Exported SessionKey from frontend for user-authorized decryption")
+
+    class Config:
+        # Accept both camelCase and snake_case for sessionKeyData
+        populate_by_name = True
 
 
 # Auth dependency for /verify endpoints
@@ -275,9 +268,7 @@ async def health():
         "acoustid_configured": bool(ACOUSTID_API_KEY),
         "walrus_upload_configured": bool(WALRUS_UPLOAD_URL),  # Legacy
         "walrus_aggregator_configured": bool(WALRUS_AGGREGATOR_URL),  # New
-        "seal_configured": bool(SEAL_PACKAGE_ID and len(SEAL_SECRET_KEYS) >= SEAL_THRESHOLD),
-        "seal_secret_keys_count": len(SEAL_SECRET_KEYS),
-        "seal_threshold": SEAL_THRESHOLD,
+        "seal_configured": bool(SEAL_PACKAGE_ID),
         "auth_enabled": bool(VERIFIER_AUTH_TOKEN)
     }
     return {
@@ -331,10 +322,10 @@ async def create_verification(
                     status_code=503,
                     detail="WALRUS_AGGREGATOR_URL not configured - encrypted blob verification disabled"
                 )
-            if not SEAL_PACKAGE_ID or len(SEAL_SECRET_KEYS) < SEAL_THRESHOLD:
+            if not SEAL_PACKAGE_ID:
                 raise HTTPException(
                     status_code=503,
-                    detail="Seal decryption not configured - missing SEAL_PACKAGE_ID or insufficient SEAL_SECRET_KEYS"
+                    detail="Seal decryption not configured - missing SEAL_PACKAGE_ID"
                 )
 
             verification_id = str(uuid.uuid4())
@@ -353,7 +344,8 @@ async def create_verification(
                 plaintext_bytes = await decrypt_encrypted_blob(
                     encrypted_request.walrusBlobId,
                     encrypted_object_bytes,
-                    encrypted_request.sealIdentity
+                    encrypted_request.sealIdentity,
+                    encrypted_request.sessionKeyData
                 )
 
                 # Write decrypted data to temp file
