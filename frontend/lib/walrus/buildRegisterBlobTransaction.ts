@@ -3,15 +3,15 @@ import type { SuiClient } from '@mysten/sui/client';
 import { collectCoinsForAmount } from '@/lib/sui/coin-utils';
 
 // Get env vars lazily to support testing
-function getWalrusConfig() {
+function getWalrusConfig(): { packageId: string; systemObject: string } {
   const packageId = process.env.NEXT_PUBLIC_WALRUS_PACKAGE_ID?.trim();
   const systemObject = process.env.NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT?.trim();
 
   if (!packageId) {
-    console.error('Missing NEXT_PUBLIC_WALRUS_PACKAGE_ID');
+    throw new Error('NEXT_PUBLIC_WALRUS_PACKAGE_ID is not configured');
   }
   if (!systemObject) {
-    console.error('Missing NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT');
+    throw new Error('NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT is not configured');
   }
 
   return { packageId, systemObject };
@@ -138,13 +138,6 @@ export function buildRegisterBlobTransaction(params: RegisterBlobParams): Transa
   const { packageId, systemObject } = getWalrusConfig();
 
   const tx = new Transaction();
-
-  if (!packageId) {
-    throw new Error('WALRUS_PACKAGE_ID is not defined');
-  }
-  if (!systemObject) {
-    throw new Error('WALRUS_SYSTEM_OBJECT is not defined');
-  }
 
   if (!walCoinId) {
     throw new Error(
@@ -278,16 +271,11 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
   if (!sonarPackageId) {
     throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
   }
-  if (!systemObject) {
-    throw new Error('Walrus system object is not configured');
-  }
   if (!walCoinId) {
     throw new Error('WAL coin ID is required');
   }
 
   const tx = new Transaction();
-  const walCoinIdSafe: string = walCoinId; // Type assertion after validation
-  const systemObjectSafe: string = systemObject; // Type assertion after validation
 
   // Helper to prepare blob args
   const prepareBlobArgs = (blobParams: RegisterBlobParams) => {
@@ -342,7 +330,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
   tx.moveCall({
     target: `${sonarPackageId}::blob_manager::batch_register_blobs`,
     arguments: [
-      tx.object(systemObjectSafe),
+      tx.object(systemObject),
 
       // Main Blob
       mainArgs.storage,
@@ -368,7 +356,7 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
       tx.pure.u64(submission.durationSeconds),
 
       // Payments
-      tx.object(walCoinIdSafe),
+      tx.object(walCoinId),
       suiPaymentCoin,
     ],
   });

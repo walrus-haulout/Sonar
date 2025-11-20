@@ -12,6 +12,7 @@ import { useState, useCallback } from 'react';
 import { useSuiClient, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { buildRegisterBlobTransactionAsync } from '@/lib/walrus/buildRegisterBlobTransaction';
+import type { WalrusUploadResult } from '@/lib/types/upload';
 import { useChunkedWalrusUpload } from './useChunkedWalrusUpload';
 import { useSubWalletOrchestrator } from './useSubWalletOrchestrator'; // Kept for type compatibility if needed, but unused for logic
 
@@ -26,27 +27,6 @@ export interface WalrusUploadProgress {
   stage: 'encrypting' | 'uploading' | 'registering' | 'finalizing' | 'completed';
   currentRetry?: number; // Current retry attempt (1-10)
   maxRetries?: number; // Max retry attempts
-}
-
-export interface WalrusUploadResult {
-  blobId: string;
-  previewBlobId?: string;
-  seal_policy_id: string;
-  strategy: 'user-paid';
-  mimeType?: string;
-  previewMimeType?: string;
-  txDigest?: string;
-  // Preview metadata for batch registration
-  previewStorageId?: string;
-  previewSize?: number;
-  previewEncodingType?: string;
-  previewDeletable?: boolean;
-  // Kept for compatibility with existing types if strictly checked, though we only use user-paid now
-  prototypeMetadata?: {
-    walletCount: number;
-    chunkCount: number;
-    estimatedChunkSize: number;
-  };
 }
 
 type WalrusUploadMetadata = EncryptionMetadata | Record<string, unknown> | undefined;
