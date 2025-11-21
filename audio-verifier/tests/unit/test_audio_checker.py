@@ -446,3 +446,113 @@ class TestFormatDetection:
         assert len(errors) > 0
         # Error messages should be descriptive
         assert any(len(err) > 10 for err in errors)  # Non-trivial error messages
+
+
+class TestFailureReasons:
+    """Test failure_reason field for better diagnostics."""
+
+    @pytest.mark.asyncio
+    async def test_failure_reason_for_clipping(self, clipped_audio_file):
+        """Test that clipping failures are marked with specific reason."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(clipped_audio_file))
+
+        assert result["quality"]["passed"] is False
+        assert "failure_reason" in result
+        assert result["failure_reason"] == "clipping_detected"
+
+    @pytest.mark.asyncio
+    async def test_failure_reason_for_silence(self, mostly_silent_audio_file):
+        """Test that silence failures are marked with specific reason."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(mostly_silent_audio_file))
+
+        assert result["quality"]["passed"] is False
+        assert "failure_reason" in result
+        assert result["failure_reason"] == "excessive_silence"
+
+    @pytest.mark.asyncio
+    async def test_failure_reason_for_volume(self, very_quiet_audio_file):
+        """Test that volume failures are marked with specific reason."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(very_quiet_audio_file))
+
+        assert result["quality"]["passed"] is False
+        assert "failure_reason" in result
+        assert result["failure_reason"] == "volume_out_of_range"
+
+    @pytest.mark.asyncio
+    async def test_failure_reason_for_duration(self, short_audio_file):
+        """Test that duration failures are marked with specific reason."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(short_audio_file))
+
+        assert result["quality"]["passed"] is False
+        assert "failure_reason" in result
+        assert result["failure_reason"] == "duration_out_of_range"
+
+    @pytest.mark.asyncio
+    async def test_no_failure_reason_when_passed(self, valid_audio_file):
+        """Test that passing audio doesn't have failure_reason."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+
+        assert result["quality"]["passed"] is True
+        # Should not have failure_reason when passing
+        assert "failure_reason" not in result or result.get("failure_reason") is None
+
+
+class TestTinyBlobDetection:
+    """Test detection of suspiciously small files."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_32_byte_file(self, tmp_path):
+        """Test that 32-byte dummy blob is rejected as too small."""
+        # Create a 32-byte file (typical of minimal error case)
+        audio_path = tmp_path / "tiny_blob.wav"
+        audio_path.write_bytes(b"X" * 32)
+
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(audio_path))
+
+        # Should fail due to minimum size check in _probe_format
+        assert result["quality"] is None
+        assert len(result["errors"]) > 0
+        # Error should mention size constraint
+        assert any("size" in err.lower() or "small" in err.lower() for err in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_rejects_zero_byte_file(self, tmp_path):
+        """Test that empty files are rejected."""
+        audio_path = tmp_path / "zero_bytes.wav"
+        audio_path.write_bytes(b"")
+
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(audio_path))
+
+        # Should fail
+        assert result["quality"] is None
+        assert len(result["errors"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_accepts_valid_1kb_file(self, tmp_path):
+        """Test that valid audio files >= 1KB are accepted."""
+        # Create valid minimal WAV file
+        sample_rate = 16000
+        duration = 0.1  # 0.1 seconds
+        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+        waveform = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+
+        audio_path = tmp_path / "minimal_valid.wav"
+        sf.write(audio_path, waveform, sample_rate, subtype="PCM_16")
+
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(audio_path))
+
+        # Should not fail due to size (content validity may vary)
+        # If it fails, error shouldn't be about file size
+        if result["quality"] is None:
+            assert not any("size" in err.lower() for err in result["errors"])
+        else:
+            # If passed, size validation succeeded
+            pass

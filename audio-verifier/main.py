@@ -14,6 +14,7 @@ import json
 import logging
 import tempfile
 import asyncio
+import mimetypes
 from typing import Dict, Any, Optional, List, TypedDict
 
 from audio_checker import AudioQualityChecker
@@ -132,6 +133,20 @@ def get_session_store() -> SessionStore:
         _session_store = SessionStore()
         logger.info("Initialized PostgreSQL session store")
     return _session_store
+
+
+def _get_hex_preview(data: bytes, length: int = 32) -> str:
+    """Get hexadecimal preview of first N bytes (for RIFF header inspection)."""
+    preview = data[:length]
+    return preview.hex()
+
+
+def _check_riff_header(data: bytes) -> bool:
+    """Check if data starts with valid RIFF header for WAV files."""
+    if len(data) < 12:
+        return False
+    # RIFF files start with "RIFF" (0x52494646)
+    return data[:4] == b'RIFF' and data[8:12] == b'WAVE'
 
 
 def get_verification_pipeline() -> VerificationPipeline:
@@ -405,7 +420,36 @@ async def create_verification(
                     temp_file.write(plaintext_bytes)
 
                 file_size = len(plaintext_bytes)
-                logger.info(f"Decrypted {file_size} bytes to {temp_file_path}")
+
+                # Pre-quality-check diagnostics
+                blob_id_short = encrypted_request.walrusBlobId[:16] if encrypted_request.walrusBlobId else "unknown"
+                hex_preview = _get_hex_preview(plaintext_bytes)
+                has_riff_header = _check_riff_header(plaintext_bytes)
+                mime_type, _ = mimetypes.guess_type(temp_file_path)
+
+                logger.info(
+                    f"Decrypted audio blob to temp file",
+                    extra={
+                        "verification_id": verification_id,
+                        "blob_id_short": blob_id_short,
+                        "decrypted_bytes": file_size,
+                        "temp_file_path": temp_file_path,
+                        "hex_preview": hex_preview,
+                        "has_riff_header": has_riff_header,
+                        "mime_type": mime_type or "unknown"
+                    }
+                )
+
+                # Early validation: check for suspiciously small files
+                if file_size < 1024:
+                    logger.warning(
+                        f"Decrypted audio is very small (< 1KB)",
+                        extra={
+                            "verification_id": verification_id,
+                            "blob_id_short": blob_id_short,
+                            "decrypted_bytes": file_size
+                        }
+                    )
 
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid encrypted blob data: {str(e)}")
@@ -443,7 +487,8 @@ async def create_verification(
                     pipeline,
                     session_object_id,
                     temp_file_path,
-                    metadata_dict
+                    metadata_dict,
+                    encrypted_request.walrusBlobId  # Pass blob ID for logging
                 )
             )
 
@@ -593,12 +638,20 @@ def _run_pipeline_sync(
     pipeline: VerificationPipeline,
     session_object_id: str,
     temp_file_path: str,
-    metadata_dict: Dict[str, Any]
+    metadata_dict: Dict[str, Any],
+    blob_id: Optional[str] = None
 ) -> None:
     """
     Synchronous wrapper for pipeline execution (runs in thread pool).
 
     This ensures the pipeline doesn't block the FastAPI event loop.
+
+    Args:
+        pipeline: VerificationPipeline instance
+        session_object_id: Session UUID
+        temp_file_path: Path to temp audio file
+        metadata_dict: Metadata dictionary
+        blob_id: Optional Walrus blob ID for logging correlation
     """
     import asyncio
     # Create new event loop for this thread
@@ -606,7 +659,7 @@ def _run_pipeline_sync(
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(
-            pipeline.run_from_file(session_object_id, temp_file_path, metadata_dict)
+            pipeline.run_from_file(session_object_id, temp_file_path, metadata_dict, blob_id)
         )
     finally:
         loop.close()

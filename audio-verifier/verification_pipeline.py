@@ -110,7 +110,8 @@ class VerificationPipeline:
         self,
         session_object_id: str,
         audio_file_path: str,
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
+        blob_id: Optional[str] = None
     ) -> None:
         """
         Run the complete six-stage verification pipeline from a file path.
@@ -122,12 +123,13 @@ class VerificationPipeline:
             session_object_id: Verification session ID (UUID)
             audio_file_path: Path to temporary audio file on disk
             metadata: Dataset metadata (title, description, etc.)
+            blob_id: Optional Walrus blob ID for logging correlation
         """
         logger.info(f"Starting verification pipeline for session {session_object_id[:8]}... from file {audio_file_path}")
 
         try:
             # Run the standard pipeline with file path (avoids loading into RAM)
-            await self.run(session_object_id, audio_file_path, metadata)
+            await self.run(session_object_id, audio_file_path, metadata, blob_id)
 
         except Exception as e:
             logger.error(f"[{session_object_id[:8]}...] Pipeline failed: {e}", exc_info=True)
@@ -150,7 +152,8 @@ class VerificationPipeline:
         self,
         session_object_id: str,
         audio_file_path: str,
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
+        blob_id: Optional[str] = None
     ) -> None:
         """
         Run the complete six-stage verification pipeline.
@@ -159,6 +162,7 @@ class VerificationPipeline:
             session_object_id: Verification session ID (UUID)
             audio_file_path: Path to audio file on disk (avoids loading 13GB into RAM)
             metadata: Dataset metadata (title, description, etc.)
+            blob_id: Optional Walrus blob ID for logging correlation
         """
         logger.info(f"Starting verification pipeline for session {session_object_id[:8]}...")
 
@@ -167,7 +171,8 @@ class VerificationPipeline:
             logger.info(f"[{session_object_id}] Stage 1: Quality Check")
             quality_result = await self._stage_quality_check(
                 session_object_id,
-                audio_file_path
+                audio_file_path,
+                blob_id
             )
 
             # Handle quality check failure (returns None for invalid audio)
@@ -276,12 +281,18 @@ class VerificationPipeline:
     async def _stage_quality_check(
         self,
         session_object_id: str,
-        audio_file_path: str
+        audio_file_path: str,
+        blob_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Stage 1: Quality Check
 
         Uses AudioQualityChecker to verify technical audio quality.
+
+        Args:
+            session_object_id: Session UUID
+            audio_file_path: Path to audio file
+            blob_id: Optional Walrus blob ID for logging correlation
         """
         import time
         stage_start = time.time()
@@ -293,6 +304,7 @@ class VerificationPipeline:
         quality_info = result.get("quality")
         quality_passed = quality_info.get("passed", False) if quality_info else False
         errors = result.get("errors", [])
+        failure_reason = result.get("failure_reason")
 
         if quality_info:
             quality_info["score"] = self._compute_quality_score(quality_info)
@@ -300,13 +312,16 @@ class VerificationPipeline:
         stage_duration = time.time() - stage_start
 
         if not quality_passed:
+            blob_id_short = blob_id[:16] if blob_id else "unknown"
             logger.warning(
                 f"[{session_object_id}] Quality check failed",
                 extra={
                     "session_id": session_object_id,
+                    "blob_id_short": blob_id_short,
                     "duration_seconds": round(stage_duration, 2),
                     "quality_info": quality_info,
-                    "errors": errors
+                    "errors": errors,
+                    "failure_reason": failure_reason or "unknown"
                 }
             )
         else:

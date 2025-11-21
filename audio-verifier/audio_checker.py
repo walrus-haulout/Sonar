@@ -82,6 +82,15 @@ class AudioQualityChecker:
             }
 
     def _analyze_file(self, file_path: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        # Early format detection using ffprobe
+        probe_result = self._probe_format(file_path, session_id)
+        if probe_result.get("error"):
+            return {
+                "quality": None,
+                "errors": [probe_result["error"]],
+                "failure_reason": "format_probe_failed"
+            }
+
         try:
             with sf.SoundFile(file_path) as audio_file:
                 return self._analyze_stream(audio_file, session_id)
@@ -100,7 +109,9 @@ class AudioQualityChecker:
                 )
                 try:
                     with sf.SoundFile(converted_path) as audio_file:
-                        return self._analyze_stream(audio_file, session_id)
+                        result = self._analyze_stream(audio_file, session_id)
+                        result["failure_reason"] = "converted_with_ffmpeg"
+                        return result
                 finally:
                     # Clean up temporary converted file
                     if os.path.exists(converted_path):
@@ -111,7 +122,11 @@ class AudioQualityChecker:
                     extra={"session_id": session_id, "file_path": file_path},
                     exc_info=True
                 )
-                raise
+                return {
+                    "quality": None,
+                    "errors": [f"Failed to analyze audio: soundfile and ffmpeg both failed"],
+                    "failure_reason": "analysis_failed"
+                }
 
     def _analyze_bytes(self, audio_bytes: bytes) -> Dict[str, Any]:
         with sf.SoundFile(io.BytesIO(audio_bytes)) as audio_file:
@@ -196,13 +211,33 @@ class AudioQualityChecker:
 
         errors = self._get_errors(duration, sample_rate, clipping_detected, silence_percent, volume_ok, subtype)
 
+        result = {
+            "quality": quality,
+            "errors": errors
+        }
+
         if not passed:
+            # Determine specific failure reason
+            if clipping_detected:
+                result["failure_reason"] = "clipping_detected"
+            elif silence_percent >= self.MAX_SILENCE_PERCENT:
+                result["failure_reason"] = "excessive_silence"
+            elif not volume_ok:
+                result["failure_reason"] = "volume_out_of_range"
+            elif sample_rate < self.MIN_SAMPLE_RATE:
+                result["failure_reason"] = "sample_rate_too_low"
+            elif duration < self.MIN_DURATION or duration > self.MAX_DURATION:
+                result["failure_reason"] = "duration_out_of_range"
+            else:
+                result["failure_reason"] = "quality_check_failed"
+
             logger.warning(
                 "Quality check failed",
                 extra={
                     "session_id": session_id,
                     "quality": quality,
-                    "errors": errors
+                    "errors": errors,
+                    "failure_reason": result["failure_reason"]
                 }
             )
         else:
@@ -214,10 +249,73 @@ class AudioQualityChecker:
                 }
             )
 
-        return {
-            "quality": quality,
-            "errors": errors
-        }
+        return result
+
+    def _probe_format(self, file_path: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Probe audio format using ffprobe to detect issues early.
+
+        Returns:
+            Dict with either format info or error message.
+        """
+        # Check minimum file size first
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size < 1024:  # Less than 1KB
+                return {
+                    "error": f"Audio file too small: {file_size} bytes (minimum 1024 bytes for valid audio)"
+                }
+        except OSError as e:
+            return {"error": f"Cannot access audio file: {e}"}
+
+        # Try ffprobe format detection
+        try:
+            cmd = [
+                "ffprobe",
+                "-v", "error",
+                "-show_format",
+                "-show_streams",
+                "-of", "json",
+                file_path
+            ]
+
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+                # Extract first error line if multiple lines
+                error_line = stderr.split('\n')[0] if stderr else "Unknown format error"
+                return {
+                    "error": f"Format detection failed: {error_line}"
+                }
+
+            logger.debug(
+                "Format probe successful",
+                extra={"session_id": session_id}
+            )
+            return {"success": True}
+
+        except FileNotFoundError:
+            # ffprobe not available, skip format check
+            logger.debug(
+                "ffprobe not available, skipping format detection",
+                extra={"session_id": session_id}
+            )
+            return {"success": True}
+        except subprocess.TimeoutExpired:
+            return {"error": "Format detection timeout"}
+        except Exception as e:
+            logger.warning(
+                f"Format probe exception: {e}",
+                extra={"session_id": session_id}
+            )
+            # Don't fail the entire check if ffprobe has issues
+            return {"success": True}
 
     def _convert_with_ffmpeg(self, input_path: str, session_id: Optional[str] = None) -> str:
         """
