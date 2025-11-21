@@ -520,7 +520,11 @@ export function VerificationStep({
       }
 
       const data = await response.json();
-      const { verificationId: id } = data;
+      const id = data.sessionObjectId || data.verificationId; // Backend returns sessionObjectId
+
+      if (!id) {
+        throw new Error('No verification ID returned from server');
+      }
 
       setVerificationId(id);
 
