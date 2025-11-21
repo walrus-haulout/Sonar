@@ -30,6 +30,57 @@ function getErrorMessage(error: unknown): string {
   return String(error || 'Unknown error');
 }
 
+/**
+ * Sanitize metadata to remove non-serializable properties (DOM nodes, React Fibers, etc.)
+ * Whitelists only known-good DatasetMetadata fields to prevent JSON.stringify errors
+ */
+function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
+  return {
+    title: metadata.title,
+    description: metadata.description,
+    languages: metadata.languages,
+    tags: metadata.tags,
+    consent: metadata.consent,
+    ...(metadata.perFileMetadata && {
+      perFileMetadata: metadata.perFileMetadata.map((pfm) => ({
+        fileId: pfm.fileId,
+        title: pfm.title,
+        description: pfm.description,
+      })),
+    }),
+    ...(metadata.audioQuality && {
+      audioQuality: {
+        sampleRate: metadata.audioQuality.sampleRate,
+        bitDepth: metadata.audioQuality.bitDepth,
+        channels: metadata.audioQuality.channels,
+        codec: metadata.audioQuality.codec,
+        recordingQuality: metadata.audioQuality.recordingQuality,
+      },
+    }),
+    ...(metadata.speakers && {
+      speakers: {
+        speakerCount: metadata.speakers.speakerCount,
+        ...(metadata.speakers.speakers && {
+          speakers: metadata.speakers.speakers.map((s) => ({
+            id: s.id,
+            role: s.role,
+            ageRange: s.ageRange,
+            gender: s.gender,
+            accent: s.accent,
+          })),
+        }),
+      },
+    }),
+    ...(metadata.categorization && {
+      categorization: {
+        useCase: metadata.categorization.useCase,
+        contentType: metadata.categorization.contentType,
+        domain: metadata.categorization.domain,
+      },
+    }),
+  };
+}
+
 interface VerificationStepProps {
   audioFile?: AudioFile; // Optional - for backwards compatibility
   audioFiles?: AudioFile[]; // Optional - for backwards compatibility
@@ -299,9 +350,11 @@ export function VerificationStep({
 
       console.log('[VerificationStep] Sending verification request to backend');
 
+      // Sanitize metadata to remove any non-serializable properties
+      const sanitizedMetadata = sanitizeMetadata(metadata);
+
       // Backend will handle blob fetch and decryption
       // We only need to send sessionKeyData for backend to decrypt
-
       const response = await fetch('/api/verify', {
         method: 'POST',
         headers: {
@@ -311,7 +364,7 @@ export function VerificationStep({
           walrusBlobId,
           sealIdentity,
           encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
-          metadata,
+          metadata: sanitizedMetadata,
           sessionKeyData,
         }),
       });
