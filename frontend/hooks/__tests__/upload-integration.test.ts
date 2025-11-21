@@ -8,19 +8,19 @@ import { getUploadStrategy } from '../useSubWalletOrchestrator';
 
 describe('Upload Pipeline Integration', () => {
   describe('Strategy Selection', () => {
-    it('should select blockberry strategy for files < 1GB', () => {
+    it('should select blockberry strategy for all files', () => {
       const fileSize = 500 * 1024 * 1024; // 500 MB
       const strategy = getUploadStrategy(fileSize);
       expect(strategy).toBe('blockberry');
     });
 
-    it('should select sponsored-parallel strategy for files >= 1GB', () => {
-      const fileSize = 1.5 * 1024 * 1024 * 1024; // 1.5 GB
+    it('should always return blockberry regardless of file size', () => {
+      const fileSize = 100 * 1024 * 1024; // 100 MB
       const strategy = getUploadStrategy(fileSize);
-      expect(strategy).toBe('sponsored-parallel');
+      expect(strategy).toBe('blockberry');
     });
 
-    it('should select blockberry for exactly 1GB boundary', () => {
+    it('should use blockberry as MVP strategy for MVP', () => {
       const fileSize = 1024 * 1024 * 1024 - 1; // Just under 1GB
       const strategy = getUploadStrategy(fileSize);
       expect(strategy).toBe('blockberry');
@@ -85,16 +85,16 @@ describe('Upload Pipeline Integration', () => {
   });
 
   describe('File Validation', () => {
-    it('should reject files larger than 13 GiB (Walrus limit)', () => {
-      const maxSize = 13 * 1024 * 1024 * 1024; // 13 GiB
-      const tooLargeFile = 14 * 1024 * 1024 * 1024; // 14 GiB
+    it('should reject files larger than 1 GiB (MVP limit)', () => {
+      const maxSize = 1 * 1024 * 1024 * 1024; // 1 GiB MVP limit
+      const tooLargeFile = 1.5 * 1024 * 1024 * 1024; // 1.5 GiB
 
       expect(tooLargeFile).toBeGreaterThan(maxSize);
     });
 
-    it('should accept files at exactly 13 GiB', () => {
-      const maxSize = 13 * 1024 * 1024 * 1024; // 13 GiB
-      const exactMaxFile = 13 * 1024 * 1024 * 1024;
+    it('should accept files at exactly 1 GiB MVP limit', () => {
+      const maxSize = 1 * 1024 * 1024 * 1024; // 1 GiB MVP limit
+      const exactMaxFile = 1 * 1024 * 1024 * 1024;
 
       expect(exactMaxFile).toBe(maxSize);
     });
@@ -135,14 +135,14 @@ describe('Upload Pipeline Integration', () => {
   });
 
   describe('Error Messages', () => {
-    it('should provide clear error for sponsored-parallel not implemented', () => {
+    it('should provide clear error for files exceeding 1GB MVP limit', () => {
       const expectedError =
-        'Sponsored parallel uploads not yet implemented. ' +
-        'Files ≥1GB require server-side transaction orchestration. ' +
-        'Please use Blockberry API or wait for SDK support.';
+        'File size exceeds 1GB limit. ' +
+        'Current MVP is limited to 1GB per upload. ' +
+        'Please split larger files into multiple uploads.';
 
-      expect(expectedError).toContain('not yet implemented');
-      expect(expectedError).toContain('server-side transaction orchestration');
+      expect(expectedError).toContain('exceeds 1GB limit');
+      expect(expectedError).toContain('MVP');
     });
   });
 });

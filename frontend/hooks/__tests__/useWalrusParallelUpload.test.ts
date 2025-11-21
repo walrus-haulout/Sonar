@@ -43,8 +43,7 @@ describe('useWalrusParallelUpload', () => {
   });
 
   describe('Strategy Selection', () => {
-    it('should select blockberry strategy for files < 1GB', async () => {
-      delete process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE;
+    it('should select blockberry strategy for all files', async () => {
       const { result } = renderHook(() => useWalrusParallelUpload());
 
       const fileSize = 500 * 1024 * 1024; // 500 MB
@@ -53,13 +52,18 @@ describe('useWalrusParallelUpload', () => {
       expect(strategy).toBe('blockberry');
     });
 
-    it('should select sponsored-parallel strategy for files >= 1GB', async () => {
+    it('should reject files larger than 1GB', async () => {
       const { result } = renderHook(() => useWalrusParallelUpload());
 
-      const fileSize = 1.5 * 1024 * 1024 * 1024; // 1.5 GB
-      const strategy = result.current.getUploadStrategy(fileSize);
+      const encryptedBlob = new Blob(['test data'], { type: 'application/octet-stream' });
+      // Mock a blob larger than 1GB
+      Object.defineProperty(encryptedBlob, 'size', { value: 1.5 * 1024 * 1024 * 1024 });
 
-      expect(strategy).toBe('sponsored-parallel');
+      await expect(async () => {
+        await act(async () => {
+          await result.current.uploadBlob(encryptedBlob, 'test-policy-id', {});
+        });
+      }).rejects.toThrow('File size exceeds 1GB limit');
     });
   });
 

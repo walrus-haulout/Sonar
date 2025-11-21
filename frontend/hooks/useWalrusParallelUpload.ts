@@ -13,10 +13,8 @@ import { useSuiClient, useCurrentAccount, useSignAndExecuteTransaction } from '@
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { buildRegisterBlobTransactionAsync } from '@/lib/walrus/buildRegisterBlobTransaction';
 import type { WalrusUploadResult } from '@/lib/types/upload';
-import { useChunkedWalrusUpload } from './useChunkedWalrusUpload';
-import { useSubWalletOrchestrator } from './useSubWalletOrchestrator'; // Kept for type compatibility if needed, but unused for logic
 
-const CHUNKED_UPLOAD_THRESHOLD = 100 * 1024 * 1024; // 100MB
+const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
 
 export interface WalrusUploadProgress {
   totalFiles: number;
@@ -75,10 +73,6 @@ export function useWalrusParallelUpload() {
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-  const chunkedUpload = useChunkedWalrusUpload();
-  // We keep orchestrator just to satisfy any external dependencies if they exist, 
-  // but we won't use it for the main flow.
-  const orchestrator = useSubWalletOrchestrator();
 
   const [progress, setProgress] = useState<WalrusUploadProgress>({
     totalFiles: 0,
@@ -326,22 +320,9 @@ export function useWalrusParallelUpload() {
     metadata: WalrusUploadMetadata,
     options: UploadBlobOptions = {}
   ): Promise<WalrusUploadResult> => {
-    // Route large files (≥100MB) to dedicated chunked upload service
-    if (encryptedBlob.size >= CHUNKED_UPLOAD_THRESHOLD) {
-      try {
-        const chunkedResult = await chunkedUpload.uploadBlob(
-          encryptedBlob,
-          seal_policy_id,
-          metadata
-        );
-        return {
-          blobId: chunkedResult.blobIds[0],
-          seal_policy_id,
-          strategy: 'user-paid',
-        };
-      } catch (error) {
-        console.warn('Chunked upload failed, falling back to standard:', error);
-      }
+    // Validate file size (1GB max)
+    if (encryptedBlob.size > MAX_UPLOAD_SIZE) {
+      throw new Error(`File size exceeds 1GB limit. Size: ${(encryptedBlob.size / (1024 * 1024 * 1024)).toFixed(2)}GB`);
     }
 
     setProgress((prev) => ({
@@ -405,12 +386,12 @@ export function useWalrusParallelUpload() {
       blobId: publisherResult.blobId,
       previewBlobId: publisherResult.previewBlobId,
       seal_policy_id,
-      strategy: 'user-paid',
+      strategy: 'blockberry',
       mimeType: publisherResult.mimeType,
       previewMimeType: publisherResult.previewMimeType,
       txDigest,
     };
-  }, [uploadToPublisher, batchRegisterAndSubmit, chunkedUpload]);
+  }, [uploadToPublisher, batchRegisterAndSubmit]);
 
   /**
    * Upload multiple files in parallel
@@ -487,10 +468,7 @@ export function useWalrusParallelUpload() {
     // Progress tracking
     progress,
 
-    // Orchestrator access (kept for compatibility)
-    orchestrator,
-
-    // Utilities (mocked for compatibility)
-    getUploadStrategy: () => 'user-paid' as const,
+    // Utilities
+    getUploadStrategy: () => 'blockberry' as const,
   };
 }
