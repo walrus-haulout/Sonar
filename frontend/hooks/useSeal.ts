@@ -344,7 +344,7 @@ export function useSealDecryption() {
    * Fetch encrypted blob from Walrus
    */
   const fetchEncryptedBlob = useCallback(async (blobId: string): Promise<Uint8Array> => {
-    const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus-testnet.walrus.space';
+    const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus.space';
     const response = await fetch(`${walrusAggregator}/v1/${blobId}`);
 
     if (!response.ok) {
