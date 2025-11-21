@@ -283,13 +283,41 @@ class VerificationPipeline:
 
         Uses AudioQualityChecker to verify technical audio quality.
         """
+        import time
+        stage_start = time.time()
+
         await self._update_stage(session_object_id, "quality", 0.15)
 
-        result = await self.quality_checker.check_audio_file(audio_file_path)
+        result = await self.quality_checker.check_audio_file(audio_file_path, session_id=session_object_id)
 
         quality_info = result.get("quality")
+        quality_passed = quality_info.get("passed", False) if quality_info else False
+        errors = result.get("errors", [])
+
         if quality_info:
             quality_info["score"] = self._compute_quality_score(quality_info)
+
+        stage_duration = time.time() - stage_start
+
+        if not quality_passed:
+            logger.warning(
+                f"[{session_object_id}] Quality check failed",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2),
+                    "quality_info": quality_info,
+                    "errors": errors
+                }
+            )
+        else:
+            logger.info(
+                f"[{session_object_id}] Quality check passed",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2),
+                    "quality_score": quality_info.get("score") if quality_info else None
+                }
+            )
 
         await self._update_stage(session_object_id, "quality", 0.30)
 
@@ -305,8 +333,34 @@ class VerificationPipeline:
 
         Uses Chromaprint + AcoustID for copyright detection.
         """
+        import time
+        stage_start = time.time()
+
         await self._update_stage(session_object_id, "copyright", 0.35)
         result = await self.copyright_detector.check_copyright_from_path(audio_file_path)
+
+        stage_duration = time.time() - stage_start
+        copyright_info = result.get("copyright", {})
+        errors = result.get("errors", [])
+
+        if copyright_info.get("error"):
+            logger.warning(
+                f"[{session_object_id}] Copyright check failed",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2),
+                    "error": copyright_info.get("error")
+                }
+            )
+        else:
+            logger.info(
+                f"[{session_object_id}] Copyright check completed",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2),
+                    "matches_found": len(copyright_info.get("matches", []))
+                }
+            )
 
         await self._update_stage(session_object_id, "copyright", 0.45)
 
@@ -322,17 +376,28 @@ class VerificationPipeline:
 
         Uses Voxtral Small via OpenRouter to transcribe audio to text.
         """
+        import time
+        import base64
+        stage_start = time.time()
+
         await self._update_stage(session_object_id, "transcription", 0.55)
 
         try:
-            logger.debug(f"Transcribing audio via OpenRouter Voxtral: {audio_file_path}")
+            logger.debug(f"[{session_object_id}] Transcribing audio via OpenRouter Voxtral")
 
             # Read audio file as base64 for chat completions API
-            import base64
             with open(audio_file_path, "rb") as audio_file:
                 audio_bytes = audio_file.read()
                 audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-            
+
+            logger.debug(
+                f"[{session_object_id}] Audio file loaded",
+                extra={
+                    "session_id": session_object_id,
+                    "file_size_bytes": len(audio_bytes)
+                }
+            )
+
             # Determine audio MIME type from file extension
             audio_mime = "audio/wav"
             if audio_file_path.endswith(".mp3"):
@@ -361,22 +426,42 @@ class VerificationPipeline:
                     ]
                 }
             ])
+
+            api_start = time.time()
             completion = self.openai_client.chat.completions.create(
                 model=OPENROUTER_MODELS["TRANSCRIPTION"],
                 messages=transcription_messages,
                 max_tokens=4096,
             )
+            api_duration = time.time() - api_start
 
             transcript = completion.choices[0].message.content.strip()
 
-            logger.debug(f"Transcription length: {len(transcript)} chars")
+            stage_duration = time.time() - stage_start
+            logger.info(
+                f"[{session_object_id}] Transcription completed",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2),
+                    "api_duration_seconds": round(api_duration, 2),
+                    "transcript_length_chars": len(transcript)
+                }
+            )
 
             await self._update_stage(session_object_id, "transcription", 0.65)
 
             return transcript
 
         except Exception as e:
-            logger.error(f"Transcription failed: {e}", exc_info=True)
+            stage_duration = time.time() - stage_start
+            logger.error(
+                f"[{session_object_id}] Transcription failed: {e}",
+                extra={
+                    "session_id": session_object_id,
+                    "duration_seconds": round(stage_duration, 2)
+                },
+                exc_info=True
+            )
             raise Exception(f"Failed to transcribe audio: {str(e)}")
 
     async def _stage_analysis(

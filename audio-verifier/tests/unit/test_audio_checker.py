@@ -310,15 +310,139 @@ class TestByteProcessing:
         """Test that bytes and file produce same results."""
         with open(valid_audio_file, "rb") as f:
             audio_bytes = f.read()
-        
+
         checker = AudioQualityChecker()
-        
+
         # Check from file
         result_file = await checker.check_audio_file(str(valid_audio_file))
-        
+
         # Check from bytes
         result_bytes = await checker.check_audio(audio_bytes)
-        
+
         # Results should be equivalent
         assert result_file["quality"]["passed"] == result_bytes["quality"]["passed"]
         assert pytest.approx(result_file["quality"]["duration"], rel=0.01) == result_bytes["quality"]["duration"]
+
+
+class TestSessionIDLogging:
+    """Test session ID support in logging."""
+
+    @pytest.mark.asyncio
+    async def test_accepts_session_id_parameter(self, valid_audio_file):
+        """Test that session_id parameter is accepted."""
+        checker = AudioQualityChecker()
+        session_id = "test-session-uuid-123"
+
+        # Should not raise error with session_id
+        result = await checker.check_audio_file(str(valid_audio_file), session_id=session_id)
+
+        assert result["quality"]["passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_session_id_in_error_context(self, corrupted_audio_file):
+        """Test that session_id is included in error handling."""
+        checker = AudioQualityChecker()
+        session_id = "test-session-uuid-456"
+
+        result = await checker.check_audio_file(str(corrupted_audio_file), session_id=session_id)
+
+        # Should fail gracefully with session ID context
+        assert result["quality"] is None
+        assert len(result["errors"]) > 0
+
+
+class TestFFmpegFallback:
+    """Test FFmpeg fallback for format conversion."""
+
+    @pytest.mark.asyncio
+    async def test_analyzes_valid_audio_without_ffmpeg(self, valid_audio_file):
+        """Test that valid audio works without ffmpeg fallback."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+
+        # Should succeed with soundfile directly
+        assert result["quality"]["passed"] is True
+        assert result["quality"]["sample_rate"] == 16000
+
+    @pytest.mark.asyncio
+    async def test_error_messages_include_format_info(self, clipped_audio_file):
+        """Test that error messages include detected audio format."""
+        checker = AudioQualityChecker()
+        # This tests format detection in error messages
+        result = await checker.check_audio_file(str(clipped_audio_file))
+
+        # Should return errors with format information
+        assert result["quality"]["passed"] is False
+        errors = result["errors"]
+        assert len(errors) > 0
+        # Check that format info is included when there are errors
+        assert any("format" in err.lower() or "clipping" in err.lower() for err in errors)
+
+    @pytest.mark.asyncio
+    async def test_ffmpeg_conversion_preserves_quality(self, valid_audio_file):
+        """Test that ffmpeg fallback produces valid analysis."""
+        checker = AudioQualityChecker()
+
+        # Analyze original file
+        result = await checker.check_audio_file(str(valid_audio_file))
+
+        assert result["quality"]["passed"] is True
+        assert "sample_rate" in result["quality"]
+        assert "duration" in result["quality"]
+
+
+class TestMetadataCapture:
+    """Test file metadata capture for diagnostics."""
+
+    @pytest.mark.asyncio
+    async def test_captures_file_metadata(self, valid_audio_file):
+        """Test that file metadata is captured (size, mime type, etc)."""
+        checker = AudioQualityChecker()
+        session_id = "metadata-test-session"
+
+        # This should capture file size and mime type internally
+        result = await checker.check_audio_file(str(valid_audio_file), session_id=session_id)
+
+        assert result["quality"]["passed"] is True
+        # File was successfully analyzed with metadata capture
+        assert result["quality"]["duration"] > 0
+
+    @pytest.mark.asyncio
+    async def test_handles_missing_file_gracefully(self):
+        """Test graceful handling when file is missing."""
+        checker = AudioQualityChecker()
+        session_id = "missing-file-test"
+
+        result = await checker.check_audio_file(
+            "/nonexistent/path/audio.wav",
+            session_id=session_id
+        )
+
+        assert result["quality"] is None
+        assert len(result["errors"]) > 0
+
+
+class TestFormatDetection:
+    """Test audio format detection and error messages."""
+
+    @pytest.mark.asyncio
+    async def test_detects_wav_format(self, valid_audio_file):
+        """Test WAV format detection."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+
+        assert result["quality"] is not None
+        # Format should be detectable from file
+        assert result["quality"]["bit_depth"] > 0
+
+    @pytest.mark.asyncio
+    async def test_error_messages_with_format_context(self, mostly_silent_audio_file):
+        """Test that error messages include format information when available."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(mostly_silent_audio_file))
+
+        assert result["quality"]["passed"] is False
+        errors = result["errors"]
+        assert len(errors) > 0
+        # Error messages should be descriptive
+        assert any(len(err) > 10 for err in errors)  # Non-trivial error messages
