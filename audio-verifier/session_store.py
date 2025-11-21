@@ -5,6 +5,7 @@ Stores verification session data in Railway Postgres (same database as backend).
 Replaces Vercel KV with PostgreSQL for unified infrastructure.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -14,6 +15,24 @@ from typing import Dict, Any, Optional
 import asyncpg
 
 logger = logging.getLogger(__name__)
+
+
+async def _retry_db_operation(operation, max_retries=2, initial_delay=0.5):
+    """Retry database operation on transient failures."""
+    delay = initial_delay
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            return await operation()
+        except (asyncio.TimeoutError, asyncpg.exceptions.CannotConnectNowError) as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                await asyncio.sleep(delay)
+                delay *= 2  # exponential backoff
+            continue
+
+    raise last_error
 
 
 class SessionStore:
@@ -40,8 +59,9 @@ class SessionStore:
             self._pool = await asyncpg.create_pool(
                 self.database_url,
                 min_size=1,
-                max_size=10,
-                command_timeout=60
+                max_size=5,
+                command_timeout=30,
+                statement_cache_size=0  # Required for Railway's PgBouncer
             )
             # Create table schema on first connection
             await self._ensure_schema()
@@ -52,14 +72,18 @@ class SessionStore:
         if self._pool is None:
             return
 
-        async with self._pool.acquire() as conn:
-            # Enable pgvector extension (harmless if already exists)
-            try:
-                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-            except Exception as e:
-                logger.warning(f"Could not create pgvector extension: {e}")
+        try:
+            async with asyncio.timeout(10):
+                async with self._pool.acquire() as conn:
+                    # Enable pgvector extension (harmless if already exists)
+                    try:
+                        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                    except Exception as e:
+                        logger.warning(f"Could not create pgvector extension: {e}")
 
-            logger.info("Verified pgvector extension and table schema")
+                    logger.info("Verified pgvector extension and table schema")
+        except asyncio.TimeoutError:
+            logger.error("Timeout verifying schema")
 
     async def create_session(
         self,
@@ -68,7 +92,7 @@ class SessionStore:
     ) -> str:
         """
         Create a new verification session in PostgreSQL.
-        
+
         Args:
             verification_id: Unique verification identifier
             initial_data: Initial session data containing:
@@ -76,34 +100,38 @@ class SessionStore:
                 - plaintext_size_bytes: Size in bytes
                 - duration_seconds: Audio duration
                 - file_format: Audio format (e.g., "audio/wav")
-        
+
         Returns:
             Session ID (UUID)
         """
         session_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
-        
+
         try:
             pool = await self._get_pool()
-            async with pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO verification_sessions 
-                    (id, verification_id, status, stage, progress, created_at, updated_at, initial_data)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                """,
-                    session_id,
-                    verification_id,
-                    "processing",
-                    "queued",
-                    0.0,
-                    now,
-                    now,
-                    json.dumps(initial_data)
-                )
-            
+            async with asyncio.timeout(10):
+                async with pool.acquire() as conn:
+                    await conn.execute("""
+                        INSERT INTO verification_sessions
+                        (id, verification_id, status, stage, progress, created_at, updated_at, initial_data)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                        session_id,
+                        verification_id,
+                        "processing",
+                        "queued",
+                        0.0,
+                        now,
+                        now,
+                        json.dumps(initial_data)
+                    )
+
             logger.info(f"Created session {session_id[:8]}... in PostgreSQL")
             return session_id
-            
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout creating session {session_id[:8]}...")
+            raise RuntimeError("Database connection timeout")
         except Exception as e:
             logger.error(f"Failed to create session in PostgreSQL: {e}", exc_info=True)
             raise RuntimeError(f"Failed to create session: {str(e)}")
@@ -115,7 +143,7 @@ class SessionStore:
     ) -> bool:
         """
         Update verification session data in PostgreSQL.
-        
+
         Args:
             session_id: Session ID
             updates: Dictionary with updates:
@@ -124,75 +152,79 @@ class SessionStore:
                 - status: Optional status update
                 - results: Optional results data
                 - error: Optional error message
-        
+
         Returns:
             True if successful, False otherwise
         """
-        try:
-            pool = await self._get_pool()
-            
-            # Build UPDATE query dynamically based on provided updates
-            update_fields: list[str] = []
-            update_values: list[object] = []
-            param_num = 1
-            
-            if "stage" in updates:
-                update_fields.append(f"stage = ${param_num}")
-                update_values.append(str(updates["stage"]))
-                param_num += 1
-            
-            if "progress" in updates:
-                update_fields.append(f"progress = ${param_num}")
-                update_values.append(float(updates["progress"]))
-                param_num += 1
-            
-            if "status" in updates:
-                update_fields.append(f"status = ${param_num}")
-                update_values.append(str(updates["status"]))
-                param_num += 1
-            
-            if "results" in updates:
-                update_fields.append(f"results = ${param_num}")
-                update_values.append(json.dumps(updates["results"]))
-                param_num += 1
-            
-            if "error" in updates:
-                error_value = updates["error"]
-                if isinstance(error_value, list):
-                    error_value = ", ".join(str(e) for e in error_value)
-                update_fields.append(f"error = ${param_num}")
-                update_values.append(str(error_value))
-                param_num += 1
-            
-            # Always update updated_at
-            update_fields.append(f"updated_at = ${param_num}")
-            update_values.append(datetime.now(timezone.utc))
+        # Build UPDATE query dynamically based on provided updates
+        update_fields: list[str] = []
+        update_values: list[object] = []
+        param_num = 1
+
+        if "stage" in updates:
+            update_fields.append(f"stage = ${param_num}")
+            update_values.append(str(updates["stage"]))
             param_num += 1
-            
-            # Add session_id as last parameter
-            update_values.append(session_id)
-            
-            if not update_fields:
-                logger.warning(f"No fields to update for session {session_id[:8]}...")
-                return False
-            
-            query = f"""
-                UPDATE verification_sessions 
-                SET {', '.join(update_fields)}
-                WHERE id = ${param_num}
-            """
-            
-            async with pool.acquire() as conn:
-                result = await conn.execute(query, *update_values)
-                
-                # Check if any rows were updated
-                if "0" in result:  # asyncpg returns "UPDATE 0" if no rows affected
-                    logger.warning(f"Session {session_id[:8]}... not found for update")
-                    return False
-            
-            logger.debug(f"Updated session {session_id[:8]}... stage={updates.get('stage')} progress={updates.get('progress')}")
+
+        if "progress" in updates:
+            update_fields.append(f"progress = ${param_num}")
+            update_values.append(float(updates["progress"]))
+            param_num += 1
+
+        if "status" in updates:
+            update_fields.append(f"status = ${param_num}")
+            update_values.append(str(updates["status"]))
+            param_num += 1
+
+        if "results" in updates:
+            update_fields.append(f"results = ${param_num}")
+            update_values.append(json.dumps(updates["results"]))
+            param_num += 1
+
+        if "error" in updates:
+            error_value = updates["error"]
+            if isinstance(error_value, list):
+                error_value = ", ".join(str(e) for e in error_value)
+            update_fields.append(f"error = ${param_num}")
+            update_values.append(str(error_value))
+            param_num += 1
+
+        # Always update updated_at
+        update_fields.append(f"updated_at = ${param_num}")
+        update_values.append(datetime.now(timezone.utc))
+        param_num += 1
+
+        # Add session_id as last parameter
+        update_values.append(session_id)
+
+        if not update_fields:
+            logger.warning(f"No fields to update for session {session_id[:8]}...")
+            return False
+
+        query = f"""
+            UPDATE verification_sessions
+            SET {', '.join(update_fields)}
+            WHERE id = ${param_num}
+        """
+
+        async def _do_update():
+            pool = await self._get_pool()
+            async with asyncio.timeout(10):
+                async with pool.acquire() as conn:
+                    result = await conn.execute(query, *update_values)
+
+                    # Check if any rows were updated
+                    if "0" in result:  # asyncpg returns "UPDATE 0" if no rows affected
+                        logger.warning(f"Session {session_id[:8]}... not found for update")
+                        return False
             return True
-            
+
+        try:
+            success = await _retry_db_operation(_do_update)
+            if success:
+                logger.debug(f"Updated session {session_id[:8]}... stage={updates.get('stage')} progress={updates.get('progress')}")
+            return success
+
         except Exception as e:
             logger.error(f"Failed to update session in PostgreSQL: {e}", exc_info=True)
             return False
@@ -269,44 +301,48 @@ class SessionStore:
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
         Get verification session from PostgreSQL.
-        
+
         Args:
             session_id: Session ID
-        
+
         Returns:
             Session data if found, None otherwise
         """
         try:
             pool = await self._get_pool()
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow("""
-                    SELECT id, verification_id, status, stage, progress, 
-                           created_at, updated_at, initial_data, results, error
-                    FROM verification_sessions
-                    WHERE id = $1
-                """, session_id)
-                
-                if not row:
-                    logger.warning(f"Session {session_id[:8]}... not found in PostgreSQL")
-                    return None
-                
-                # Convert row to dict
-                session_data = {
-                    "id": str(row["id"]),
-                    "verification_id": row["verification_id"],
-                    "status": row["status"],
-                    "stage": row["stage"],
-                    "progress": float(row["progress"]),
-                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-                    "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
-                    "results": json.loads(row["results"]) if row["results"] else None,
-                    "error": row["error"]
-                }
-                
-                logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")
-                return session_data
-                
+            async with asyncio.timeout(10):
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow("""
+                        SELECT id, verification_id, status, stage, progress,
+                               created_at, updated_at, initial_data, results, error
+                        FROM verification_sessions
+                        WHERE id = $1
+                    """, session_id)
+
+                    if not row:
+                        logger.warning(f"Session {session_id[:8]}... not found in PostgreSQL")
+                        return None
+
+                    # Convert row to dict
+                    session_data = {
+                        "id": str(row["id"]),
+                        "verification_id": row["verification_id"],
+                        "status": row["status"],
+                        "stage": row["stage"],
+                        "progress": float(row["progress"]),
+                        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                        "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
+                        "results": json.loads(row["results"]) if row["results"] else None,
+                        "error": row["error"]
+                    }
+
+                    logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")
+                    return session_data
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout retrieving session {session_id[:8]}...")
+            return None
         except Exception as e:
             logger.error(f"Error retrieving session: {e}", exc_info=True)
             return None
