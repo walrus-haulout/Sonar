@@ -189,11 +189,13 @@ class VerificationPipeline:
             # Fail fast if quality check fails
             quality_info = quality_result.get("quality") or {}
             if not quality_info.get("passed", False):
-                logger.warning(f"[{session_object_id}] Failed quality check")
+                failure_reason = quality_result.get("failure_reason", "unknown")
+                logger.warning(f"[{session_object_id}] Failed quality check: {failure_reason}")
                 success = await self.session_store.mark_failed(session_object_id, {
                     "quality": quality_info,
                     "errors": quality_result.get("errors", []),
-                    "stage_failed": "quality"
+                    "stage_failed": "quality",
+                    "failure_reason": failure_reason
                 })
                 if not success:
                     logger.error(f"Failed to mark session as failed")

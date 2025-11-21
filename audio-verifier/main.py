@@ -434,21 +434,58 @@ async def create_verification(
                         "blob_id_short": blob_id_short,
                         "decrypted_bytes": file_size,
                         "temp_file_path": temp_file_path,
-                        "hex_preview": hex_preview,
                         "has_riff_header": has_riff_header,
                         "mime_type": mime_type or "unknown"
                     }
                 )
 
-                # Early validation: check for suspiciously small files
+                # Debug-level hex preview to avoid leaking audio data in INFO logs
+                logger.debug(
+                    f"Audio blob hex preview (first 32 bytes)",
+                    extra={
+                        "verification_id": verification_id,
+                        "hex_preview": hex_preview
+                    }
+                )
+
+                # Early validation gate: reject tiny or invalid blobs before pipeline
                 if file_size < 1024:
                     logger.warning(
-                        f"Decrypted audio is very small (< 1KB)",
+                        f"Rejecting decrypted audio (too small): {file_size} bytes < 1KB minimum",
                         extra={
                             "verification_id": verification_id,
                             "blob_id_short": blob_id_short,
                             "decrypted_bytes": file_size
                         }
+                    )
+                    # Clean up temp file
+                    try:
+                        os.unlink(temp_file_path)
+                    except OSError:
+                        pass
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB"
+                    )
+
+                # Reject blobs with invalid RIFF header for .wav files
+                if not has_riff_header:
+                    logger.warning(
+                        f"Rejecting decrypted audio (invalid RIFF header)",
+                        extra={
+                            "verification_id": verification_id,
+                            "blob_id_short": blob_id_short,
+                            "decrypted_bytes": file_size
+                        }
+                    )
+                    # Clean up temp file
+                    try:
+                        os.unlink(temp_file_path)
+                    except OSError:
+                        pass
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid audio blob: missing or corrupted RIFF/WAV header"
                     )
 
             except ValueError as e:
