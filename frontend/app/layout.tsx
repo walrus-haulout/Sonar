@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { Navbar } from '@/components/layout/Navbar';
+import { LazyMotion, domAnimation } from 'framer-motion';
 
 import { DeploymentGuard } from '@/components/layout/DeploymentGuard';
 
@@ -53,10 +54,12 @@ export default function RootLayout({
     <html lang="en" className={`${ibmPlexMono.variable} ${inter.variable}`}>
       <body>
         <DeploymentGuard />
-        <Providers>
-          <Navbar />
-          <div className="pt-18">{children}</div>
-        </Providers>
+        <LazyMotion features={domAnimation}>
+          <Providers>
+            <Navbar />
+            <div className="pt-18">{children}</div>
+          </Providers>
+        </LazyMotion>
       </body>
     </html>
   );

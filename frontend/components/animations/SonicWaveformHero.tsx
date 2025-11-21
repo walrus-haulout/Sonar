@@ -35,8 +35,8 @@ const SonicWaveformCanvas = () => {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const lineCount = 60;
-      const segmentCount = 80;
+      const lineCount = 40;
+      const segmentCount = 40;
       const height = canvas.height / 2;
 
       for (let i = 0; i < lineCount; i++) {
@@ -75,6 +75,27 @@ const SonicWaveformCanvas = () => {
       animationFrameId = requestAnimationFrame(draw);
     };
 
+    // Intersection Observer to pause when off-screen
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (!animationFrameId) {
+              draw();
+            }
+          } else {
+            if (animationFrameId) {
+              cancelAnimationFrame(animationFrameId);
+              animationFrameId = 0;
+            }
+          }
+        });
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(canvas);
+
     const handleMouseMove = (event: MouseEvent) => {
       mouse.x = event.clientX;
       mouse.y = event.clientY;
@@ -90,6 +111,7 @@ const SonicWaveformCanvas = () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('mousemove', handleMouseMove);
+      observer.disconnect();
     };
   }, []);
 

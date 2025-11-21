@@ -91,8 +91,9 @@ export function useSonarAnimation(options: SonarAnimationOptions = {}) {
     scene.add(mesh);
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: window.devicePixelRatio <= 1, // Disable antialias on high-DPI screens
       alpha: true, // Transparent background
+      powerPreference: 'high-performance',
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap at 2x for performance
 
@@ -124,6 +125,27 @@ export function useSonarAnimation(options: SonarAnimationOptions = {}) {
       }
     };
 
+    // Intersection Observer to pause when off-screen
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (isPlaying && !sceneRef.current?.animationId) {
+              animate();
+            }
+          } else {
+            if (sceneRef.current?.animationId) {
+              cancelAnimationFrame(sceneRef.current.animationId);
+              sceneRef.current.animationId = 0;
+            }
+          }
+        });
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(container);
+
     // Store scene references
     sceneRef.current = {
       camera,
@@ -141,6 +163,7 @@ export function useSonarAnimation(options: SonarAnimationOptions = {}) {
     // Cleanup
     return () => {
       window.removeEventListener('resize', onWindowResize);
+      observer.disconnect();
 
       if (sceneRef.current) {
         cancelAnimationFrame(sceneRef.current.animationId);
