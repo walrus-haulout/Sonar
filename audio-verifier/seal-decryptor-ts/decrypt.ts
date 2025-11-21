@@ -168,13 +168,19 @@ async function decryptWithSessionKey(request: DecryptRequest): Promise<Uint8Arra
         }
 
         // Call seal_approve on the open_access_policy module for verification
-        // This establishes the authorization for decryption on-chain
+        // open_access_policy::seal_approve requires: identity, timestamp, clock
         const policyModule = 'open_access_policy';
         const identityBytes = fromHEX(request.identity);
+        const uploadTimestamp = BigInt(sessionKeyObj.creationTimeMs);
+        const CLOCK_OBJECT_ID = '0x6'; // Sui well-known Clock object
 
         tx.moveCall({
             target: `${packageId}::${policyModule}::seal_approve`,
-            arguments: [tx.pure.vector('u8', identityBytes)],
+            arguments: [
+                tx.pure.vector('u8', identityBytes),
+                tx.pure.u64(uploadTimestamp),
+                tx.object(CLOCK_OBJECT_ID),
+            ],
         });
 
         const txBytes = await tx.build({
