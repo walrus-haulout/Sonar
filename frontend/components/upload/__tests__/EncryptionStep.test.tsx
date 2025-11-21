@@ -64,17 +64,6 @@ mock.module('@/hooks/useWalrusParallelUpload', () => ({
   }),
 }));
 
-mock.module('@/hooks/useSubWalletOrchestrator', () => ({
-  useSubWalletOrchestrator: () => ({
-    isReady: true,
-    wallets: [],
-    walletCount: 0,
-    calculateWalletCount: (size: number) => 4,
-    createWallets: (count: number) => [],
-    discardAllWallets: () => {},
-  }),
-}));
-
 describe('EncryptionStep', () => {
   const mockAudioFile: AudioFile = {
     file: new File(['test'], 'test.mp3', { type: 'audio/mp3' }),

@@ -118,7 +118,7 @@ export interface WalrusUploadResult {
   previewMimeType?: string;
   // User-paid registration support
   txDigest?: string;
-  strategy?: 'user-paid';
+  strategy?: 'user-paid' | 'blockberry';
   // Preview metadata for batch registration
   previewStorageId?: string;
   previewSize?: number;

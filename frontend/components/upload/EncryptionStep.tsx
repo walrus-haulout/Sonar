@@ -8,7 +8,6 @@ import { AudioFile, EncryptionResult, FileUploadResult } from '@/lib/types/uploa
 import { GlassCard } from '@/components/ui/GlassCard';
 import { useSealEncryption } from '@/hooks/useSeal';
 import { useWalrusParallelUpload } from '@/hooks/useWalrusParallelUpload';
-import { useSubWalletOrchestrator } from '@/hooks/useSubWalletOrchestrator';
 import { CHAIN_CONFIG } from '@/lib/sui/client';
 import { bytesToHex } from '@sonar/seal';
 
@@ -62,7 +61,6 @@ export function EncryptionStep({
 
   const { isReady, encrypt, error: sealError } = useSealEncryption();
   const { uploadBlob, progress: uploadProgress } = useWalrusParallelUpload();
-  const orchestrator = useSubWalletOrchestrator();
 
   const addLog = (message: string) => {
     console.log('[EncryptionStep]', message);
@@ -175,21 +173,10 @@ export function EncryptionStep({
         console.warn('Failed to check pending uploads:', e);
       }
 
-      // Step 1: Initialize orchestrator and determine strategy
-      addLog('Initializing upload orchestrator...');
+      // Step 1: Determine file size and strategy
       const totalSize = filesToProcess.reduce((sum, f) => sum + f.file.size, 0);
-      const walletCount = orchestrator.calculateWalletCount(totalSize);
-      const strategy = totalSize < 1024 * 1024 * 1024 ? 'blockberry' : 'sponsored-parallel';
-
-      addLog(`File size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
-      addLog(`Upload strategy: ${strategy}`);
-      addLog(`Optimal wallet count: ${walletCount}`);
-
-      // Create demo wallets (for logging/telemetry, not used in Blockberry flow)
-      if (orchestrator.isReady) {
-        const demoWallets = orchestrator.createWallets(Math.min(walletCount, 4));
-        addLog(`Created ${demoWallets.length} ephemeral demo wallets (RAM-only)`);
-      }
+      addLog(`Total file size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+      addLog('Upload strategy: Blockberry HTTP API');
 
       // Step 2: Process files in parallel
       const filePromises = filesToProcess.map(async (file, index) => {
@@ -366,14 +353,7 @@ export function EncryptionStep({
       const results = await Promise.all(filePromises);
       setCompletedFiles(results);
 
-      // Step 4: Cleanup
-      if (orchestrator.walletCount > 0) {
-        addLog('Cleaning up ephemeral wallets...');
-        orchestrator.discardAllWallets();
-        addLog('Wallets discarded (no sweeping needed)');
-      }
-
-      // Step 5: Finalize
+      // Step 4: Finalize
       setStage('finalizing');
       setProgress(90);
       addLog('Finalizing upload...');
