@@ -175,8 +175,9 @@ export function EncryptionStep({
 
       // Step 1: Determine file size and strategy
       const totalSize = filesToProcess.reduce((sum, f) => sum + f.file.size, 0);
+      const strategy = 'Blockberry HTTP API';
       addLog(`Total file size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
-      addLog('Upload strategy: Blockberry HTTP API');
+      addLog(`Upload strategy: ${strategy}`);
 
       // Step 2: Process files in parallel
       const filePromises = filesToProcess.map(async (file, index) => {
