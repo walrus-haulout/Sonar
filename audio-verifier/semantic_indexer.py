@@ -34,14 +34,14 @@ class SemanticIndexer:
 
         self.embedding_model = embedding_model
         self._pool: Optional[asyncpg.Pool] = None
+        self.vector_service: Optional[VectorService] = None
 
         # Initialize centralized vector service
         try:
             self.vector_service = VectorService()
-            logger.info("Initialized VectorService with Qdrant support")
+            logger.info("Initialized VectorService for vector indexing")
         except Exception as e:
             logger.warning(f"VectorService initialization failed: {e}")
-            self.vector_service = None
 
     async def _get_pool(self) -> asyncpg.Pool:
         """Get or create database connection pool."""
@@ -138,19 +138,13 @@ class SemanticIndexer:
                     session_id
                 )
 
-            # Write to Qdrant (async, don't block on failure)
+            # Write to Pinecone (async, don't block on failure)
             if self.vector_service:
-                await self.vector_service.index_to_qdrant(
+                await self.vector_service.index_to_pinecone(
                     session_id,
                     embedding,
                     metadata
                 )
-                # Mark as synced in PostgreSQL
-                async with pool.acquire() as conn:
-                    await conn.execute(
-                        "UPDATE verification_sessions SET qdrant_synced = true WHERE id = $1",
-                        session_id
-                    )
 
             logger.info(f"Indexed session {session_id[:8]}... in PostgreSQL + Qdrant")
             return True
@@ -165,7 +159,7 @@ class SemanticIndexer:
         limit: int = 10,
         similarity_threshold: float = 0.7,
         use_qdrant: bool = True
-    ) -> List[Dict[str, any]]:
+    ) -> List[Dict[str, Any]]:
         """
         Find similar sessions using semantic search.
 
@@ -288,7 +282,7 @@ class SemanticIndexer:
             logger.error(f"Error in batch indexing: {e}", exc_info=True)
             return 0
 
-    async def get_similarity_stats(self, session_id: str) -> Dict[str, any]:
+    async def get_similarity_stats(self, session_id: str) -> Dict[str, Any]:
         """
         Get similarity statistics for a session.
 
@@ -350,6 +344,10 @@ class SemanticIndexer:
 
                 synced = 0
                 for session in sessions:
+                    if not self.vector_service:
+                        logger.warning("VectorService not available, skipping sync")
+                        break
+
                     initial_data = json.loads(session["initial_data"]) if session["initial_data"] else {}
 
                     metadata = {
@@ -361,21 +359,16 @@ class SemanticIndexer:
                         "created_at": datetime.now(timezone.utc).isoformat()
                     }
 
-                    success = await self.vector_service.index_to_qdrant(
+                    success = await self.vector_service.index_to_pinecone(
                         str(session["id"]),
                         list(session["embedding"]),
                         metadata
                     )
 
                     if success:
-                        # Mark as synced
-                        await conn.execute(
-                            "UPDATE verification_sessions SET qdrant_synced = true WHERE id = $1",
-                            session["id"]
-                        )
                         synced += 1
 
-                logger.info(f"Synced {synced}/{len(sessions)} sessions to Qdrant")
+                logger.info(f"Synced {synced}/{len(sessions)} sessions to Pinecone")
                 return synced
 
         except Exception as e:

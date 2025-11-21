@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List
 
+from models import coerce_list_of_strings, normalize_initial_data, normalize_results
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -94,8 +96,12 @@ class VerificationExporter:
     def _flatten_session(self, session: asyncpg.Record) -> Dict[str, Any]:
         """Flatten verification session record."""
         # Parse JSONB columns
-        initial_data = json.loads(session["initial_data"]) if session["initial_data"] else {}
-        results = json.loads(session["results"]) if session["results"] else {}
+        initial_data_raw = json.loads(session["initial_data"]) if session["initial_data"] else {}
+        results_raw = json.loads(session["results"]) if session["results"] else {}
+
+        # Normalize to typed models
+        initial_data = normalize_initial_data(initial_data_raw)
+        results = normalize_results(results_raw)
 
         # Extract quality metrics
         quality = results.get("quality", {})

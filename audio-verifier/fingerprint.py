@@ -53,12 +53,20 @@ class CopyrightDetector:
 
     def _fingerprint_and_lookup(self, file_path: str) -> Iterable[tuple[float, str, str, str]]:
         duration, fingerprint = acoustid.fingerprint_file(file_path)
-        return acoustid.lookup(
+        results = acoustid.lookup(
             self.api_key,
             fingerprint,
             duration,
-            parse=True,
         )
+        # Parse raw results: extract (score, recording_id, title, artist) tuples
+        for result in results.get("results", []):
+            recordings = result.get("recordings", [])
+            for recording in recordings:
+                score = result.get("score", 0.0)
+                recording_id = recording.get("id", "")
+                title = recording.get("title", "")
+                artist = recording.get("artists", [{}])[0].get("name", "")
+                yield (score, recording_id, title, artist)
 
     def _format_results(self, lookup_results: Iterable[tuple[float, str, str, str]]) -> Dict[str, Any]:
         matches = []

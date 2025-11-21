@@ -8,7 +8,7 @@ Applies 25-sample minimum before penalizing saturation.
 import asyncpg
 import logging
 import os
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ class SaturationCalculator:
         self,
         similar_count: int,
         dynamic_threshold: int
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Calculate saturation status and penalty.
 
@@ -219,7 +219,7 @@ class SaturationCalculator:
             logger.error(f"Error checking bulk contributor: {e}")
             return False
 
-    async def get_saturation_report(self, subject: str) -> Dict[str, any]:
+    async def get_saturation_report(self, subject: str) -> Dict[str, Any]:
         """
         Get detailed saturation report for a subject.
 
@@ -314,7 +314,7 @@ class SaturationCalculator:
         else:
             return "severe"
 
-    async def get_saturation_leaderboard(self, limit: int = 20) -> List[Dict[str, any]]:
+    async def get_saturation_leaderboard(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get most saturated subjects."""
         try:
             pool = await self._get_pool()

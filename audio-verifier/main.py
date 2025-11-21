@@ -14,7 +14,7 @@ import json
 import logging
 import tempfile
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TypedDict
 
 from audio_checker import AudioQualityChecker
 from fingerprint import CopyrightDetector
@@ -226,6 +226,15 @@ async def limit_upload_size(request: Request, call_next):
     return await call_next(request)
 
 
+# Response type for legacy audio check endpoints
+class AudioCheckResponseDict(TypedDict, total=False):
+    """Legacy audio check response structure."""
+    approved: bool
+    quality: Dict[str, Any]
+    copyright: Dict[str, Any]
+    errors: List[str]
+
+
 # Pydantic models for API requests
 class EncryptedVerificationRequest(BaseModel):
     """Request model for encrypted blob verification."""
@@ -303,7 +312,9 @@ async def health():
 @app.post("/verify", dependencies=[Depends(verify_bearer_token)])
 async def create_verification(
     request: Request,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    file: Optional[UploadFile] = File(None),
+    metadata: Optional[str] = Form(None)
 ):
     """
     Start comprehensive audio verification.
@@ -352,6 +363,18 @@ async def create_verification(
 
             verification_id = str(uuid.uuid4())
             metadata_dict = encrypted_request.metadata
+
+            # Validate required fields for encrypted decryption
+            if not encrypted_request.sessionKeyData:
+                raise HTTPException(
+                    status_code=400,
+                    detail="sessionKeyData is required for encrypted blob verification"
+                )
+            if not encrypted_request.encryptedObjectBcsHex:
+                raise HTTPException(
+                    status_code=400,
+                    detail="encryptedObjectBcsHex is required for encrypted blob verification"
+                )
 
             logger.info(
                 f"Creating encrypted verification {verification_id} for blob {encrypted_request.walrusBlobId[:16]}..."
@@ -425,7 +448,8 @@ async def create_verification(
             )
 
             # Estimate time based on file size (rough estimate: 1MB per second)
-            estimated_time = min(60, max(10, file_size / (1024 * 1024)))
+            file_size_mb = float(file_size) / (1024 * 1024)
+            estimated_time = min(60.0, max(10.0, file_size_mb))
 
             return JSONResponse(content={
                 "sessionObjectId": session_object_id,
@@ -534,7 +558,8 @@ async def create_verification(
             )
 
             # Estimate time based on file size (rough estimate: 1MB per second)
-            estimated_time = min(60, max(10, file_size / (1024 * 1024)))
+            file_size_mb = float(file_size) / (1024 * 1024)
+            estimated_time = min(60.0, max(10.0, file_size_mb))
 
             return JSONResponse(content={
                 "sessionObjectId": session_object_id,
@@ -685,7 +710,7 @@ async def check_audio(file: UploadFile = File(...)):
         approved = quality_passed and copyright_passed
 
         # Build response
-        response = {
+        response: AudioCheckResponseDict = {
             "approved": approved,
             "quality": quality,
             "copyright": copyright_info,
@@ -694,7 +719,9 @@ async def check_audio(file: UploadFile = File(...)):
 
         # Add quality errors
         if "errors" in quality_result:
-            response["errors"].extend(quality_result["errors"])
+            quality_errors = quality_result.get("errors", [])
+            if isinstance(quality_errors, list):
+                response["errors"].extend(quality_errors)
 
         # Add copyright warning
         if copyright_info.get("detected"):
@@ -748,7 +775,7 @@ async def check_audio_url(url: str):
         copyright_passed = copyright_info.get("passed", True)
         approved = quality_passed and copyright_passed
 
-        response = {
+        response: AudioCheckResponseDict = {
             "approved": approved,
             "quality": quality,
             "copyright": copyright_info,
@@ -756,7 +783,9 @@ async def check_audio_url(url: str):
         }
 
         if "errors" in quality_result:
-            response["errors"].extend(quality_result["errors"])
+            quality_errors = quality_result.get("errors", [])
+            if isinstance(quality_errors, list):
+                response["errors"].extend(quality_errors)
 
         if copyright_info.get("detected"):
             matches = copyright_info.get("matches", [])

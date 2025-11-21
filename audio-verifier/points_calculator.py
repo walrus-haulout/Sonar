@@ -288,17 +288,18 @@ class PointsCalculator:
                 break
 
         if current_tier and current_tier != "Legend":
-            # Find next tier
-            for tier_name, threshold in tiers:
-                if threshold > (tiers[tiers.index((current_tier, next(t for n, t in tiers if n == current_tier)))])
-                    threshold for n, t in tiers if n == current_tier):
-                    next_tier = tier_name
-                    next_threshold = threshold
-                    break
+            # Find next tier - get the tier with threshold higher than current
+            current_idx = next((i for i, (n, _) in enumerate(tiers) if n == current_tier), -1)
+            if current_idx >= 0 and current_idx > 0:
+                next_tier, next_threshold = tiers[current_idx - 1]
 
         if not next_tier:
             # Already at Legend tier
             next_tier = "Legend"
+            next_threshold = 100000
+
+        # Ensure next_threshold is always defined
+        if next_threshold is None:
             next_threshold = 100000
 
         points_needed = max(0, next_threshold - current_points)

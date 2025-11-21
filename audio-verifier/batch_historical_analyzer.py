@@ -12,8 +12,17 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Dict
 
+from models import (
+    normalize_initial_data,
+    normalize_results,
+    normalize_quality,
+    normalize_copyright,
+    normalize_analysis,
+    coerce_list_of_strings,
+    coerce_int
+)
 from semantic_indexer import SemanticIndexer
 from subject_extractor import SubjectExtractor
 from subject_rarity_researcher import SubjectRarityResearcher
@@ -148,16 +157,21 @@ class BatchHistoricalAnalyzer:
         """
         try:
             session_id = str(session["id"])
-            initial_data = json.loads(session["initial_data"]) if session["initial_data"] else {}
-            results = json.loads(session["results"]) if session["results"] else {}
+            initial_data_raw = json.loads(session["initial_data"]) if session["initial_data"] else {}
+            results_raw = json.loads(session["results"]) if session["results"] else {}
 
-            # Extract data
-            title = initial_data.get("title", "")
-            description = initial_data.get("description", "")
-            tags = initial_data.get("tags", [])
-            languages = initial_data.get("languages", [])
-            transcript = results.get("transcript", "")
-            quality_score = results.get("quality", {}).get("score", 0)
+            # Normalize to typed models
+            initial_data = normalize_initial_data(initial_data_raw)
+            results = normalize_results(results_raw)
+
+            # Extract data (now properly typed)
+            title: str = initial_data.get("title", "")
+            description: str = initial_data.get("description", "")
+            tags: list[str] = initial_data.get("tags", [])
+            languages: list[str] = initial_data.get("languages", [])
+            transcript: str = results.get("transcript", "")
+            quality_dict = results.get("quality", {})
+            quality_score = float(quality_dict.get("score", 0)) if isinstance(quality_dict, dict) else 0.0
 
             # Step 1: Extract subject
             subject = await self.subject_extractor.extract_subject(

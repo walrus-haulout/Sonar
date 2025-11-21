@@ -163,10 +163,10 @@ class AirdropCalculator:
             "SELECT COALESCE(MAX(total_points), 1) FROM users"
         )
 
-        if max_points == 0:
+        if max_points is None or max_points == 0:
             return 0.0
 
-        score = min(1.0, total_points / max_points)
+        score = min(1.0, total_points / int(max_points))
         return score
 
     async def _calculate_diversity_score(

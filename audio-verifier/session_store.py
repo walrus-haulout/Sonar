@@ -132,8 +132,8 @@ class SessionStore:
             pool = await self._get_pool()
             
             # Build UPDATE query dynamically based on provided updates
-            update_fields = []
-            update_values = []
+            update_fields: list[str] = []
+            update_values: list[object] = []
             param_num = 1
             
             if "stage" in updates:

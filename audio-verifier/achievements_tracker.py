@@ -301,7 +301,7 @@ class AchievementsTracker:
                 """,
                 wallet_address
             )
-            return rank <= 100
+            return bool(rank and rank <= 100)
 
         elif achievement_key == "diversity_king":
             diversity = await conn.fetchval(
@@ -312,7 +312,7 @@ class AchievementsTracker:
                 """,
                 wallet_address
             )
-            return diversity and diversity >= 20
+            return bool(diversity and diversity >= 20)
 
         elif achievement_key == "perfectionist":
             grade_a_count = await conn.fetchval(
@@ -324,7 +324,7 @@ class AchievementsTracker:
                 """,
                 wallet_address
             )
-            return grade_a_count and grade_a_count >= 5
+            return bool(grade_a_count and grade_a_count >= 5)
 
         elif achievement_key == "bulk_master":
             return first_bulk >= 5
@@ -357,7 +357,7 @@ class AchievementsTracker:
                 """,
                 wallet_address
             )
-            return verified_count and verified_count >= 5
+            return bool(verified_count and verified_count >= 5)
 
         elif achievement_key == "consistent_contributor":
             days = await conn.fetchval(
@@ -368,7 +368,7 @@ class AchievementsTracker:
                 """,
                 wallet_address
             )
-            return days and days >= 30
+            return bool(days and days >= 30)
 
         return False
 

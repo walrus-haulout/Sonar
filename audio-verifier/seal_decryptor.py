@@ -10,8 +10,12 @@ import os
 import subprocess
 import tempfile
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import httpx
+
+if TYPE_CHECKING:
+    from Crypto.Cipher import AES as _AES  # type: ignore
+    from Crypto.Util import Counter as _Counter  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +133,8 @@ def _decrypt_sync(
 
 def _fetch_walrus_blob(blob_id: str) -> bytes:
     """Fetch encrypted blob from Walrus aggregator with retry logic for propagation delays."""
+    if not WALRUS_AGGREGATOR_URL:
+        raise RuntimeError("WALRUS_AGGREGATOR_URL environment variable not set")
     url = f"{WALRUS_AGGREGATOR_URL.rstrip('/')}/v1/blobs/{blob_id}"
 
     headers = {}

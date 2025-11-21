@@ -7,7 +7,7 @@ Identifies bulk submissions (100+ samples) and tracks first bulk contributors.
 import asyncpg
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any, List
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class BulkDetector:
         self,
         subject: str,
         sample_count: int
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Get bulk contributor status for a submission.
 
@@ -153,7 +153,7 @@ class BulkDetector:
     async def get_first_bulk_contributor(
         self,
         subject: str
-    ) -> Optional[Dict[str, any]]:
+    ) -> Optional[Dict[str, Any]]:
         """
         Get information about first bulk contributor for a subject.
 
@@ -200,7 +200,7 @@ class BulkDetector:
         self,
         subject: str,
         limit: int = 10
-    ) -> list:
+    ) -> List:
         """
         Get all bulk submissions for a subject.
 
@@ -247,7 +247,7 @@ class BulkDetector:
             logger.error(f"Error getting bulk submissions: {e}")
             return []
 
-    async def get_bulk_statistics(self) -> Dict[str, any]:
+    async def get_bulk_statistics(self) -> Dict[str, Any]:
         """Get overall bulk submission statistics."""
         try:
             pool = await self._get_pool()

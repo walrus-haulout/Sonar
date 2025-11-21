@@ -8,7 +8,7 @@ Caches results to avoid repeated searches.
 import asyncpg
 import logging
 import json
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 from datetime import datetime, timezone, timedelta
 import os
 
@@ -64,7 +64,7 @@ class SubjectRarityResearcher:
         self,
         subject: str,
         use_web_search: bool = True
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Research rarity of a subject.
 
@@ -161,7 +161,7 @@ class SubjectRarityResearcher:
         self,
         subject: str,
         conn: asyncpg.Connection
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Perform actual web research using omnisearch MCP.
 
@@ -246,7 +246,7 @@ class SubjectRarityResearcher:
         # Default: Standard
         return "Standard"
 
-    async def get_cached_subjects(self) -> Dict[str, Dict[str, any]]:
+    async def get_cached_subjects(self) -> Dict[str, Dict[str, Any]]:
         """Get all cached subject rarity data."""
         try:
             pool = await self._get_pool()

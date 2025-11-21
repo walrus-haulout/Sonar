@@ -3,7 +3,7 @@
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
-from pinecone import Pinecone
+from pinecone import Pinecone  # type: ignore
 
 logger = logging.getLogger(__name__)
 

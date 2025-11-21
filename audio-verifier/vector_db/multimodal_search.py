@@ -28,7 +28,7 @@ class MultiModalSearch:
         query: str,
         top_k: int = 10,
         threshold: float = 0.7
-    ) -> List[Dict[str, any]]:
+    ) -> List[Dict[str, Any]]:
         """
         Search by text query.
 
@@ -51,7 +51,7 @@ class MultiModalSearch:
         audio_embedding: List[float],
         top_k: int = 10,
         threshold: float = 0.7
-    ) -> List[Dict[str, any]]:
+    ) -> List[Dict[str, Any]]:
         """
         Search by audio feature vector.
 

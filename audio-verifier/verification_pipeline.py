@@ -15,7 +15,7 @@ import logging
 import os
 import tempfile
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast, List
 
 from openai import OpenAI
 
@@ -318,23 +318,24 @@ class VerificationPipeline:
 
             # Call Voxtral via OpenRouter chat completions API
             # OpenRouter uses OpenAI-compatible format for multimodal inputs
+            transcription_messages = cast(List[Any], [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Transcribe this audio verbatim. Return only the transcript text, without any additional commentary or formatting."
+                        },
+                        {
+                            "type": "input_audio",
+                            "input_audio": f"data:{audio_mime};base64,{audio_base64}"
+                        }
+                    ]
+                }
+            ])
             completion = self.openai_client.chat.completions.create(
                 model=OPENROUTER_MODELS["TRANSCRIPTION"],
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "Transcribe this audio verbatim. Return only the transcript text, without any additional commentary or formatting."
-                            },
-                            {
-                                "type": "input_audio",
-                                "input_audio": f"data:{audio_mime};base64,{audio_base64}"
-                            }
-                        ]
-                    }
-                ],
+                messages=transcription_messages,
                 max_tokens=4096,
             )
 
@@ -369,19 +370,23 @@ class VerificationPipeline:
 
         try:
             # Call Gemini 2.5 Flash via OpenRouter
+            analysis_messages = cast(List[Any], [
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ])
             completion = self.openai_client.chat.completions.create(
                 model=OPENROUTER_MODELS["ANALYSIS"],
                 max_tokens=2048,
                 temperature=0.3,  # Lower temperature for consistent analysis
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
+                messages=analysis_messages,
             )
 
-            response_text = completion.choices[0].message.content.strip()
+            content = completion.choices[0].message.content
+            if content is None:
+                raise ValueError("No content in API response")
+            response_text = content.strip()
 
             # Parse JSON response
             analysis = self._parse_analysis_response(response_text)
