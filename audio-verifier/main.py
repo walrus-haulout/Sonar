@@ -21,7 +21,14 @@ from audio_checker import AudioQualityChecker
 from fingerprint import CopyrightDetector
 from session_store import SessionStore
 from verification_pipeline import VerificationPipeline
-from seal_decryptor import decrypt_encrypted_blob
+from seal_decryptor import (
+    decrypt_encrypted_blob,
+    SealDecryptionError,
+    SealAuthenticationError,
+    SealValidationError,
+    SealNetworkError,
+    SealTimeoutError
+)
 
 # Configure logging
 logging.basicConfig(
@@ -488,11 +495,33 @@ async def create_verification(
                         detail="Invalid audio blob: missing or corrupted RIFF/WAV header"
                     )
 
+            except SealAuthenticationError as e:
+                # 403: User not authorized (SessionKey invalid/expired, policy denied)
+                logger.warning(f"Decryption authentication failed: {e.message}")
+                raise HTTPException(status_code=403, detail=f"Decryption failed: {e.message}")
+            except SealValidationError as e:
+                # 400: Invalid input (malformed encrypted data, missing SessionKey)
+                logger.warning(f"Decryption validation failed: {e.message}")
+                raise HTTPException(status_code=400, detail=f"Invalid encrypted blob: {e.message}")
+            except SealNetworkError as e:
+                # 502: Transient network error (key server unreachable)
+                logger.warning(f"Decryption network error (transient): {e.message}")
+                raise HTTPException(status_code=502, detail=f"Decryption service temporarily unavailable: {e.message}")
+            except SealTimeoutError as e:
+                # 504: Operation timed out
+                logger.warning(f"Decryption timeout: {e.message}")
+                raise HTTPException(status_code=504, detail=f"Decryption operation timed out: {e.message}")
+            except SealDecryptionError as e:
+                # Other Seal errors - use suggested HTTP status from exception
+                logger.error(f"Decryption failed ({e.error_type}): {e.message}")
+                raise HTTPException(status_code=e.http_status, detail=f"Decryption failed: {e.message}")
             except ValueError as e:
+                # Fallback for any unhandled ValueError
                 raise HTTPException(status_code=400, detail=f"Invalid encrypted blob data: {str(e)}")
-            except RuntimeError as e:
-                logger.error(f"Decryption failed: {e}", exc_info=True)
-                raise HTTPException(status_code=502, detail=f"Failed to decrypt encrypted blob: {str(e)}")
+            except Exception as e:
+                # Catch any other unexpected errors
+                logger.error(f"Unexpected error during decryption: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Unexpected error during decryption")
 
             # Get audio duration from decrypted file
             try:
