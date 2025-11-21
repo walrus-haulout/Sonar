@@ -31,6 +31,18 @@ function getErrorMessage(error: unknown): string {
 }
 
 /**
+ * Type guard to validate PerFileMetadata structure
+ */
+function isValidPerFileMetadata(pfm: unknown): pfm is { fileId: string; title?: string; description?: string } {
+  return (
+    pfm !== null &&
+    typeof pfm === 'object' &&
+    !Array.isArray(pfm) &&
+    typeof (pfm as any).fileId === 'string'
+  );
+}
+
+/**
  * Sanitize metadata to remove non-serializable properties (DOM nodes, React Fibers, etc.)
  * Whitelists only known-good DatasetMetadata fields to prevent JSON.stringify errors
  */
@@ -91,15 +103,12 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   // Per-file metadata array - validate with Array.isArray before .map()
   if (Array.isArray(metadata.perFileMetadata) && metadata.perFileMetadata.length > 0) {
     const filtered = metadata.perFileMetadata
-      .filter((pfm): pfm is Record<string, unknown> =>
-        pfm !== null && typeof pfm === 'object' && !Array.isArray(pfm)
-      )
+      .filter(isValidPerFileMetadata)
       .map((pfm) => ({
-        fileId: typeof pfm.fileId === 'string' ? pfm.fileId : undefined,
+        fileId: pfm.fileId,
         title: typeof pfm.title === 'string' ? pfm.title : undefined,
         description: typeof pfm.description === 'string' ? pfm.description : undefined,
-      }))
-      .filter((pfm) => pfm.fileId !== undefined); // Must have fileId
+      }));
 
     if (filtered.length > 0) {
       result.perFileMetadata = filtered;
