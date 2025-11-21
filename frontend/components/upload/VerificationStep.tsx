@@ -61,10 +61,23 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
     return filtered.length > 0 ? filtered : undefined;
   };
 
+  // Validate required fields strictly
+  if (metadata.consent !== true) {
+    throw new Error('Consent must be explicitly granted before verification');
+  }
+
+  if (typeof metadata.title !== 'string' || metadata.title.length === 0) {
+    throw new Error('Title is required and must be a non-empty string');
+  }
+
+  if (typeof metadata.description !== 'string' || metadata.description.length === 0) {
+    throw new Error('Description is required and must be a non-empty string');
+  }
+
   const result: DatasetMetadata = {
-    title: typeof metadata.title === 'string' ? metadata.title : '',
-    description: typeof metadata.description === 'string' ? metadata.description : '',
-    consent: Boolean(metadata.consent),
+    title: metadata.title,
+    description: metadata.description,
+    consent: true, // Safe to set true only after validation above
   };
 
   // Languages array - only valid strings, not forwarded reference
@@ -94,7 +107,7 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Audio quality object - validate type before accessing properties
-  if (metadata.audioQuality !== null && typeof metadata.audioQuality === 'object') {
+  if (metadata.audioQuality !== null && typeof metadata.audioQuality === 'object' && !Array.isArray(metadata.audioQuality)) {
     const aq = metadata.audioQuality as Record<string, unknown>;
     const audioQuality: any = {};
 
@@ -110,7 +123,7 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Speakers object - validate type and validate speakers array with Array.isArray
-  if (metadata.speakers !== null && typeof metadata.speakers === 'object') {
+  if (metadata.speakers !== null && typeof metadata.speakers === 'object' && !Array.isArray(metadata.speakers)) {
     const sp = metadata.speakers as Record<string, unknown>;
     const speakers: any = {};
 
@@ -129,7 +142,7 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Categorization object - validate type before accessing properties
-  if (metadata.categorization !== null && typeof metadata.categorization === 'object') {
+  if (metadata.categorization !== null && typeof metadata.categorization === 'object' && !Array.isArray(metadata.categorization)) {
     const cat = metadata.categorization as Record<string, unknown>;
     const categorization: any = {};
 
