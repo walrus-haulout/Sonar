@@ -221,7 +221,7 @@ export function VerificationStep({
   const [errorDetails, setErrorDetails] = useState<any>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
+  const [sessionKeyExport, setSessionKeyExport] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
 
@@ -277,13 +277,27 @@ export function VerificationStep({
       // Export session immediately for backend use (ephemeral, no storage needed)
       const exported = session.export();
 
+      // Stringify immediately with Uint8Array replacer - ensures clean, JSON-safe string
+      let sessionKeyJson: string;
+      try {
+        sessionKeyJson = JSON.stringify(exported, (_k, v) =>
+          v instanceof Uint8Array ? Array.from(v) : v
+        );
+      } catch (err) {
+        const serializationError = getErrorMessage(err);
+        console.error('[VerificationStep] Failed to serialize session:', serializationError);
+        setErrorMessage(`Session encoding failed: ${serializationError}`);
+        setIsCreatingSession(false);
+        return;
+      }
+
       console.log('[VerificationStep] Session created and exported (ephemeral)');
-      setSessionKeyExport(exported);
+      setSessionKeyExport(sessionKeyJson);
       setVerificationState('running');
       setIsCreatingSession(false);
 
       // Start verification with ephemeral session data
-      startVerification(exported);
+      startVerification();
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
       const errorMsg = getErrorMessage(error);
@@ -304,17 +318,12 @@ export function VerificationStep({
     }
   };
 
-  const startVerification = async (maybeSessionKey?: any) => {
+  const startVerification = async () => {
     console.log('[VerificationStep] Starting verification...');
     setErrorMessage(null);
     setErrorDetails(null);
 
-    // Detect if a click event was passed instead of sessionKey
-    // (e.g., from onClick handlers that don't prevent event propagation)
-    const isClickEvent = maybeSessionKey?.preventDefault || maybeSessionKey?.target;
-    const sessionKeyData = isClickEvent ? sessionKeyExport : (maybeSessionKey ?? sessionKeyExport);
-
-    if (!sessionKeyData) {
+    if (!sessionKeyExport) {
       setErrorMessage('Session expired. Please authorize again.');
       setVerificationState('waiting-auth');
       return;
@@ -349,7 +358,7 @@ export function VerificationStep({
       setTotalFiles(1);
       setCurrentFileIndex(0);
 
-      await verifyEncryptedBlob(blobId, identity, sessionKeyData);
+      await verifyEncryptedBlob(blobId, identity);
     } else {
       // Legacy file upload flow (for backwards compatibility)
       if (!audioFile && (!audioFiles || audioFiles.length === 0)) {
@@ -442,11 +451,10 @@ export function VerificationStep({
 
   const verifyEncryptedBlob = async (
     walrusBlobId: string,
-    sealIdentity: string,
-    sessionKeyData?: any
+    sealIdentity: string
   ) => {
     try {
-      if (!sessionKeyData) {
+      if (!sessionKeyExport) {
         throw new Error('No active session. Please authorize verification first.');
       }
 
@@ -455,27 +463,17 @@ export function VerificationStep({
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
-      // Prepare sessionKeyData - no sanitization, keep intact
-      let sessionKeyJson: string;
-      try {
-        // sessionKeyData from session.export() is an ExportedSessionKey with Uint8Array fields
-        sessionKeyJson = typeof sessionKeyData === 'string'
-          ? sessionKeyData
-          : JSON.stringify(sessionKeyData, (_k, v) =>
-              v instanceof Uint8Array ? Array.from(v) : v
-            );
-      } catch (err) {
-        throw new Error(`Failed to serialize sessionKeyData: ${getErrorMessage(err)}`);
-      }
+      // sessionKeyExport is already stringified with Uint8Array replacer in handleAuthorizeVerification
+      // Use it directly - no further serialization needed
+      const sessionKeyJson = sessionKeyExport;
 
       // Development: log sessionKeyData structure for debugging
       if (process.env.NODE_ENV === 'development') {
         try {
-          const parsed = typeof sessionKeyData === 'string' ? JSON.parse(sessionKeyData) : sessionKeyData;
+          const parsed = JSON.parse(sessionKeyJson);
           console.log('[VerificationStep] sessionKeyData prepared:', {
             keyServers: parsed?.keyServers?.length,
             threshold: parsed?.threshold,
-            isString: typeof sessionKeyData === 'string',
           });
         } catch {
           console.warn('[VerificationStep] Could not parse sessionKeyData for logging');
