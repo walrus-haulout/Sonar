@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
-import { CLOCK_OBJECT_ID } from '@sonar/seal';
 import { cn } from '@/lib/utils';
 import { useSeal } from '@/hooks/useSeal';
 import {
@@ -67,7 +66,7 @@ export function VerificationStep({
 }: VerificationStepProps) {
   // Hooks for wallet interaction
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { createSession, sessionKey, decrypt } = useSeal();
+  const { createSession } = useSeal();
 
   // State
   const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
@@ -75,7 +74,6 @@ export function VerificationStep({
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [dataAccessAcknowledged, setDataAccessAcknowledged] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
-    { name: 'decryption', status: 'pending', progress: 0 },
     { name: 'quality', status: 'pending', progress: 0 },
     { name: 'copyright', status: 'pending', progress: 0 },
     { name: 'transcription', status: 'pending', progress: 0 },
@@ -138,12 +136,14 @@ export function VerificationStep({
         },
       });
 
-      console.log('[VerificationStep] Session created and cached in IndexedDB');
+      // Export session immediately for backend use (ephemeral, no storage needed)
+      const sessionKeyData = session.export();
+      console.log('[VerificationStep] Session created and exported (ephemeral)');
       setVerificationState('running');
       setIsCreatingSession(false);
 
-      // Now start the actual verification with session key
-      startVerification();
+      // Start verification with ephemeral session data
+      startVerification(sessionKeyData);
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
       const errorMsg = getErrorMessage(error);
@@ -164,7 +164,7 @@ export function VerificationStep({
     }
   };
 
-  const startVerification = async () => {
+  const startVerification = async (sessionKeyData?: any) => {
     console.log('[VerificationStep] Starting verification...');
     setErrorMessage(null);
     setErrorDetails(null);
@@ -198,7 +198,7 @@ export function VerificationStep({
       setTotalFiles(1);
       setCurrentFileIndex(0);
 
-      await verifyEncryptedBlob(blobId, identity);
+      await verifyEncryptedBlob(blobId, identity, sessionKeyData);
     } else {
       // Legacy file upload flow (for backwards compatibility)
       if (!audioFile && (!audioFiles || audioFiles.length === 0)) {
@@ -289,135 +289,18 @@ export function VerificationStep({
 
   const verifyEncryptedBlob = async (
     walrusBlobId: string,
-    sealIdentity: string
+    sealIdentity: string,
+    sessionKeyData?: any
   ) => {
     try {
-      if (!sessionKey) {
+      if (!sessionKeyData) {
         throw new Error('No active session. Please authorize verification first.');
       }
 
-      console.log('[VerificationStep] Fetching encrypted blob from Walrus:', walrusBlobId);
-
-      // Stage 1: Fetch encrypted blob from Walrus (via proxy endpoint)
-      setStages((prev) =>
-        prev.map((stage) =>
-          stage.name === 'decryption'
-            ? { ...stage, status: 'in_progress', progress: 10 }
-            : stage
-        )
-      );
-
-      const blobResponse = await fetch(`/api/edge/walrus/proxy/${walrusBlobId}`);
-
-      if (!blobResponse.ok) {
-        throw new Error(
-          `Failed to fetch encrypted blob from Walrus: ${blobResponse.statusText}`
-        );
-      }
-
-      const encryptedArrayBuffer = await blobResponse.arrayBuffer();
-      const encryptedBlob = new Uint8Array(encryptedArrayBuffer);
-
-      console.log(
-        '[VerificationStep] Encrypted blob fetched, size:',
-        encryptedBlob.length,
-        'bytes'
-      );
-
-      // Validate blob format before decryption
-      if (encryptedBlob.length < 4) {
-        throw new Error(
-          `Invalid encrypted blob: too small (${encryptedBlob.length} bytes, need at least 4)`
-        );
-      }
-
-      // Check envelope format early
-      const view = new DataView(
-        encryptedBlob.buffer,
-        encryptedBlob.byteOffset,
-        4
-      );
-      const keyLength = view.getUint32(0, true); // little-endian
-
-      console.log('[VerificationStep] Blob format validation:', {
-        blobSize: encryptedBlob.length,
-        firstFourBytes: keyLength,
-        likelyEnvelope: keyLength >= 200 && keyLength <= 400,
-        envelopeSizeCheck: encryptedBlob.length > keyLength + 4,
-      });
-
-      if (keyLength >= 200 && keyLength <= 400 && encryptedBlob.length > keyLength + 4) {
-        console.log(
-          '[VerificationStep] Envelope format detected - expecting decryptEnvelope to be used'
-        );
-      } else if (keyLength > 100000 || keyLength < 0) {
-        console.warn(
-          '[VerificationStep] WARNING: Invalid key length detected. Blob might be corrupted or not in envelope format.',
-          { keyLength, blobSize: encryptedBlob.length }
-        );
-      }
-
-      // Stage 2: Decrypt using sessionKey
-      setStages((prev) =>
-        prev.map((stage) =>
-          stage.name === 'decryption'
-            ? { ...stage, status: 'in_progress', progress: 30 }
-            : stage
-        )
-      );
-
-      console.log('[VerificationStep] Decrypting blob with sessionKey...');
-
-      // For uploader verification, use open access policy
-      // This allows the uploader to verify their encrypted content before blockchain submission
-      // After submission, access switches to HybridPolicy with purchase/admin controls
-      // Pass upload timestamp and Clock for time-window validation (15 minutes)
-      // Subtract 60 seconds buffer to account for client-validator clock skew
-      const uploadTimestampMs = Date.now() - 60000;
-      const decryptionResult = await decrypt(
-        encryptedBlob,
-        sealIdentity,
-        {
-          policyModule: 'open_access_policy',
-          policyArgs: [
-            uploadTimestampMs.toString(),  // upload_timestamp_ms parameter (milliseconds since epoch)
-            CLOCK_OBJECT_ID,               // Sui Clock shared object ID
-          ],
-        },
-        (progress) => {
-          // Update progress: progress is 0-1, map to 30-80% for decryption stage
-          const progressPercent = 30 + Math.floor(progress * 50);
-          setStages((prev) =>
-            prev.map((stage) =>
-              stage.name === 'decryption'
-                ? { ...stage, progress: progressPercent }
-                : stage
-            )
-          );
-        }
-      );
-
-      console.log(
-        '[VerificationStep] Blob decrypted successfully, size:',
-        decryptionResult.data.length,
-        'bytes'
-      );
-
-      // Mark decryption as complete
-      setStages((prev) =>
-        prev.map((stage) =>
-          stage.name === 'decryption'
-            ? { ...stage, status: 'completed', progress: 100 }
-            : stage
-        )
-      );
-
-      // Stage 3: Send verification request to backend
-      // We send the blob ID, identity, and SessionKey for user-authorized decryption
       console.log('[VerificationStep] Sending verification request to backend');
 
-      // Export SessionKey for backend to use during decryption
-      const sessionKeyData = sessionKey.export();
+      // Backend will handle blob fetch and decryption
+      // We only need to send sessionKeyData for backend to decrypt
 
       const response = await fetch('/api/verify', {
         method: 'POST',
@@ -627,7 +510,7 @@ export function VerificationStep({
     const currentStage = session.stage;
     const progress = session.progress || 0;
 
-    const stageOrder = ['decryption', 'quality', 'copyright', 'transcription', 'analysis'];
+    const stageOrder = ['quality', 'copyright', 'transcription', 'analysis'];
     const currentIndex = stageOrder.indexOf(currentStage);
 
     setStages((prev) =>
@@ -644,11 +527,6 @@ export function VerificationStep({
   };
 
   const stageConfig = {
-    decryption: {
-      icon: <Shield className="w-5 h-5" />,
-      label: 'Decryption',
-      description: 'Decrypting audio using your session key',
-    },
     quality: {
       icon: <Music className="w-5 h-5" />,
       label: 'Quality Check',
