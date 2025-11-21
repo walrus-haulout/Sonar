@@ -116,9 +116,21 @@ export function useWalrusParallelUpload() {
           return { response, attempt };
         }
 
+        // Log non-200 response for debugging
+        let errorDetail = response.statusText;
+        try {
+          const errorBody = await response.json();
+          errorDetail = errorBody.error || errorBody.details || errorDetail;
+        } catch {
+          // Fallback to statusText if JSON parsing fails
+        }
+
+        console.warn(`[Upload] Attempt ${attempt}/${maxRetries} failed with HTTP ${response.status}: ${errorDetail}`);
+
         // Non-200 response, retry if not the last attempt
         if (attempt < maxRetries) {
           const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
+          console.log(`[Upload] Retrying in ${delayMs}ms...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           continue;
         }
@@ -172,10 +184,25 @@ export function useWalrusParallelUpload() {
       formData.append('metadata', JSON.stringify(metadata));
     }
 
+    // Log FormData for debugging
+    const fileSizeMB = (encryptedBlob.size / (1024 * 1024)).toFixed(2);
+    console.log(`[Upload] Uploading main blob: ${(options.fileName ?? 'encrypted-audio.bin')} (${fileSizeMB}MB)`, {
+      sealed_policy_id: seal_policy_id.substring(0, 20) + '...',
+      epochs: '26',
+      hasMetadata: !!metadata,
+    });
+
     const { response, attempt } = await fetchUploadWithRetry(formData, 10);
 
     if (!response.ok) {
-      throw new Error(`Publisher upload failed on attempt ${attempt}: ${response.statusText}`);
+      let errorMessage = `Publisher upload failed on attempt ${attempt}: ${response.statusText}`;
+      try {
+        const errorBody = await response.json();
+        errorMessage = errorBody.error || errorBody.details || errorMessage;
+      } catch {
+        // Fallback to statusText if JSON parsing fails
+      }
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -195,10 +222,21 @@ export function useWalrusParallelUpload() {
       const previewFileName = inferFileName(options.previewFileName ?? 'preview', effectivePreviewMimeType);
       previewFormData.append('file', previewBlob, previewFileName);
 
+      // Log preview upload for debugging
+      const previewSizeMB = (previewBlob.size / (1024 * 1024)).toFixed(2);
+      console.log(`[Upload] Uploading preview blob: ${previewFileName} (${previewSizeMB}MB)`);
+
       const { response: previewResponse, attempt } = await fetchUploadWithRetry(previewFormData, 10);
 
       if (!previewResponse.ok) {
-        throw new Error(`Preview upload failed on attempt ${attempt}: ${previewResponse.statusText}`);
+        let previewErrorMessage = `Preview upload failed on attempt ${attempt}: ${previewResponse.statusText}`;
+        try {
+          const errorBody = await previewResponse.json();
+          previewErrorMessage = errorBody.error || errorBody.details || previewErrorMessage;
+        } catch {
+          // Fallback to statusText if JSON parsing fails
+        }
+        throw new Error(previewErrorMessage);
       }
 
       const previewResult = await previewResponse.json();

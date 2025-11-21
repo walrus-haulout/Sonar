@@ -87,7 +87,22 @@ export async function POST(request: NextRequest) {
     const epochsParam = formData.get('epochs');
     const metadataParam = formData.get('metadata'); // JSON string
 
+    // Log incoming request for debugging
+    console.log('[Walrus Upload API] Received request:', {
+      hasFile: !!file,
+      isBlob: file instanceof Blob,
+      fileSize: file instanceof Blob ? file.size : 'N/A',
+      fileSizeMB: file instanceof Blob ? (file.size / (1024 * 1024)).toFixed(2) : 'N/A',
+      hasSealPolicyId: !!sealPolicyId,
+      sealPolicyIdPreview: sealPolicyId ? `${String(sealPolicyId).substring(0, 20)}...` : 'N/A',
+      epochs: epochsParam || 'default',
+      hasMetadata: !!metadataParam,
+      walrusPublisherUrl: WALRUS_PUBLISHER_URL,
+      hasBlockberryKey: !!BLOCKBERRY_API_KEY,
+    });
+
     if (!file || !(file instanceof Blob)) {
+      console.warn('[Walrus Upload API] Validation failed: No file or invalid file type');
       return NextResponse.json(
         { error: 'No file provided or invalid file' },
         { status: 400 }
@@ -95,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!sealPolicyId) {
+      console.warn('[Walrus Upload API] Validation failed: Missing seal_policy_id');
       return NextResponse.json(
         { error: 'Missing seal_policy_id' },
         { status: 400 }
@@ -115,11 +131,17 @@ export async function POST(request: NextRequest) {
     const maxSize = 1 * 1024 * 1024 * 1024; // 1 GiB
     if (file.size > maxSize) {
       const fileSizeGB = (file.size / (1024 * 1024 * 1024)).toFixed(2);
+      console.warn('[Walrus Upload API] Validation failed: File too large', {
+        actualSizeGB: fileSizeGB,
+        maxSizeGB: '1',
+      });
       return NextResponse.json(
         { error: `File too large (${fileSizeGB} GiB). Maximum size is 1 GiB for MVP` },
         { status: 400 }
       );
     }
+
+    console.log('[Walrus Upload API] Validation passed, forwarding to Walrus publisher');
 
     // Build Walrus URL with epochs parameter (default: 1 year = 26 epochs)
     const epochs = epochsParam ? parseInt(epochsParam.toString(), 10) : DEFAULT_EPOCHS;
@@ -147,16 +169,38 @@ export async function POST(request: NextRequest) {
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
-      console.error(`Walrus upload failed on attempt ${retryAttempt}:`, errorText);
+
+      // Try to parse error as JSON for better diagnostics
+      let parsedError: any = null;
+      try {
+        parsedError = JSON.parse(errorText);
+      } catch {
+        // Not JSON, use raw text
+      }
+
+      const errorDetails = parsedError?.error || parsedError?.details || errorText;
+      console.error(`[Walrus Upload] Failed on attempt ${retryAttempt}/${10}:`, {
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+        error: errorDetails,
+        fullResponse: parsedError || errorText,
+        walrusUrl: walrusUrl.split('?')[0], // Hide epochs in logs
+        hasBlockberryKey: !!BLOCKBERRY_API_KEY,
+      });
+
       return NextResponse.json(
         {
           error: 'Failed to upload to Walrus',
-          details: errorText,
+          details: errorDetails,
           retryAttempt,
         },
         { status: uploadResponse.status }
       );
     }
+
+    console.log('[Walrus Upload] Successfully uploaded blob to Walrus publisher', {
+      retryAttempt,
+    });
 
     const walrusResult = await uploadResponse.json();
 
