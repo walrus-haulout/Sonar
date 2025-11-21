@@ -221,7 +221,7 @@ export function VerificationStep({
   const [errorDetails, setErrorDetails] = useState<any>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [sessionKeyExport, setSessionKeyExport] = useState<string | null>(null);
+  const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
 
@@ -276,17 +276,14 @@ export function VerificationStep({
 
       // Export session immediately for backend use (ephemeral, no storage needed)
       const exported = session.export();
-      const sessionKeyJson = typeof exported === 'string'
-        ? exported
-        : JSON.stringify(exported);
 
       console.log('[VerificationStep] Session created and exported (ephemeral)');
-      setSessionKeyExport(sessionKeyJson);
+      setSessionKeyExport(exported);
       setVerificationState('running');
       setIsCreatingSession(false);
 
       // Start verification with ephemeral session data
-      startVerification(sessionKeyJson);
+      startVerification(exported);
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
       const errorMsg = getErrorMessage(error);
@@ -461,10 +458,12 @@ export function VerificationStep({
       // Prepare sessionKeyData - no sanitization, keep intact
       let sessionKeyJson: string;
       try {
-        // sessionKeyData from session.export() is already a string representation of ExportedSessionKey
+        // sessionKeyData from session.export() is an ExportedSessionKey with Uint8Array fields
         sessionKeyJson = typeof sessionKeyData === 'string'
           ? sessionKeyData
-          : JSON.stringify(sessionKeyData);
+          : JSON.stringify(sessionKeyData, (_k, v) =>
+              v instanceof Uint8Array ? Array.from(v) : v
+            );
       } catch (err) {
         throw new Error(`Failed to serialize sessionKeyData: ${getErrorMessage(err)}`);
       }
