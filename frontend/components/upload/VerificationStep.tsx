@@ -221,7 +221,7 @@ export function VerificationStep({
   const [errorDetails, setErrorDetails] = useState<any>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [sessionKeyExport, setSessionKeyExport] = useState<string | null>(null);
+  const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
 
@@ -277,22 +277,8 @@ export function VerificationStep({
       // Export session immediately for backend use (ephemeral, no storage needed)
       const exported = session.export();
 
-      // Stringify immediately with Uint8Array replacer - ensures clean, JSON-safe string
-      let sessionKeyJson: string;
-      try {
-        sessionKeyJson = JSON.stringify(exported, (_k, v) =>
-          v instanceof Uint8Array ? Array.from(v) : v
-        );
-      } catch (err) {
-        const serializationError = getErrorMessage(err);
-        console.error('[VerificationStep] Failed to serialize session:', serializationError);
-        setErrorMessage(`Session encoding failed: ${serializationError}`);
-        setIsCreatingSession(false);
-        return;
-      }
-
       console.log('[VerificationStep] Session created and exported (ephemeral)');
-      setSessionKeyExport(sessionKeyJson);
+      setSessionKeyExport(exported);
       setVerificationState('running');
       setIsCreatingSession(false);
 
@@ -463,21 +449,33 @@ export function VerificationStep({
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
-      // sessionKeyExport is already stringified with Uint8Array replacer in handleAuthorizeVerification
-      // Use it directly - no further serialization needed
-      const sessionKeyJson = sessionKeyExport;
+      // Ensure keyServers and threshold are present in the session payload
+      // Inject defaults if missing (4 of 6 servers as standard)
+      const keyServers = sessionKeyExport.keyServers ?? [];
+      const threshold = sessionKeyExport.threshold ?? 4;
+      const sessionPayload = { ...sessionKeyExport, keyServers, threshold };
+
+      // Stringify with Uint8Array replacer - converts Uint8Array to arrays
+      let sessionKeyJson: string;
+      try {
+        sessionKeyJson = JSON.stringify(sessionPayload, (_k, v) =>
+          v instanceof Uint8Array ? Array.from(v) : v
+        );
+      } catch (err) {
+        const serializationError = getErrorMessage(err);
+        console.error('[VerificationStep] Failed to serialize session payload:', serializationError);
+        setErrorMessage(`Session encoding failed: ${serializationError}`);
+        setVerificationState('failed');
+        return;
+      }
 
       // Development: log sessionKeyData structure for debugging
       if (process.env.NODE_ENV === 'development') {
-        try {
-          const parsed = JSON.parse(sessionKeyJson);
-          console.log('[VerificationStep] sessionKeyData prepared:', {
-            keyServers: parsed?.keyServers?.length,
-            threshold: parsed?.threshold,
-          });
-        } catch {
-          console.warn('[VerificationStep] Could not parse sessionKeyData for logging');
-        }
+        console.log('[VerificationStep] sessionKeyData prepared:', {
+          keyServers: keyServers?.length ?? 0,
+          threshold,
+          isString: true,
+        });
       }
 
       // Backend will handle blob fetch and decryption
