@@ -21,6 +21,7 @@ import {
 import { suiClient, CHAIN_CONFIG, NETWORK } from '@/lib/sui/client';
 
 const RAW_KEY_SERVERS = process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS || '';
+const RAW_SEAL_THRESHOLD = process.env.NEXT_PUBLIC_SEAL_THRESHOLD || '4';
 
 function parseKeyServers(value: string) {
   const servers = value
@@ -35,6 +36,15 @@ function parseKeyServers(value: string) {
   return servers;
 }
 
+function parseThreshold(value: string): number {
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    console.warn(`Invalid NEXT_PUBLIC_SEAL_THRESHOLD "${value}", using default 4`);
+    return 4;
+  }
+  return parsed;
+}
+
 /**
  * Custom hook for Mysten Seal encryption/decryption
  * Manages SealClient, session keys, and provides encryption/decryption methods
@@ -47,6 +57,7 @@ export function useSeal() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyServers = useMemo(() => parseKeyServers(RAW_KEY_SERVERS), []);
+  const threshold = useMemo(() => parseThreshold(RAW_SEAL_THRESHOLD), []);
   const hasKeyServersConfigured = keyServers.length > 0;
 
   // Initialize SealClient once
@@ -60,15 +71,11 @@ export function useSeal() {
     }
 
     try {
-      // Set threshold for 4-of-6 key servers (production redundancy)
-      // Up to 2 servers can fail and system still works
-      const threshold = 4;
-
       const client = createSonarSealClient({
         suiClient: suiClient as SuiClient,
         network: NETWORK as 'testnet' | 'mainnet',
         keyServers,
-        threshold, // Explicitly set threshold based on available servers
+        threshold, // Explicitly set threshold based on environment config
       });
       setSealClient(client);
       setIsInitialized(true);
@@ -77,7 +84,7 @@ export function useSeal() {
       console.error('Failed to initialize Seal client:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize Seal');
     }
-  }, [hasKeyServersConfigured, keyServers]);
+  }, [hasKeyServersConfigured, keyServers, threshold]);
 
   // Try to restore session from cache when account is available
   useEffect(() => {
@@ -292,6 +299,8 @@ export function useSeal() {
     // Raw objects (for advanced usage)
     sealClient,
     sessionKey,
+    keyServers, // Expose configured key servers for downstream consumers
+    threshold, // Environment-driven threshold used to initialize the client
   };
 }
 

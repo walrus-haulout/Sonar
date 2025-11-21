@@ -203,7 +203,7 @@ export function VerificationStep({
 }: VerificationStepProps) {
   // Hooks for wallet interaction
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { createSession } = useSeal();
+  const { createSession, keyServers: configKeyServers, threshold: configThreshold } = useSeal();
 
   // State
   const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
@@ -450,9 +450,9 @@ export function VerificationStep({
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
       // Ensure keyServers and threshold are present in the session payload
-      // Inject defaults if missing (4 of 6 servers as standard)
-      const keyServers = sessionKeyExport.keyServers ?? [];
-      const threshold = sessionKeyExport.threshold ?? 4;
+      // Use values from export, or fall back to useSeal config, then hardcoded defaults
+      const keyServers = sessionKeyExport.keyServers ?? configKeyServers ?? [];
+      const threshold = sessionKeyExport.threshold ?? configThreshold ?? 4;
       const sessionPayload = { ...sessionKeyExport, keyServers, threshold };
 
       // Stringify with Uint8Array replacer - converts Uint8Array to arrays
