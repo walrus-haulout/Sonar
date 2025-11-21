@@ -282,16 +282,48 @@ export function useSeal() {
     [sealClient, sessionKey]
   );
 
+  /**
+   * Get or create session - tries cache first, then creates if needed
+   * Avoids prompting user if valid session already exists
+   */
+  const getOrCreateSessionExport = useCallback(
+    async (options: {
+      ttlMin?: number;
+      signMessage: (message: Uint8Array) => Promise<{ signature: string }>;
+    }) => {
+      // Check if we have a valid cached session
+      if (sessionKey && isSessionValid(sessionKey)) {
+        console.log('[useSeal] Valid session found, returning cached export');
+        return sessionKey.export();
+      }
+
+      // No valid session, create new one
+      const newSession = await createNewSession(options);
+      return newSession.export();
+    },
+    [sessionKey, createNewSession]
+  );
+
+  /**
+   * Check if current session is valid
+   */
+  const isCurrentSessionValid = useCallback((): boolean => {
+    return sessionKey ? isSessionValid(sessionKey) : false;
+  }, [sessionKey]);
+
   return {
     // State
     isInitialized,
     isInitializing,
     hasSession: !!sessionKey,
+    hasValidSession: sessionKey ? isSessionValid(sessionKey) : false,
     isReady: isInitialized && !!sealClient,
     error,
 
     // Methods
     createSession: createNewSession,
+    getOrCreateSessionExport,
+    isCurrentSessionValid,
     restoreSession: restoreSessionFromCache,
     encrypt,
     decrypt,

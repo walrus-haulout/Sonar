@@ -6,6 +6,7 @@ import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyri
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { cn } from '@/lib/utils';
 import { useSeal } from '@/hooks/useSeal';
+import { isSessionValid } from '@sonar/seal';
 import {
   DatasetMetadata,
   VerificationResult,
@@ -203,7 +204,7 @@ export function VerificationStep({
 }: VerificationStepProps) {
   // Hooks for wallet interaction
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { createSession, keyServers: configKeyServers, threshold: configThreshold } = useSeal();
+  const { getOrCreateSessionExport, sessionKey, keyServers: configKeyServers, threshold: configThreshold } = useSeal();
 
   // State
   const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
@@ -224,6 +225,8 @@ export function VerificationStep({
   const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
+  const isAuthorizingRef = useRef(false); // Guard against duplicate authorization attempts
+  const isVerifyingRef = useRef(false); // Guard against duplicate verification attempts
 
   // Auto-start verification when component mounts
   useEffect(() => {
@@ -254,19 +257,47 @@ export function VerificationStep({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reset verification guard when verification completes or fails
+  useEffect(() => {
+    if (verificationState === 'failed' || verificationState === 'completed') {
+      isVerifyingRef.current = false;
+    }
+  }, [verificationState]);
+
   /**
    * Request user authorization for verification
-   * Creates a SessionKey with wallet signature
+   * Reuses existing valid session if available, creates new one only if needed
    */
   const handleAuthorizeVerification = async () => {
+    // Guard against duplicate authorization attempts
+    if (isAuthorizingRef.current) {
+      console.log('[VerificationStep] Authorization already in progress, skipping duplicate');
+      return;
+    }
+
+    isAuthorizingRef.current = true;
+
     console.log('[VerificationStep] Requesting user authorization...');
     setIsCreatingSession(true);
     setErrorMessage(null);
 
     try {
-      // Create session with extended TTL for verification (30 min)
+      // Check if we already have a valid session - skip wallet prompt if so
+      if (sessionKey && isSessionValid(sessionKey)) {
+        console.log('[VerificationStep] Valid session exists, using cached session');
+        const exported = sessionKey.export();
+        console.log('[VerificationStep] Session export from cache');
+        setSessionKeyExport(exported);
+        setVerificationState('running');
+        setIsCreatingSession(false);
+        isAuthorizingRef.current = false;
+        startVerification();
+        return;
+      }
+
+      // No valid session, create new one with extended TTL for verification (30 min)
       // Verification can take time on large files, so we need a longer window
-      const session = await createSession({
+      const exported = await getOrCreateSessionExport({
         ttlMin: 30,  // Extended from default 10 min for verification flow
         signMessage: async (message: Uint8Array) => {
           const result = await signPersonalMessage({ message });
@@ -274,15 +305,13 @@ export function VerificationStep({
         },
       });
 
-      // Export session immediately for backend use (ephemeral, no storage needed)
-      const exported = session.export();
-
-      console.log('[VerificationStep] Session created and exported (ephemeral)');
+      console.log('[VerificationStep] Session obtained (cached or new)');
       setSessionKeyExport(exported);
       setVerificationState('running');
       setIsCreatingSession(false);
+      isAuthorizingRef.current = false;
 
-      // Start verification with ephemeral session data
+      // Start verification with session data
       startVerification();
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
@@ -301,10 +330,19 @@ export function VerificationStep({
 
       setErrorMessage(displayError);
       setIsCreatingSession(false);
+      isAuthorizingRef.current = false;
     }
   };
 
   const startVerification = async () => {
+    // Guard against duplicate verification attempts
+    if (isVerifyingRef.current) {
+      console.log('[VerificationStep] Verification already in progress, skipping duplicate');
+      return;
+    }
+
+    isVerifyingRef.current = true;
+
     console.log('[VerificationStep] Starting verification...');
     setErrorMessage(null);
     setErrorDetails(null);
@@ -312,6 +350,7 @@ export function VerificationStep({
     if (!sessionKeyExport) {
       setErrorMessage('Session expired. Please authorize again.');
       setVerificationState('waiting-auth');
+      isVerifyingRef.current = false;
       return;
     }
 
