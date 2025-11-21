@@ -221,6 +221,7 @@ export function VerificationStep({
   const [errorDetails, setErrorDetails] = useState<any>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
+  const [sessionKeyExport, setSessionKeyExport] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
 
@@ -274,13 +275,18 @@ export function VerificationStep({
       });
 
       // Export session immediately for backend use (ephemeral, no storage needed)
-      const sessionKeyData = session.export();
+      const exported = session.export();
+      const sessionKeyJson = typeof exported === 'string'
+        ? exported
+        : JSON.stringify(exported);
+
       console.log('[VerificationStep] Session created and exported (ephemeral)');
+      setSessionKeyExport(sessionKeyJson);
       setVerificationState('running');
       setIsCreatingSession(false);
 
       // Start verification with ephemeral session data
-      startVerification(sessionKeyData);
+      startVerification(sessionKeyJson);
     } catch (error) {
       console.error('[VerificationStep] Failed to create session:', error);
       const errorMsg = getErrorMessage(error);
@@ -301,10 +307,21 @@ export function VerificationStep({
     }
   };
 
-  const startVerification = async (sessionKeyData?: any) => {
+  const startVerification = async (maybeSessionKey?: any) => {
     console.log('[VerificationStep] Starting verification...');
     setErrorMessage(null);
     setErrorDetails(null);
+
+    // Detect if a click event was passed instead of sessionKey
+    // (e.g., from onClick handlers that don't prevent event propagation)
+    const isClickEvent = maybeSessionKey?.preventDefault || maybeSessionKey?.target;
+    const sessionKeyData = isClickEvent ? sessionKeyExport : (maybeSessionKey ?? sessionKeyExport);
+
+    if (!sessionKeyData) {
+      setErrorMessage('Session expired. Please authorize again.');
+      setVerificationState('waiting-auth');
+      return;
+    }
 
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(walrusUpload || (walrusBlobId && sealIdentity && encryptedObjectBcsHex));
@@ -1042,7 +1059,7 @@ export function VerificationStep({
               <div className="flex items-center gap-3">
                 <SonarButton
                   variant="secondary"
-                  onClick={startVerification}
+                  onClick={() => startVerification()}
                   className="flex-1"
                 >
                   Retry Verification
