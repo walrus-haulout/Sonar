@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { cn } from '@/lib/utils';
-import { sanitizeForJson, validateJson } from '@/lib/utils/json-sanitizer';
 import { useSeal } from '@/hooks/useSeal';
 import {
   DatasetMetadata,
@@ -442,19 +441,28 @@ export function VerificationStep({
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
-      // Deep sanitize sessionKeyData - removes objects with throwing toJSON
-      const sanitizedSessionKeyData = sanitizeForJson(sessionKeyData);
+      // Prepare sessionKeyData - no sanitization, keep intact
+      let sessionKeyJson: string;
+      try {
+        // sessionKeyData from session.export() is already a string representation of ExportedSessionKey
+        sessionKeyJson = typeof sessionKeyData === 'string'
+          ? sessionKeyData
+          : JSON.stringify(sessionKeyData);
+      } catch (err) {
+        throw new Error(`Failed to serialize sessionKeyData: ${getErrorMessage(err)}`);
+      }
 
-      // Development: validate payload before JSON.stringify
+      // Development: log sessionKeyData structure for debugging
       if (process.env.NODE_ENV === 'development') {
         try {
-          validateJson({
-            metadata: sanitizedMetadata,
-            sessionKeyData: sanitizedSessionKeyData,
+          const parsed = typeof sessionKeyData === 'string' ? JSON.parse(sessionKeyData) : sessionKeyData;
+          console.log('[VerificationStep] sessionKeyData prepared:', {
+            keyServers: parsed?.keyServers?.length,
+            threshold: parsed?.threshold,
+            isString: typeof sessionKeyData === 'string',
           });
-          console.log('[VerificationStep] ✓ Payload validation passed');
-        } catch (err) {
-          console.error('[VerificationStep] ⚠️ Payload validation warning:', err);
+        } catch {
+          console.warn('[VerificationStep] Could not parse sessionKeyData for logging');
         }
       }
 
@@ -470,7 +478,7 @@ export function VerificationStep({
           sealIdentity,
           encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
           metadata: sanitizedMetadata,
-          sessionKeyData: JSON.stringify(sanitizedSessionKeyData),
+          sessionKeyData: sessionKeyJson,
         }),
       });
 
