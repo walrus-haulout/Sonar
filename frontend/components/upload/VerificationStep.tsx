@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { cn } from '@/lib/utils';
+import { sanitizeForJson, validateJson } from '@/lib/utils/json-sanitizer';
 import { useSeal } from '@/hooks/useSeal';
 import {
   DatasetMetadata,
@@ -441,6 +442,22 @@ export function VerificationStep({
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
+      // Deep sanitize sessionKeyData - removes objects with throwing toJSON
+      const sanitizedSessionKeyData = sanitizeForJson(sessionKeyData);
+
+      // Development: validate payload before JSON.stringify
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          validateJson({
+            metadata: sanitizedMetadata,
+            sessionKeyData: sanitizedSessionKeyData,
+          });
+          console.log('[VerificationStep] ✓ Payload validation passed');
+        } catch (err) {
+          console.error('[VerificationStep] ⚠️ Payload validation warning:', err);
+        }
+      }
+
       // Backend will handle blob fetch and decryption
       // We only need to send sessionKeyData for backend to decrypt
       const response = await fetch('/api/verify', {
@@ -453,7 +470,7 @@ export function VerificationStep({
           sealIdentity,
           encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
           metadata: sanitizedMetadata,
-          sessionKeyData,
+          sessionKeyData: sanitizedSessionKeyData,
         }),
       });
 
