@@ -51,10 +51,30 @@ class SessionStore:
 
         self.database_url = database_url
         self._pool: Optional[asyncpg.Pool] = None
+        self._pool_loop: Optional[asyncio.AbstractEventLoop] = None
         logger.info("Initialized PostgreSQL session store")
 
     async def _get_pool(self) -> asyncpg.Pool:
-        """Get or create database connection pool."""
+        """Get or create database connection pool.
+
+        Detects event loop changes and recreates pool if needed, since asyncpg
+        pools are bound to the event loop they were created in.
+        """
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            raise RuntimeError("No running event loop")
+
+        # Recreate pool if event loop changed (e.g., background task with new loop)
+        if self._pool is not None and self._pool_loop != current_loop:
+            logger.info("Event loop changed, recreating connection pool")
+            try:
+                await self._pool.close()
+            except Exception as e:
+                logger.warning(f"Error closing old pool: {e}")
+            self._pool = None
+            self._pool_loop = None
+
         if self._pool is None:
             self._pool = await asyncpg.create_pool(
                 self.database_url,
@@ -63,6 +83,7 @@ class SessionStore:
                 command_timeout=30,
                 statement_cache_size=0  # Required for Railway's PgBouncer
             )
+            self._pool_loop = current_loop
             # Create table schema on first connection
             await self._ensure_schema()
         return self._pool
@@ -376,4 +397,5 @@ class SessionStore:
         if self._pool:
             await self._pool.close()
             self._pool = None
+            self._pool_loop = None
             logger.info("Closed PostgreSQL connection pool")
