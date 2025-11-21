@@ -157,14 +157,25 @@ async function decryptWithSessionKey(request: DecryptRequest): Promise<Uint8Arra
             serverConfigs,
         });
 
-        // Build transaction for decryption
-        // This is required by the SDK's decrypt method
+        // Build transaction for decryption with seal_approve moveCall
+        // The PTB must include an approval call to pass policy validation
         const tx = new Transaction();
         tx.setSender(sessionKey.getAddress());
 
-        // Note: The exact transaction content depends on the policy module
-        // For SessionKey-based decryption, the SDK handles policy approval internally
-        // We just need to provide the transaction skeleton
+        const packageId = sessionKeyObj.packageId;
+        if (!packageId) {
+            throw new Error('packageId missing from session key data');
+        }
+
+        // Call seal_approve on the open_access_policy module for verification
+        // This establishes the authorization for decryption on-chain
+        const policyModule = 'open_access_policy';
+        const identityBytes = fromHEX(request.identity);
+
+        tx.moveCall({
+            target: `${packageId}::${policyModule}::seal_approve`,
+            arguments: [tx.pure.vector('u8', identityBytes)],
+        });
 
         const txBytes = await tx.build({
             client: suiClient,
