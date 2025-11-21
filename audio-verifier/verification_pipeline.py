@@ -170,6 +170,17 @@ class VerificationPipeline:
                 audio_file_path
             )
 
+            # Handle quality check failure (returns None for invalid audio)
+            if quality_result is None:
+                logger.warning(f"[{session_object_id}] Quality check returned None - invalid or corrupted audio file")
+                success = await self.session_store.mark_failed(session_object_id, {
+                    "errors": ["Invalid or corrupted audio file"],
+                    "stage_failed": "quality"
+                })
+                if not success:
+                    logger.error(f"Failed to mark session as failed")
+                return
+
             # Fail fast if quality check fails
             if not quality_result.get("quality", {}).get("passed", False):
                 logger.warning(f"[{session_object_id}] Failed quality check")
@@ -189,12 +200,28 @@ class VerificationPipeline:
                 audio_file_path
             )
 
+            # Handle copyright check failure
+            if copyright_result is None:
+                logger.warning(f"[{session_object_id}] Copyright check failed")
+                copyright_result = {"copyright": {}, "errors": ["Copyright check unavailable"]}
+
             # Stage 3: Transcription
             logger.info(f"[{session_object_id}] Stage 3: Transcription")
             transcript = await self._stage_transcription(
                 session_object_id,
                 audio_file_path
             )
+
+            # Handle transcription failure
+            if not transcript:
+                logger.warning(f"[{session_object_id}] Transcription returned empty")
+                success = await self.session_store.mark_failed(session_object_id, {
+                    "errors": ["Failed to transcribe audio"],
+                    "stage_failed": "transcription"
+                })
+                if not success:
+                    logger.error(f"Failed to mark session as failed")
+                return
 
             # Stage 4: AI Analysis
             logger.info(f"[{session_object_id}] Stage 4: AI Analysis")

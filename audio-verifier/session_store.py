@@ -70,6 +70,9 @@ class SessionStore:
             logger.info("Event loop changed, recreating connection pool")
             try:
                 await self._pool.close()
+            except (RuntimeError, asyncio.InvalidStateError) as e:
+                # Expected when closing pool from different event loop
+                logger.debug(f"Expected error closing old pool from different loop: {type(e).__name__}")
             except Exception as e:
                 logger.warning(f"Error closing old pool: {e}")
             self._pool = None
