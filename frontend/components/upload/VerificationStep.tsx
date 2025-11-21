@@ -429,7 +429,7 @@ export function VerificationStep({
           sealIdentity,
           encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
           metadata,
-          sessionKeyData: JSON.stringify(sessionKeyData),
+          sessionKeyData,
         }),
       });
 
