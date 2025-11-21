@@ -449,9 +449,24 @@ export function VerificationStep({
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
 
-      // Ensure keyServers and threshold are present in the session payload
-      // Use values from export, or fall back to useSeal config, then hardcoded defaults
-      const keyServers = sessionKeyExport.keyServers ?? configKeyServers ?? [];
+      // Validate and inject keyServers + threshold into session payload
+      // Priority: session export > config > empty fallback
+      let keyServers = sessionKeyExport.keyServers;
+      if (!keyServers || !Array.isArray(keyServers) || keyServers.length === 0) {
+        // Export didn't have keyServers, use config
+        keyServers = configKeyServers;
+      }
+
+      // Fail if we still don't have keyServers - env not configured
+      if (!keyServers || !Array.isArray(keyServers) || keyServers.length === 0) {
+        const envError =
+          'Key servers not configured. Set NEXT_PUBLIC_SEAL_KEY_SERVERS env var.';
+        console.error('[VerificationStep]', envError);
+        setErrorMessage(envError);
+        setVerificationState('failed');
+        return;
+      }
+
       const threshold = sessionKeyExport.threshold ?? configThreshold ?? 4;
       const sessionPayload = { ...sessionKeyExport, keyServers, threshold };
 
@@ -471,8 +486,9 @@ export function VerificationStep({
 
       // Development: log sessionKeyData structure for debugging
       if (process.env.NODE_ENV === 'development') {
-        console.log('[VerificationStep] sessionKeyData prepared:', {
-          keyServers: keyServers?.length ?? 0,
+        console.log('[VerificationStep] sessionKeyData validated:', {
+          keyServersCount: keyServers.length,
+          keyServerSample: keyServers[0],
           threshold,
           isString: true,
         });

@@ -65,3 +65,4 @@ backend/.env.local
 
 # Root environment
 .env.local
+.env*.local

@@ -14,6 +14,44 @@ const DecryptRequestSchema = z.object({
 
 type DecryptRequest = z.infer<typeof DecryptRequestSchema>;
 
+/**
+ * Build full server configurations from keyServers in session data
+ * Maps objectIds to their network URLs via environment variable
+ *
+ * SEAL_KEY_SERVER_URLS format (JSON): {
+ *   "0x4af91bd94b19e1fabd12586b5392571f7b76e9b6076ef0813b0a1352fa3d2d10": "https://seal-server-1.railway.app",
+ *   "0x6f0c33c9fa69d466a32ba1291174604bf4c7a58d7efc986341fe3c169c30338c": "https://seal-server-2.railway.app",
+ *   ...
+ * }
+ */
+function buildServerConfigs(keyServers: any[]): any[] {
+    // Parse URL mappings from environment
+    const urlMapEnv = process.env.SEAL_KEY_SERVER_URLS || '{}';
+    let urlMap: Record<string, string> = {};
+    try {
+        urlMap = JSON.parse(urlMapEnv);
+    } catch (e) {
+        console.warn('[decrypt] Failed to parse SEAL_KEY_SERVER_URLS env var, using empty map');
+    }
+
+    // Build server configs by mapping keyServers to their URLs
+    const serverConfigs = (Array.isArray(keyServers) ? keyServers : [])
+        .filter((server: any) => server && typeof server.objectId === 'string')
+        .map((server: any) => {
+            const url = urlMap[server.objectId];
+            if (!url && (process.env.LOG_LEVEL === 'debug' || process.env.NODE_ENV !== 'production')) {
+                console.warn(`[decrypt] No URL configured for server ${server.objectId.slice(0, 8)}...`);
+            }
+            return {
+                objectId: server.objectId,
+                weight: server.weight || 1,
+                ...(url && { url }), // Only include url if available
+            };
+        });
+
+    return serverConfigs;
+}
+
 async function main() {
     try {
         // Read input from command line args
@@ -79,10 +117,22 @@ async function decryptWithSessionKey(request: DecryptRequest): Promise<Uint8Arra
         const rpcUrl = getFullnodeUrl(network);
         const suiClient = new SuiClient({ url: rpcUrl });
 
-        // Import SessionKey from exported data
+        // Parse and validate session key data
+        let sessionKeyObj: any;
         let sessionKey: SessionKey;
         try {
-            const sessionKeyObj = JSON.parse(request.session_key_data);
+            sessionKeyObj = JSON.parse(request.session_key_data);
+
+            // Debug: Log keyServers structure for diagnostics
+            if (process.env.LOG_LEVEL === 'debug' || process.env.NODE_ENV !== 'production') {
+                console.log('[decrypt] Session key data received:', {
+                    hasKeyServers: !!sessionKeyObj.keyServers,
+                    keyServersCount: sessionKeyObj.keyServers?.length ?? 0,
+                    threshold: sessionKeyObj.threshold ?? 'missing',
+                    hasSessionKey: !!sessionKeyObj.sessionKey,
+                });
+            }
+
             // SessionKey.import requires: (data: ExportedSessionKey, suiClient: SuiClient, signer?: Signer)
             sessionKey = SessionKey.import(sessionKeyObj, suiClient);
         } catch (e) {
@@ -91,12 +141,20 @@ async function decryptWithSessionKey(request: DecryptRequest): Promise<Uint8Arra
             );
         }
 
-        // Initialize Seal client
-        // SDK uses key server discovery via identity embedded in SessionKey
-        // Empty serverConfigs allows SDK to discover servers dynamically
+        // Initialize Seal client with server configurations
+        // Map keyServers (objectId + weight) to full configs (objectId + weight + url)
+        const serverConfigs = buildServerConfigs(sessionKeyObj.keyServers || []);
+
+        if (process.env.LOG_LEVEL === 'debug' || process.env.NODE_ENV !== 'production') {
+            console.log('[decrypt] SealClient initialized with:', {
+                serverCount: serverConfigs.length,
+                serverIds: serverConfigs.map(s => s.objectId).slice(0, 2) + (serverConfigs.length > 2 ? '...' : ''),
+            });
+        }
+
         const sealClient = new SealClient({
             suiClient,
-            serverConfigs: [],
+            serverConfigs,
         });
 
         // Build transaction for decryption
