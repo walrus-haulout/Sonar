@@ -221,6 +221,7 @@ export function useWalrusParallelUpload() {
       effectivePreviewMimeType = normalizeAudioMimeType(previewBlob.type) ?? effectivePreviewMimeType;
       const previewFileName = inferFileName(options.previewFileName ?? 'preview', effectivePreviewMimeType);
       previewFormData.append('file', previewBlob, previewFileName);
+      previewFormData.append('seal_policy_id', seal_policy_id);
 
       // Log preview upload for debugging
       const previewSizeMB = (previewBlob.size / (1024 * 1024)).toFixed(2);
