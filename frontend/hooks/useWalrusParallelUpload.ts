@@ -195,31 +195,24 @@ export function useWalrusParallelUpload() {
     let effectivePreviewMimeType = normalizeAudioMimeType(options.previewMimeType) ?? normalizeAudioMimeType(options.previewBlob?.type);
 
     if (options.previewBlob) {
-      try {
-        const previewFormData = new FormData();
-        const previewBlob = ensureBlobMimeType(options.previewBlob, options.previewMimeType) ?? options.previewBlob;
-        effectivePreviewMimeType = normalizeAudioMimeType(previewBlob.type) ?? effectivePreviewMimeType;
-        const previewFileName = inferFileName(options.previewFileName ?? 'preview', effectivePreviewMimeType);
-        previewFormData.append('file', previewBlob, previewFileName);
+      const previewFormData = new FormData();
+      const previewBlob = ensureBlobMimeType(options.previewBlob, options.previewMimeType) ?? options.previewBlob;
+      effectivePreviewMimeType = normalizeAudioMimeType(previewBlob.type) ?? effectivePreviewMimeType;
+      const previewFileName = inferFileName(options.previewFileName ?? 'preview', effectivePreviewMimeType);
+      previewFormData.append('file', previewBlob, previewFileName);
 
-        const previewResponse = await fetch('/api/edge/walrus/preview', {
-          method: 'POST',
-          body: previewFormData,
-        });
+      const { response: previewResponse, attempt } = await fetchUploadWithRetry(previewFormData, 10);
 
-        if (previewResponse.ok) {
-          const previewResult = await previewResponse.json();
-          finalPreviewBlobId = previewResult.previewBlobId || previewResult.blobId;
-          previewStorageId = previewResult.storageId;
-          previewSize = previewResult.fileSize;
-          previewEncodingType = previewResult.encodingType;
-          previewDeletable = previewResult.deletable;
-        } else {
-          console.warn('Preview upload failed, continuing without preview');
-        }
-      } catch (error) {
-        console.warn('Preview upload error:', error);
+      if (!previewResponse.ok) {
+        throw new Error(`Preview upload failed on attempt ${attempt}: ${previewResponse.statusText}`);
       }
+
+      const previewResult = await previewResponse.json();
+      finalPreviewBlobId = previewResult.previewBlobId || previewResult.blobId;
+      previewStorageId = previewResult.storageId;
+      previewSize = previewResult.fileSize;
+      previewEncodingType = previewResult.encodingType;
+      previewDeletable = previewResult.deletable;
     }
 
     return {

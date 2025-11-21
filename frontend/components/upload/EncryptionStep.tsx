@@ -299,18 +299,19 @@ export function EncryptionStep({
         addLog(`[File ${index + 1}/${totalFiles}] Uploading to Walrus via ${strategy}... (Attempt ${uploadProgress.currentRetry ?? 1}/${uploadProgress.maxRetries ?? 10})`);
 
         const encryptedBlob = new Blob([new Uint8Array(encryptionResult.encryptedData)]);
-        const walrusResult = await uploadBlob(
-          encryptedBlob,
-          encryptionResult.identity,
-          metadataWithMime,
-          {
-            previewBlob,
-            previewMimeType,
-            mimeType: resolvedMimeType,
-          }
-        );
+        try {
+          const walrusResult = await uploadBlob(
+            encryptedBlob,
+            encryptionResult.identity,
+            metadataWithMime,
+            {
+              previewBlob,
+              previewMimeType,
+              mimeType: resolvedMimeType,
+            }
+          );
 
-        addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
+          addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
 
         // Update pending upload with blob ID
         try {
@@ -336,22 +337,30 @@ export function EncryptionStep({
           console.error('Failed to update pending upload:', e);
         }
 
-        const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
-        setProgress(40 + completedProgress);
+          const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
+          setProgress(40 + completedProgress);
 
-        return {
-          file_index: index,
-          fileId: file.id!,
-          blobId: walrusResult.blobId,
-          previewBlobId: walrusResult.previewBlobId,
-          seal_policy_id: encryptionResult.identity,
-          encryptedObjectBcsHex, // BCS-serialized encrypted object for verifier
-          duration: file.duration,
-          metadata: metadataWithMime,
-          encryptedData: encryptionResult.encryptedData,
-          mimeType: resolvedMimeType,
-          previewMimeType,
-        };
+          return {
+            file_index: index,
+            fileId: file.id!,
+            blobId: walrusResult.blobId,
+            previewBlobId: walrusResult.previewBlobId,
+            seal_policy_id: encryptionResult.identity,
+            encryptedObjectBcsHex, // BCS-serialized encrypted object for verifier
+            duration: file.duration,
+            metadata: metadataWithMime,
+            encryptedData: encryptionResult.encryptedData,
+            mimeType: resolvedMimeType,
+            previewMimeType,
+          };
+        } catch (uploadError) {
+          // Re-throw with context for better error messaging
+          const isPreviewError = uploadError instanceof Error && uploadError.message.includes('Preview upload failed');
+          if (isPreviewError) {
+            addLog(`[File ${index + 1}/${totalFiles}] CRITICAL: Preview upload failed - upload cannot proceed. ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
+          }
+          throw uploadError;
+        }
       });
 
       const results = await Promise.all(filePromises);
