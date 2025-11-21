@@ -182,10 +182,11 @@ class VerificationPipeline:
                 return
 
             # Fail fast if quality check fails
-            if not quality_result.get("quality", {}).get("passed", False):
+            quality_info = quality_result.get("quality") or {}
+            if not quality_info.get("passed", False):
                 logger.warning(f"[{session_object_id}] Failed quality check")
                 success = await self.session_store.mark_failed(session_object_id, {
-                    "quality": quality_result.get("quality"),
+                    "quality": quality_info,
                     "errors": quality_result.get("errors", []),
                     "stage_failed": "quality"
                 })
@@ -581,9 +582,10 @@ Respond ONLY with the JSON object, no additional text."""
         - No high-confidence copyright match
         - Safety check passed
         """
-        quality_passed = quality_result.get("quality", {}).get("passed", False)
+        quality_info = quality_result.get("quality") or {}
+        quality_passed = quality_info.get("passed", False)
 
-        copyright_info = copyright_result.get("copyright", {})
+        copyright_info = copyright_result.get("copyright") or {}
         copyright_detected = copyright_info.get("detected", False)
         copyright_confidence = copyright_info.get("confidence", 0.0)
 
