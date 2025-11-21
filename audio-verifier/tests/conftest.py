@@ -338,3 +338,18 @@ def mock_environ(monkeypatch):
         for key, value in kwargs.items():
             monkeypatch.setenv(key, value)
     return _set_env
+
+
+# Mark existing unit tests with @pytest.mark.unit
+def pytest_collection_modifyitems(items):
+    """Automatically mark tests based on location."""
+    for item in items:
+        # Mark unit tests
+        if "unit/" in str(item.fspath):
+            item.add_marker(pytest.mark.unit)
+        # Mark integration tests
+        elif "integration/" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
+        # Mark property tests
+        elif "property/" in str(item.fspath):
+            item.add_marker(pytest.mark.property)

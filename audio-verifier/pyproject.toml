@@ -58,3 +58,19 @@ reportOptionalMemberAccess = true
 reportOptionalOperand = true
 reportOptionalSubscript = true
 reportUnboundVariable = true
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (with dependencies)",
+    "e2e: End-to-end tests (full flow, slow)",
+    "property: Property-based tests (Hypothesis)",
+]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--strict-markers -v"
+
+[tool.pyrefly]
+include = ["audio_verifier/**/*.py", "main.py", "*.py"]
+exclude = ["tests/**", "venv/**", "__pycache__", ".venv"]
