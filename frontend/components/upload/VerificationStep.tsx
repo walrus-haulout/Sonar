@@ -35,50 +35,114 @@ function getErrorMessage(error: unknown): string {
  * Whitelists only known-good DatasetMetadata fields to prevent JSON.stringify errors
  */
 function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
-  return {
-    title: metadata.title,
-    description: metadata.description,
-    languages: metadata.languages,
-    tags: metadata.tags,
-    consent: metadata.consent,
-    ...(metadata.perFileMetadata && {
-      perFileMetadata: metadata.perFileMetadata.map((pfm) => ({
-        fileId: pfm.fileId,
-        title: pfm.title,
-        description: pfm.description,
-      })),
-    }),
-    ...(metadata.audioQuality && {
-      audioQuality: {
-        sampleRate: metadata.audioQuality.sampleRate,
-        bitDepth: metadata.audioQuality.bitDepth,
-        channels: metadata.audioQuality.channels,
-        codec: metadata.audioQuality.codec,
-        recordingQuality: metadata.audioQuality.recordingQuality,
-      },
-    }),
-    ...(metadata.speakers && {
-      speakers: {
-        speakerCount: metadata.speakers.speakerCount,
-        ...(metadata.speakers.speakers && {
-          speakers: metadata.speakers.speakers.map((s) => ({
-            id: s.id,
-            role: s.role,
-            ageRange: s.ageRange,
-            gender: s.gender,
-            accent: s.accent,
-          })),
-        }),
-      },
-    }),
-    ...(metadata.categorization && {
-      categorization: {
-        useCase: metadata.categorization.useCase,
-        contentType: metadata.categorization.contentType,
-        domain: metadata.categorization.domain,
-      },
-    }),
+  // Helper to safely filter string arrays - prevents DOM nodes from surviving
+  const filterStrings = (arr: unknown): string[] | undefined => {
+    if (!Array.isArray(arr) || arr.length === 0) return undefined;
+    const filtered = arr.filter((x): x is string => typeof x === 'string');
+    return filtered.length > 0 ? filtered : undefined;
   };
+
+  // Helper to safely validate and filter speaker objects
+  const filterSpeakers = (arr: unknown): any[] | undefined => {
+    if (!Array.isArray(arr) || arr.length === 0) return undefined;
+    const filtered = arr
+      .filter((s): s is Record<string, unknown> =>
+        s !== null && typeof s === 'object' && !Array.isArray(s)
+      )
+      .map((s) => ({
+        id: typeof s.id === 'string' ? s.id : undefined,
+        role: typeof s.role === 'string' ? s.role : undefined,
+        ageRange: typeof s.ageRange === 'string' ? s.ageRange : undefined,
+        gender: typeof s.gender === 'string' ? s.gender : undefined,
+        accent: typeof s.accent === 'string' ? s.accent : undefined,
+      }))
+      .filter((s) => s.id !== undefined); // Must have id
+
+    return filtered.length > 0 ? filtered : undefined;
+  };
+
+  const result: DatasetMetadata = {
+    title: typeof metadata.title === 'string' ? metadata.title : '',
+    description: typeof metadata.description === 'string' ? metadata.description : '',
+    consent: Boolean(metadata.consent),
+  };
+
+  // Languages array - only valid strings, not forwarded reference
+  const languages = filterStrings(metadata.languages);
+  if (languages) result.languages = languages;
+
+  // Tags array - only valid strings, not forwarded reference
+  const tags = filterStrings(metadata.tags);
+  if (tags) result.tags = tags;
+
+  // Per-file metadata array - validate with Array.isArray before .map()
+  if (Array.isArray(metadata.perFileMetadata) && metadata.perFileMetadata.length > 0) {
+    const filtered = metadata.perFileMetadata
+      .filter((pfm): pfm is Record<string, unknown> =>
+        pfm !== null && typeof pfm === 'object' && !Array.isArray(pfm)
+      )
+      .map((pfm) => ({
+        fileId: typeof pfm.fileId === 'string' ? pfm.fileId : undefined,
+        title: typeof pfm.title === 'string' ? pfm.title : undefined,
+        description: typeof pfm.description === 'string' ? pfm.description : undefined,
+      }))
+      .filter((pfm) => pfm.fileId !== undefined); // Must have fileId
+
+    if (filtered.length > 0) {
+      result.perFileMetadata = filtered;
+    }
+  }
+
+  // Audio quality object - validate type before accessing properties
+  if (metadata.audioQuality !== null && typeof metadata.audioQuality === 'object') {
+    const aq = metadata.audioQuality as Record<string, unknown>;
+    const audioQuality: any = {};
+
+    if (typeof aq.sampleRate === 'number') audioQuality.sampleRate = aq.sampleRate;
+    if (typeof aq.bitDepth === 'number') audioQuality.bitDepth = aq.bitDepth;
+    if (typeof aq.channels === 'number') audioQuality.channels = aq.channels;
+    if (typeof aq.codec === 'string') audioQuality.codec = aq.codec;
+    if (typeof aq.recordingQuality === 'string') audioQuality.recordingQuality = aq.recordingQuality;
+
+    if (Object.keys(audioQuality).length > 0) {
+      result.audioQuality = audioQuality;
+    }
+  }
+
+  // Speakers object - validate type and validate speakers array with Array.isArray
+  if (metadata.speakers !== null && typeof metadata.speakers === 'object') {
+    const sp = metadata.speakers as Record<string, unknown>;
+    const speakers: any = {};
+
+    if (typeof sp.speakerCount === 'number') {
+      speakers.speakerCount = sp.speakerCount;
+    }
+
+    const speakersList = filterSpeakers(sp.speakers);
+    if (speakersList) {
+      speakers.speakers = speakersList;
+    }
+
+    if (Object.keys(speakers).length > 0) {
+      result.speakers = speakers;
+    }
+  }
+
+  // Categorization object - validate type before accessing properties
+  if (metadata.categorization !== null && typeof metadata.categorization === 'object') {
+    const cat = metadata.categorization as Record<string, unknown>;
+    const categorization: any = {};
+
+    if (typeof cat.useCase === 'string') categorization.useCase = cat.useCase;
+    if (typeof cat.contentType === 'string') categorization.contentType = cat.contentType;
+    if (typeof cat.domain === 'string') categorization.domain = cat.domain;
+
+    if (Object.keys(categorization).length > 0) {
+      result.categorization = categorization;
+    }
+  }
+
+  return result;
 }
 
 interface VerificationStepProps {
@@ -308,7 +372,9 @@ export function VerificationStep({
       // Prepare form data with raw audio file (BEFORE encryption!)
       const formData = new FormData();
       formData.append('file', files[fileIndex].file);
-      formData.append('metadata', JSON.stringify(metadata));
+      // Sanitize metadata to remove any non-serializable properties
+      const sanitizedMetadata = sanitizeMetadata(metadata);
+      formData.append('metadata', JSON.stringify(sanitizedMetadata));
 
       // Call server-side API (proxies to audio-verifier with secure token)
       const response = await fetch('/api/verify', {
