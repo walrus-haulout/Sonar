@@ -4,12 +4,12 @@
  */
 
 export type UploadStep =
-  | 'file-upload'
-  | 'metadata'
-  | 'encryption'
-  | 'verification'
-  | 'publish'
-  | 'success';
+  | "file-upload"
+  | "metadata"
+  | "encryption"
+  | "verification"
+  | "publish"
+  | "success";
 
 export interface AudioFile {
   file: File;
@@ -38,7 +38,7 @@ export interface AudioQualityMetadata {
   bitDepth?: number; // Optional - bits (16, 24, 32)
   channels?: number; // Optional - 1 (mono), 2 (stereo), etc.
   codec?: string; // Optional - MP3, AAC, FLAC, etc.
-  recordingQuality?: 'professional' | 'high' | 'medium' | 'low' | 'unknown'; // Optional - with 'unknown' option
+  recordingQuality?: "professional" | "high" | "medium" | "low" | "unknown"; // Optional - with 'unknown' option
 }
 
 export interface SpeakerInfo {
@@ -118,7 +118,7 @@ export interface WalrusUploadResult {
   previewMimeType?: string;
   // User-paid registration support
   txDigest?: string;
-  strategy?: 'user-paid' | 'blockberry';
+  strategy?: "user-paid" | "blockberry";
   // Preview metadata for batch registration
   previewStorageId?: string;
   previewSize?: number;
@@ -134,23 +134,23 @@ export interface WalrusUploadResult {
 
 export interface VerificationStage {
   name:
-    | 'decryption'
-    | 'quality'
-    | 'copyright'
-    | 'transcription'
-    | 'analysis'
-    | 'safety'
-    | 'finalizing'
-    | 'completed';
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+    | "decryption"
+    | "quality"
+    | "copyright"
+    | "transcription"
+    | "analysis"
+    | "safety"
+    | "finalizing"
+    | "completed";
+  status: "pending" | "in_progress" | "completed" | "failed";
   progress: number; // 0-100
   message?: string;
 }
 
 export interface VerificationSession {
-  stage: VerificationStage['name'];
+  stage: VerificationStage["name"];
   progress: number;
-  state: 'pending' | 'processing' | 'completed' | 'failed';
+  state: "pending" | "processing" | "completed" | "failed";
   approved?: boolean;
   qualityScore?: number;
   safetyPassed?: boolean;
@@ -160,11 +160,12 @@ export interface VerificationSession {
 
 export interface VerificationResult {
   id: string;
-  state: 'pending' | 'processing' | 'completed' | 'failed';
-  currentStage: VerificationStage['name'];
+  state: "pending" | "processing" | "completed" | "failed";
+  currentStage: VerificationStage["name"];
   stages: VerificationStage[];
   transcript?: string;
   qualityScore?: number;
+  suggestedPrice?: number; // AI-suggested price in SUI (3-10 range)
   safetyPassed?: boolean;
   insights?: string[];
   error?: string;

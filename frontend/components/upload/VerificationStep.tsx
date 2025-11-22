@@ -1,12 +1,21 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Brain, Shield, FileText, CheckCircle, AlertCircle, Clock, Music, Copyright } from 'lucide-react';
-import { useSignPersonalMessage } from '@mysten/dapp-kit';
-import { cn } from '@/lib/utils';
-import { useSeal } from '@/hooks/useSeal';
-import { isSessionValid } from '@sonar/seal';
+import { useEffect, useState, useRef } from "react";
+import { motion } from "framer-motion";
+import {
+  Brain,
+  Shield,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Music,
+  Copyright,
+} from "lucide-react";
+import { useSignPersonalMessage } from "@mysten/dapp-kit";
+import { cn } from "@/lib/utils";
+import { useSeal } from "@/hooks/useSeal";
+import { isSessionValid } from "@sonar/seal";
 import {
   DatasetMetadata,
   VerificationResult,
@@ -14,32 +23,34 @@ import {
   VerificationStage,
   AudioFile,
   WalrusUploadResult,
-} from '@/lib/types/upload';
-import { SonarButton } from '@/components/ui/SonarButton';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { RadarScanTarget } from '@/components/animations/RadarScanTarget';
-import { DataAccessNotice } from '@/components/upload/DataAccessNotice';
+} from "@/lib/types/upload";
+import { SonarButton } from "@/components/ui/SonarButton";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { RadarScanTarget } from "@/components/animations/RadarScanTarget";
+import { DataAccessNotice } from "@/components/upload/DataAccessNotice";
 
 /**
  * Extract error message from unknown error type
  */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error) {
+  if (typeof error === "object" && error !== null && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return String(error || 'Unknown error');
+  return String(error || "Unknown error");
 }
 
 /**
  * Type guard to validate PerFileMetadata structure
  */
-function isValidPerFileMetadata(pfm: unknown): pfm is { fileId: string; title?: string; description?: string } {
+function isValidPerFileMetadata(
+  pfm: unknown,
+): pfm is { fileId: string; title?: string; description?: string } {
   return (
     pfm !== null &&
-    typeof pfm === 'object' &&
+    typeof pfm === "object" &&
     !Array.isArray(pfm) &&
-    typeof (pfm as any).fileId === 'string'
+    typeof (pfm as any).fileId === "string"
   );
 }
 
@@ -51,7 +62,7 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   // Helper to safely filter string arrays - prevents DOM nodes from surviving
   const filterStrings = (arr: unknown): string[] | undefined => {
     if (!Array.isArray(arr) || arr.length === 0) return undefined;
-    const filtered = arr.filter((x): x is string => typeof x === 'string');
+    const filtered = arr.filter((x): x is string => typeof x === "string");
     return filtered.length > 0 ? filtered : undefined;
   };
 
@@ -59,15 +70,16 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   const filterSpeakers = (arr: unknown): any[] | undefined => {
     if (!Array.isArray(arr) || arr.length === 0) return undefined;
     const filtered = arr
-      .filter((s): s is Record<string, unknown> =>
-        s !== null && typeof s === 'object' && !Array.isArray(s)
+      .filter(
+        (s): s is Record<string, unknown> =>
+          s !== null && typeof s === "object" && !Array.isArray(s),
       )
       .map((s) => ({
-        id: typeof s.id === 'string' ? s.id : undefined,
-        role: typeof s.role === 'string' ? s.role : undefined,
-        ageRange: typeof s.ageRange === 'string' ? s.ageRange : undefined,
-        gender: typeof s.gender === 'string' ? s.gender : undefined,
-        accent: typeof s.accent === 'string' ? s.accent : undefined,
+        id: typeof s.id === "string" ? s.id : undefined,
+        role: typeof s.role === "string" ? s.role : undefined,
+        ageRange: typeof s.ageRange === "string" ? s.ageRange : undefined,
+        gender: typeof s.gender === "string" ? s.gender : undefined,
+        accent: typeof s.accent === "string" ? s.accent : undefined,
       }))
       .filter((s) => s.id !== undefined); // Must have id
 
@@ -76,15 +88,18 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
 
   // Validate required fields strictly
   if (metadata.consent !== true) {
-    throw new Error('Consent must be explicitly granted before verification');
+    throw new Error("Consent must be explicitly granted before verification");
   }
 
-  if (typeof metadata.title !== 'string' || metadata.title.length === 0) {
-    throw new Error('Title is required and must be a non-empty string');
+  if (typeof metadata.title !== "string" || metadata.title.length === 0) {
+    throw new Error("Title is required and must be a non-empty string");
   }
 
-  if (typeof metadata.description !== 'string' || metadata.description.length === 0) {
-    throw new Error('Description is required and must be a non-empty string');
+  if (
+    typeof metadata.description !== "string" ||
+    metadata.description.length === 0
+  ) {
+    throw new Error("Description is required and must be a non-empty string");
   }
 
   const result: DatasetMetadata = {
@@ -102,13 +117,17 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   if (tags) result.tags = tags;
 
   // Per-file metadata array - validate with Array.isArray before .map()
-  if (Array.isArray(metadata.perFileMetadata) && metadata.perFileMetadata.length > 0) {
+  if (
+    Array.isArray(metadata.perFileMetadata) &&
+    metadata.perFileMetadata.length > 0
+  ) {
     const filtered = metadata.perFileMetadata
       .filter(isValidPerFileMetadata)
       .map((pfm) => ({
         fileId: pfm.fileId,
-        title: typeof pfm.title === 'string' ? pfm.title : undefined,
-        description: typeof pfm.description === 'string' ? pfm.description : undefined,
+        title: typeof pfm.title === "string" ? pfm.title : undefined,
+        description:
+          typeof pfm.description === "string" ? pfm.description : undefined,
       }));
 
     if (filtered.length > 0) {
@@ -117,15 +136,21 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Audio quality object - validate type before accessing properties
-  if (metadata.audioQuality !== null && typeof metadata.audioQuality === 'object' && !Array.isArray(metadata.audioQuality)) {
+  if (
+    metadata.audioQuality !== null &&
+    typeof metadata.audioQuality === "object" &&
+    !Array.isArray(metadata.audioQuality)
+  ) {
     const aq = metadata.audioQuality as Record<string, unknown>;
     const audioQuality: any = {};
 
-    if (typeof aq.sampleRate === 'number') audioQuality.sampleRate = aq.sampleRate;
-    if (typeof aq.bitDepth === 'number') audioQuality.bitDepth = aq.bitDepth;
-    if (typeof aq.channels === 'number') audioQuality.channels = aq.channels;
-    if (typeof aq.codec === 'string') audioQuality.codec = aq.codec;
-    if (typeof aq.recordingQuality === 'string') audioQuality.recordingQuality = aq.recordingQuality;
+    if (typeof aq.sampleRate === "number")
+      audioQuality.sampleRate = aq.sampleRate;
+    if (typeof aq.bitDepth === "number") audioQuality.bitDepth = aq.bitDepth;
+    if (typeof aq.channels === "number") audioQuality.channels = aq.channels;
+    if (typeof aq.codec === "string") audioQuality.codec = aq.codec;
+    if (typeof aq.recordingQuality === "string")
+      audioQuality.recordingQuality = aq.recordingQuality;
 
     if (Object.keys(audioQuality).length > 0) {
       result.audioQuality = audioQuality;
@@ -133,11 +158,15 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Speakers object - validate type and validate speakers array with Array.isArray
-  if (metadata.speakers !== null && typeof metadata.speakers === 'object' && !Array.isArray(metadata.speakers)) {
+  if (
+    metadata.speakers !== null &&
+    typeof metadata.speakers === "object" &&
+    !Array.isArray(metadata.speakers)
+  ) {
     const sp = metadata.speakers as Record<string, unknown>;
     const speakers: any = {};
 
-    if (typeof sp.speakerCount === 'number') {
+    if (typeof sp.speakerCount === "number") {
       speakers.speakerCount = sp.speakerCount;
     }
 
@@ -152,13 +181,18 @@ function sanitizeMetadata(metadata: DatasetMetadata): DatasetMetadata {
   }
 
   // Categorization object - validate type before accessing properties
-  if (metadata.categorization !== null && typeof metadata.categorization === 'object' && !Array.isArray(metadata.categorization)) {
+  if (
+    metadata.categorization !== null &&
+    typeof metadata.categorization === "object" &&
+    !Array.isArray(metadata.categorization)
+  ) {
     const cat = metadata.categorization as Record<string, unknown>;
     const categorization: any = {};
 
-    if (typeof cat.useCase === 'string') categorization.useCase = cat.useCase;
-    if (typeof cat.contentType === 'string') categorization.contentType = cat.contentType;
-    if (typeof cat.domain === 'string') categorization.domain = cat.domain;
+    if (typeof cat.useCase === "string") categorization.useCase = cat.useCase;
+    if (typeof cat.contentType === "string")
+      categorization.contentType = cat.contentType;
+    if (typeof cat.domain === "string") categorization.domain = cat.domain;
 
     if (Object.keys(categorization).length > 0) {
       result.categorization = categorization;
@@ -183,7 +217,7 @@ interface VerificationStepProps {
 
 interface StageInfo {
   name: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: "pending" | "in_progress" | "completed" | "failed";
   progress: number;
 }
 
@@ -204,18 +238,25 @@ export function VerificationStep({
 }: VerificationStepProps) {
   // Hooks for wallet interaction
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { getOrCreateSessionExport, sessionKey, keyServers: configKeyServers, threshold: configThreshold } = useSeal();
+  const {
+    getOrCreateSessionExport,
+    sessionKey,
+    keyServers: configKeyServers,
+    threshold: configThreshold,
+  } = useSeal();
 
   // State
-  const [verificationState, setVerificationState] = useState<'idle' | 'waiting-auth' | 'running' | 'completed' | 'failed'>('idle');
+  const [verificationState, setVerificationState] = useState<
+    "idle" | "waiting-auth" | "running" | "completed" | "failed"
+  >("idle");
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [dataAccessAcknowledged, setDataAccessAcknowledged] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
-    { name: 'quality', status: 'pending', progress: 0 },
-    { name: 'copyright', status: 'pending', progress: 0 },
-    { name: 'transcription', status: 'pending', progress: 0 },
-    { name: 'analysis', status: 'pending', progress: 0 },
+    { name: "quality", status: "pending", progress: 0 },
+    { name: "copyright", status: "pending", progress: 0 },
+    { name: "transcription", status: "pending", progress: 0 },
+    { name: "analysis", status: "pending", progress: 0 },
   ]);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -232,12 +273,15 @@ export function VerificationStep({
   // Auto-start verification when component mounts
   useEffect(() => {
     // Log props received
-    console.log('[VerificationStep] Props received:', {
+    console.log("[VerificationStep] Props received:", {
       hasWalrusUpload: !!walrusUpload,
       walrusUploadBlobId: walrusUpload?.blobId,
       walrusUploadSealPolicyId: walrusUpload?.seal_policy_id?.slice(0, 20),
-      walrusUploadEncryptedHex: walrusUpload?.encryptedObjectBcsHex ? 'present' : 'missing',
-      encryptedObjectBcsHexLength: walrusUpload?.encryptedObjectBcsHex?.length ?? 0,
+      walrusUploadEncryptedHex: walrusUpload?.encryptedObjectBcsHex
+        ? "present"
+        : "missing",
+      encryptedObjectBcsHexLength:
+        walrusUpload?.encryptedObjectBcsHex?.length ?? 0,
       hasLegacyProps: !!(walrusBlobId || sealIdentity || encryptedObjectBcsHex),
     });
 
@@ -248,7 +292,7 @@ export function VerificationStep({
 
     hasStartedRef.current = true;
     // Move to waiting-auth state - user needs to authorize first
-    setVerificationState('waiting-auth');
+    setVerificationState("waiting-auth");
 
     // Cleanup polling on unmount
     return () => {
@@ -260,7 +304,7 @@ export function VerificationStep({
 
   // Reset verification guard when verification completes or fails
   useEffect(() => {
-    if (verificationState === 'failed' || verificationState === 'completed') {
+    if (verificationState === "failed" || verificationState === "completed") {
       isVerifyingRef.current = false;
     }
   }, [verificationState]);
@@ -272,24 +316,28 @@ export function VerificationStep({
   const handleAuthorizeVerification = async () => {
     // Guard against duplicate authorization attempts
     if (isAuthorizingRef.current) {
-      console.log('[VerificationStep] Authorization already in progress, skipping duplicate');
+      console.log(
+        "[VerificationStep] Authorization already in progress, skipping duplicate",
+      );
       return;
     }
 
     isAuthorizingRef.current = true;
 
-    console.log('[VerificationStep] Requesting user authorization...');
+    console.log("[VerificationStep] Requesting user authorization...");
     setIsCreatingSession(true);
     setErrorMessage(null);
 
     try {
       // Check if we already have a valid session - skip wallet prompt if so
       if (sessionKey && isSessionValid(sessionKey)) {
-        console.log('[VerificationStep] Valid session exists, using cached session');
+        console.log(
+          "[VerificationStep] Valid session exists, using cached session",
+        );
         const exported = sessionKey.export();
-        console.log('[VerificationStep] Session export from cache');
+        console.log("[VerificationStep] Session export from cache");
         setSessionKeyExport(exported);
-        setVerificationState('running');
+        setVerificationState("running");
         setIsCreatingSession(false);
         isAuthorizingRef.current = false;
         startVerification();
@@ -299,34 +347,39 @@ export function VerificationStep({
       // No valid session, create new one with extended TTL for verification (30 min)
       // Verification can take time on large files, so we need a longer window
       const exported = await getOrCreateSessionExport({
-        ttlMin: 30,  // Extended from default 10 min for verification flow
+        ttlMin: 30, // Extended from default 10 min for verification flow
         signMessage: async (message: Uint8Array) => {
           const result = await signPersonalMessage({ message });
           return { signature: result.signature };
         },
       });
 
-      console.log('[VerificationStep] Session obtained (cached or new)');
+      console.log("[VerificationStep] Session obtained (cached or new)");
       setSessionKeyExport(exported);
-      setVerificationState('running');
+      setVerificationState("running");
       setIsCreatingSession(false);
       isAuthorizingRef.current = false;
 
       // Start verification with session data
       startVerification();
     } catch (error) {
-      console.error('[VerificationStep] Failed to create session:', error);
+      console.error("[VerificationStep] Failed to create session:", error);
       const errorMsg = getErrorMessage(error);
 
       // Provide specific error messages for session creation failures
-      let displayError = errorMsg || 'Failed to create authorization session';
+      let displayError = errorMsg || "Failed to create authorization session";
 
-      if (errorMsg.includes('user rejected') || errorMsg.includes('denied')) {
-        displayError = 'You rejected the authorization request. Please approve to continue.';
-      } else if (errorMsg.includes('wallet') || errorMsg.includes('not connected')) {
-        displayError = 'Wallet not connected. Please connect your wallet and try again.';
-      } else if (errorMsg.includes('timeout')) {
-        displayError = 'Authorization request timed out. Please try again.';
+      if (errorMsg.includes("user rejected") || errorMsg.includes("denied")) {
+        displayError =
+          "You rejected the authorization request. Please approve to continue.";
+      } else if (
+        errorMsg.includes("wallet") ||
+        errorMsg.includes("not connected")
+      ) {
+        displayError =
+          "Wallet not connected. Please connect your wallet and try again.";
+      } else if (errorMsg.includes("timeout")) {
+        displayError = "Authorization request timed out. Please try again.";
       }
 
       setErrorMessage(displayError);
@@ -338,27 +391,32 @@ export function VerificationStep({
   const startVerification = async () => {
     // Guard against duplicate verification attempts
     if (isVerifyingRef.current) {
-      console.log('[VerificationStep] Verification already in progress, skipping duplicate');
+      console.log(
+        "[VerificationStep] Verification already in progress, skipping duplicate",
+      );
       return;
     }
 
     isVerifyingRef.current = true;
 
-    console.log('[VerificationStep] Starting verification...');
+    console.log("[VerificationStep] Starting verification...");
     setErrorMessage(null);
     setErrorDetails(null);
     setWarnings([]);
 
     if (!sessionKeyExport) {
-      setErrorMessage('Session expired. Please authorize again.');
-      setVerificationState('waiting-auth');
+      setErrorMessage("Session expired. Please authorize again.");
+      setVerificationState("waiting-auth");
       isVerifyingRef.current = false;
       return;
     }
 
     // Determine if we're using encrypted blob flow or legacy file flow
-    const useEncryptedFlow = !!(walrusUpload || (walrusBlobId && sealIdentity && encryptedObjectBcsHex));
-    console.log('[VerificationStep] Using encrypted flow:', useEncryptedFlow, {
+    const useEncryptedFlow = !!(
+      walrusUpload ||
+      (walrusBlobId && sealIdentity && encryptedObjectBcsHex)
+    );
+    console.log("[VerificationStep] Using encrypted flow:", useEncryptedFlow, {
       hasWalrusUpload: !!walrusUpload,
       walrusUploadBlobId: walrusUpload?.blobId,
       walrusUploadEncryptedHex: !!walrusUpload?.encryptedObjectBcsHex,
@@ -371,16 +429,19 @@ export function VerificationStep({
       // New encrypted blob flow
       const blobId = walrusUpload?.blobId || walrusBlobId!;
       const identity = walrusUpload?.seal_policy_id || sealIdentity!;
-      const encryptedObjectHex = walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
+      const encryptedObjectHex =
+        walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
 
-      console.log('[VerificationStep] Extracted values from walrusUpload:', {
+      console.log("[VerificationStep] Extracted values from walrusUpload:", {
         blobId,
         identityPrefix: identity?.slice(0, 20),
         encryptedObjectHexPresent: !!encryptedObjectHex,
         encryptedObjectHexLength: encryptedObjectHex?.length ?? 0,
       });
 
-      console.log('[VerificationStep] Validation passed. Starting encrypted blob verification...');
+      console.log(
+        "[VerificationStep] Validation passed. Starting encrypted blob verification...",
+      );
 
       setTotalFiles(1);
       setCurrentFileIndex(0);
@@ -389,13 +450,14 @@ export function VerificationStep({
     } else {
       // Legacy file upload flow (for backwards compatibility)
       if (!audioFile && (!audioFiles || audioFiles.length === 0)) {
-        setErrorMessage('No audio file or encrypted blob provided');
-        setVerificationState('failed');
-        onError('No audio file or encrypted blob provided');
+        setErrorMessage("No audio file or encrypted blob provided");
+        setVerificationState("failed");
+        onError("No audio file or encrypted blob provided");
         return;
       }
 
-      const filesToVerify = audioFiles && audioFiles.length > 0 ? audioFiles : [audioFile!];
+      const filesToVerify =
+        audioFiles && audioFiles.length > 0 ? audioFiles : [audioFile!];
       setTotalFiles(filesToVerify.length);
       setCurrentFileIndex(0);
 
@@ -408,15 +470,15 @@ export function VerificationStep({
     if (fileIndex >= files.length) {
       // All files verified successfully
       const finalResult: VerificationResult = {
-        id: verificationId || 'multi-file-verification',
-        state: 'completed',
-        currentStage: 'completed',
+        id: verificationId || "multi-file-verification",
+        state: "completed",
+        currentStage: "completed",
         stages: [
-          { name: 'decryption', status: 'completed', progress: 100 },
-          { name: 'quality', status: 'completed', progress: 100 },
-          { name: 'copyright', status: 'completed', progress: 100 },
-          { name: 'transcription', status: 'completed', progress: 100 },
-          { name: 'analysis', status: 'completed', progress: 100 },
+          { name: "decryption", status: "completed", progress: 100 },
+          { name: "quality", status: "completed", progress: 100 },
+          { name: "copyright", status: "completed", progress: 100 },
+          { name: "transcription", status: "completed", progress: 100 },
+          { name: "analysis", status: "completed", progress: 100 },
         ],
         qualityScore: 1.0, // Overall pass
         safetyPassed: true,
@@ -424,7 +486,7 @@ export function VerificationStep({
         updatedAt: Date.now(),
       };
       setResult(finalResult);
-      setVerificationState('completed');
+      setVerificationState("completed");
       onVerificationComplete(finalResult);
       return;
     }
@@ -433,30 +495,32 @@ export function VerificationStep({
 
     // Reset stages for current file
     setStages([
-      { name: 'decryption', status: 'completed', progress: 100 }, // N/A for legacy file flow
-      { name: 'quality', status: 'pending', progress: 0 },
-      { name: 'copyright', status: 'pending', progress: 0 },
-      { name: 'transcription', status: 'pending', progress: 0 },
-      { name: 'analysis', status: 'pending', progress: 0 },
+      { name: "decryption", status: "completed", progress: 100 }, // N/A for legacy file flow
+      { name: "quality", status: "pending", progress: 0 },
+      { name: "copyright", status: "pending", progress: 0 },
+      { name: "transcription", status: "pending", progress: 0 },
+      { name: "analysis", status: "pending", progress: 0 },
     ]);
 
     try {
       // Prepare form data with raw audio file (BEFORE encryption!)
       const formData = new FormData();
-      formData.append('file', files[fileIndex].file);
+      formData.append("file", files[fileIndex].file);
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
-      formData.append('metadata', JSON.stringify(sanitizedMetadata));
+      formData.append("metadata", JSON.stringify(sanitizedMetadata));
 
       // Call server-side API (proxies to audio-verifier with secure token)
-      const response = await fetch('/api/verify', {
-        method: 'POST',
+      const response = await fetch("/api/verify", {
+        method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(
+          errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
+        );
       }
 
       const data = await response.json();
@@ -466,26 +530,27 @@ export function VerificationStep({
 
       // Start polling for verification status
       startPolling(id, files, fileIndex);
-
     } catch (error) {
-      console.error('Failed to start verification:', error);
+      console.error("Failed to start verification:", error);
       const errorMsg = getErrorMessage(error);
-      setErrorMessage(errorMsg || 'Failed to start verification');
-      setVerificationState('failed');
-      onError(errorMsg || 'Verification failed to start');
+      setErrorMessage(errorMsg || "Failed to start verification");
+      setVerificationState("failed");
+      onError(errorMsg || "Verification failed to start");
     }
   };
 
   const verifyEncryptedBlob = async (
     walrusBlobId: string,
-    sealIdentity: string
+    sealIdentity: string,
   ) => {
     try {
       if (!sessionKeyExport) {
-        throw new Error('No active session. Please authorize verification first.');
+        throw new Error(
+          "No active session. Please authorize verification first.",
+        );
       }
 
-      console.log('[VerificationStep] Sending verification request to backend');
+      console.log("[VerificationStep] Sending verification request to backend");
 
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
@@ -493,18 +558,26 @@ export function VerificationStep({
       // Validate and inject keyServers + threshold into session payload
       // Priority: session export > config > empty fallback
       let keyServers = sessionKeyExport.keyServers;
-      if (!keyServers || !Array.isArray(keyServers) || keyServers.length === 0) {
+      if (
+        !keyServers ||
+        !Array.isArray(keyServers) ||
+        keyServers.length === 0
+      ) {
         // Export didn't have keyServers, use config
         keyServers = configKeyServers;
       }
 
       // Fail if we still don't have keyServers - env not configured
-      if (!keyServers || !Array.isArray(keyServers) || keyServers.length === 0) {
+      if (
+        !keyServers ||
+        !Array.isArray(keyServers) ||
+        keyServers.length === 0
+      ) {
         const envError =
-          'Key servers not configured. Set NEXT_PUBLIC_SEAL_KEY_SERVERS env var.';
-        console.error('[VerificationStep]', envError);
+          "Key servers not configured. Set NEXT_PUBLIC_SEAL_KEY_SERVERS env var.";
+        console.error("[VerificationStep]", envError);
         setErrorMessage(envError);
-        setVerificationState('failed');
+        setVerificationState("failed");
         return;
       }
 
@@ -515,19 +588,22 @@ export function VerificationStep({
       let sessionKeyJson: string;
       try {
         sessionKeyJson = JSON.stringify(sessionPayload, (_k, v) =>
-          v instanceof Uint8Array ? Array.from(v) : v
+          v instanceof Uint8Array ? Array.from(v) : v,
         );
       } catch (err) {
         const serializationError = getErrorMessage(err);
-        console.error('[VerificationStep] Failed to serialize session payload:', serializationError);
+        console.error(
+          "[VerificationStep] Failed to serialize session payload:",
+          serializationError,
+        );
         setErrorMessage(`Session encoding failed: ${serializationError}`);
-        setVerificationState('failed');
+        setVerificationState("failed");
         return;
       }
 
       // Development: log sessionKeyData structure for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[VerificationStep] sessionKeyData validated:', {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[VerificationStep] sessionKeyData validated:", {
           keyServersCount: keyServers.length,
           keyServerSample: keyServers[0],
           threshold,
@@ -537,15 +613,16 @@ export function VerificationStep({
 
       // Backend will handle blob fetch and decryption
       // We only need to send sessionKeyData for backend to decrypt
-      const response = await fetch('/api/verify', {
-        method: 'POST',
+      const response = await fetch("/api/verify", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           walrusBlobId,
           sealIdentity,
-          encryptedObjectBcsHex: walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
+          encryptedObjectBcsHex:
+            walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
           metadata: sanitizedMetadata,
           sessionKeyData: sessionKeyJson,
         }),
@@ -555,8 +632,8 @@ export function VerificationStep({
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           errorData.detail ||
-          errorData.error ||
-          `HTTP ${response.status}: ${response.statusText}`
+            errorData.error ||
+            `HTTP ${response.status}: ${response.statusText}`,
         );
       }
 
@@ -564,7 +641,7 @@ export function VerificationStep({
       const id = data.sessionObjectId || data.verificationId; // Backend returns sessionObjectId
 
       if (!id) {
-        throw new Error('No verification ID returned from server');
+        throw new Error("No verification ID returned from server");
       }
 
       setVerificationId(id);
@@ -572,34 +649,61 @@ export function VerificationStep({
       // Start polling for verification status
       startPollingEncrypted(id);
     } catch (error) {
-      console.error('[VerificationStep] Failed to decrypt and verify:', error);
+      console.error("[VerificationStep] Failed to decrypt and verify:", error);
       const errorMsg = getErrorMessage(error);
 
       // Provide specific error messages based on error type
-      let displayError = errorMsg || 'Failed to decrypt and verify audio';
+      let displayError = errorMsg || "Failed to decrypt and verify audio";
 
-      if (errorMsg.includes('E_EXPIRED')) {
-        displayError = 'Verification window expired (15 minutes exceeded). Please re-upload and try again.';
-      } else if (errorMsg.includes('E_INVALID_TIMESTAMP')) {
-        displayError = 'Invalid upload timestamp. Please make sure your system clock is correct and try again.';
-      } else if (errorMsg.includes('expired') || errorMsg.includes('Expired')) {
-        displayError = 'Authorization session expired. Please try again and complete verification within 30 minutes.';
-      } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
-        displayError = 'Access denied. Please check your wallet connection and try again.';
-      } else if (errorMsg.includes('Invalid upload timestamp') || errorMsg.includes('Did you pass seconds')) {
-        displayError = 'Invalid timestamp format. Please refresh and try verification again.';
-      } else if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
-        displayError = 'Decryption service temporarily unavailable. Please try again in a few moments. If the issue persists, contact support.';
-      } else if (errorMsg.includes('504') || errorMsg.includes('Gateway Timeout')) {
-        displayError = 'Decryption service is taking too long. Please try again. Large files may require additional time.';
-      } else if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('unreachable')) {
-        displayError = 'Network error during verification. Please check your connection and retry.';
-      } else if (errorMsg.includes('corrupted') || errorMsg.includes('invalid')) {
-        displayError = 'The audio file appears corrupted. Please re-upload and try again.';
-      } else if (errorMsg.includes('HTTP')) {
-        displayError = 'Server error during verification. Please try again later.';
-      } else if (errorMsg.includes('DEPLOYMENT_NOT_FOUND') || errorMsg.includes('deployment could not be found')) {
-        displayError = 'Deployment update detected. Refreshing page to get latest version...';
+      if (errorMsg.includes("E_EXPIRED")) {
+        displayError =
+          "Verification window expired (15 minutes exceeded). Please re-upload and try again.";
+      } else if (errorMsg.includes("E_INVALID_TIMESTAMP")) {
+        displayError =
+          "Invalid upload timestamp. Please make sure your system clock is correct and try again.";
+      } else if (errorMsg.includes("expired") || errorMsg.includes("Expired")) {
+        displayError =
+          "Authorization session expired. Please try again and complete verification within 30 minutes.";
+      } else if (errorMsg.includes("403") || errorMsg.includes("Forbidden")) {
+        displayError =
+          "Access denied. Please check your wallet connection and try again.";
+      } else if (
+        errorMsg.includes("Invalid upload timestamp") ||
+        errorMsg.includes("Did you pass seconds")
+      ) {
+        displayError =
+          "Invalid timestamp format. Please refresh and try verification again.";
+      } else if (errorMsg.includes("502") || errorMsg.includes("Bad Gateway")) {
+        displayError =
+          "Decryption service temporarily unavailable. Please try again in a few moments. If the issue persists, contact support.";
+      } else if (
+        errorMsg.includes("504") ||
+        errorMsg.includes("Gateway Timeout")
+      ) {
+        displayError =
+          "Decryption service is taking too long. Please try again. Large files may require additional time.";
+      } else if (
+        errorMsg.includes("network") ||
+        errorMsg.includes("timeout") ||
+        errorMsg.includes("unreachable")
+      ) {
+        displayError =
+          "Network error during verification. Please check your connection and retry.";
+      } else if (
+        errorMsg.includes("corrupted") ||
+        errorMsg.includes("invalid")
+      ) {
+        displayError =
+          "The audio file appears corrupted. Please re-upload and try again.";
+      } else if (errorMsg.includes("HTTP")) {
+        displayError =
+          "Server error during verification. Please try again later.";
+      } else if (
+        errorMsg.includes("DEPLOYMENT_NOT_FOUND") ||
+        errorMsg.includes("deployment could not be found")
+      ) {
+        displayError =
+          "Deployment update detected. Refreshing page to get latest version...";
         // Force reload to fix stale deployment
         setTimeout(() => {
           window.location.reload();
@@ -607,7 +711,7 @@ export function VerificationStep({
       }
 
       setErrorMessage(displayError);
-      setVerificationState('failed');
+      setVerificationState("failed");
       onError(displayError);
     }
   };
@@ -626,10 +730,11 @@ export function VerificationStep({
         const session = await response.json();
 
         // Parse response based on new API contract
-        const currentStage = session.currentStage || session.stage || 'quality';
+        const currentStage = session.currentStage || session.stage || "quality";
         const progress = session.progress || 0;
         const approved = session.approved ?? false;
         const qualityScore = session.qualityScore ?? 0;
+        const suggestedPrice = session.suggestedPrice ?? 3.0;
         const safetyPassed = session.safetyPassed ?? false;
         const analysis = session.analysis || {};
         const errors = session.errors || [];
@@ -647,54 +752,56 @@ export function VerificationStep({
         });
 
         // Check if completed or failed
-        if (session.state === 'completed' || session.approved !== undefined) {
+        if (session.state === "completed" || session.approved !== undefined) {
           clearInterval(interval);
           pollingIntervalRef.current = null;
 
           // Check if approved
           if (!approved) {
             // Verification failed validation
-            setVerificationState('failed');
-            setErrorMessage(errors[0] || 'Verification failed quality, copyright, or safety checks');
+            setVerificationState("failed");
+            setErrorMessage(
+              errors[0] ||
+                "Verification failed quality, copyright, or safety checks",
+            );
             setErrorDetails({ ...session, errors });
-            onError(errors[0] || 'Verification checks failed');
+            onError(errors[0] || "Verification checks failed");
             return;
           }
 
           // Verification passed
           const finalResult: VerificationResult = {
             id: sessionObjectId,
-            state: 'completed',
-            currentStage: 'completed',
+            state: "completed",
+            currentStage: "completed",
             stages: [
-              { name: 'decryption', status: 'completed', progress: 100 },
-              { name: 'quality', status: 'completed', progress: 100 },
-              { name: 'copyright', status: 'completed', progress: 100 },
-              { name: 'transcription', status: 'completed', progress: 100 },
-              { name: 'analysis', status: 'completed', progress: 100 },
+              { name: "decryption", status: "completed", progress: 100 },
+              { name: "quality", status: "completed", progress: 100 },
+              { name: "copyright", status: "completed", progress: 100 },
+              { name: "transcription", status: "completed", progress: 100 },
+              { name: "analysis", status: "completed", progress: 100 },
             ],
             qualityScore: qualityScore / 100, // Convert 0-100 to 0-1
+            suggestedPrice,
             safetyPassed,
             insights: analysis.insights || [],
             updatedAt: Date.now(),
           };
 
           setResult(finalResult);
-          setVerificationState('completed');
+          setVerificationState("completed");
           onVerificationComplete(finalResult);
-
-        } else if (session.state === 'failed') {
+        } else if (session.state === "failed") {
           clearInterval(interval);
           pollingIntervalRef.current = null;
 
-          setVerificationState('failed');
-          setErrorMessage(errors[0] || 'Verification failed');
+          setVerificationState("failed");
+          setErrorMessage(errors[0] || "Verification failed");
           setErrorDetails({ ...session, errors });
-          onError(errors[0] || 'Verification failed');
+          onError(errors[0] || "Verification failed");
         }
-
       } catch (error) {
-        console.error('Polling error:', error);
+        console.error("Polling error:", error);
         // Don't fail immediately on polling errors, keep trying
       }
     }, 2000);
@@ -725,35 +832,35 @@ export function VerificationStep({
         updateStagesFromSession(session);
 
         // Check if completed or failed
-        if (session.state === 'completed') {
+        if (session.state === "completed") {
           clearInterval(interval);
           pollingIntervalRef.current = null;
 
           // Check if approved
           if (!session.approved) {
             // Verification failed validation
-            setVerificationState('failed');
-            setErrorMessage('Verification failed quality, copyright, or safety checks');
+            setVerificationState("failed");
+            setErrorMessage(
+              "Verification failed quality, copyright, or safety checks",
+            );
             setErrorDetails(session);
-            onError('Verification checks failed');
+            onError("Verification checks failed");
             return;
           }
 
           // This file passed, move to next file
           await verifyNextFile(files, fileIndex + 1);
-
-        } else if (session.state === 'failed') {
+        } else if (session.state === "failed") {
           clearInterval(interval);
           pollingIntervalRef.current = null;
 
-          setVerificationState('failed');
-          setErrorMessage(session.errors?.[0] || 'Verification failed');
+          setVerificationState("failed");
+          setErrorMessage(session.errors?.[0] || "Verification failed");
           setErrorDetails(session);
-          onError(session.errors?.[0] || 'Verification failed');
+          onError(session.errors?.[0] || "Verification failed");
         }
-
       } catch (error) {
-        console.error('Polling error:', error);
+        console.error("Polling error:", error);
         // Don't fail immediately on polling errors, keep trying
       }
     }, 2000);
@@ -761,46 +868,52 @@ export function VerificationStep({
     pollingIntervalRef.current = interval;
   };
 
-  const updateStagesFromSession = (session: Pick<VerificationSession, 'stage' | 'progress'>) => {
+  const updateStagesFromSession = (
+    session: Pick<VerificationSession, "stage" | "progress">,
+  ) => {
     const currentStage = session.stage;
     const progress = session.progress || 0;
 
-    const stageOrder = ['quality', 'copyright', 'transcription', 'analysis'];
+    const stageOrder = ["quality", "copyright", "transcription", "analysis"];
     const currentIndex = stageOrder.indexOf(currentStage);
 
     setStages((prev) =>
       prev.map((stage, idx) => {
         if (idx < currentIndex) {
-          return { ...stage, status: 'completed', progress: 100 };
+          return { ...stage, status: "completed", progress: 100 };
         } else if (stage.name === currentStage) {
-          return { ...stage, status: 'in_progress', progress: Math.round(progress * 100) };
+          return {
+            ...stage,
+            status: "in_progress",
+            progress: Math.round(progress * 100),
+          };
         } else {
-          return { ...stage, status: 'pending', progress: 0 };
+          return { ...stage, status: "pending", progress: 0 };
         }
-      })
+      }),
     );
   };
 
   const stageConfig = {
     quality: {
       icon: <Music className="w-5 h-5" />,
-      label: 'Quality Check',
-      description: 'Analyzing audio quality, sample rate, and volume levels',
+      label: "Quality Check",
+      description: "Analyzing audio quality, sample rate, and volume levels",
     },
     copyright: {
       icon: <Copyright className="w-5 h-5" />,
-      label: 'Copyright Detection',
-      description: 'Checking for copyrighted content using fingerprinting',
+      label: "Copyright Detection",
+      description: "Checking for copyrighted content using fingerprinting",
     },
     transcription: {
       icon: <FileText className="w-5 h-5" />,
-      label: 'Transcription',
-      description: 'Converting audio to text using Gemini AI',
+      label: "Transcription",
+      description: "Converting audio to text using Gemini AI",
     },
     analysis: {
       icon: <Brain className="w-5 h-5" />,
-      label: 'AI Analysis',
-      description: 'Analyzing quality, safety, and content value',
+      label: "AI Analysis",
+      description: "Analyzing quality, safety, and content value",
     },
   };
 
@@ -815,17 +928,20 @@ export function VerificationStep({
               Enhance Your Dataset Value
             </h3>
             <p className="text-sm text-sonar-highlight/80 mb-3">
-              Add optional metadata like Audio Quality (+10% points) and Speaker Information (+15% points) to boost your rarity score and attract more buyers.
+              Add optional metadata like Audio Quality (+10% points) and Speaker
+              Information (+15% points) to boost your rarity score and attract
+              more buyers.
             </p>
             <p className="text-xs text-sonar-highlight/60 mb-3">
-              You can go back to the metadata form to fill in these optional fields at any time.
+              You can go back to the metadata form to fill in these optional
+              fields at any time.
             </p>
           </div>
         </div>
       </GlassCard>
 
       {/* Waiting for User Authorization */}
-      {verificationState === 'waiting-auth' && (
+      {verificationState === "waiting-auth" && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -847,17 +963,19 @@ export function VerificationStep({
               Authorize Verification
             </h3>
             <p className="text-sonar-highlight/70 max-w-2xl mx-auto mb-6">
-              Sign with your Sui wallet to authorize Sonar to verify your encrypted audio with secure key server authentication.
+              Sign with your Sui wallet to authorize Sonar to verify your
+              encrypted audio with secure key server authentication.
             </p>
             <p className="text-sm text-sonar-highlight/50 mb-8">
-              Your signature proves you own this audio and authorizes temporary key access for verification.
+              Your signature proves you own this audio and authorizes temporary
+              key access for verification.
             </p>
             <SonarButton
               onClick={handleAuthorizeVerification}
               disabled={isCreatingSession || !dataAccessAcknowledged}
               className="w-full"
             >
-              {isCreatingSession ? 'Signing...' : 'Sign & Authorize'}
+              {isCreatingSession ? "Signing..." : "Sign & Authorize"}
             </SonarButton>
             {errorMessage && (
               <div className="mt-4 p-3 rounded-sonar bg-sonar-coral/10 border border-sonar-coral/20">
@@ -869,7 +987,7 @@ export function VerificationStep({
       )}
 
       {/* Verification Running */}
-      {(verificationState === 'running') && (
+      {verificationState === "running" && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -909,17 +1027,18 @@ export function VerificationStep({
           {/* Stage Progress */}
           <div className="space-y-3">
             {stages.map((stage) => {
-              const config = stageConfig[stage.name as keyof typeof stageConfig];
-              const isCompleted = stage.status === 'completed';
-              const isActive = stage.status === 'in_progress';
-              const isPending = stage.status === 'pending';
+              const config =
+                stageConfig[stage.name as keyof typeof stageConfig];
+              const isCompleted = stage.status === "completed";
+              const isActive = stage.status === "in_progress";
+              const isPending = stage.status === "pending";
 
               return (
                 <GlassCard
                   key={stage.name}
                   className={cn(
-                    'transition-all duration-300',
-                    isActive && 'bg-sonar-signal/10 border border-sonar-signal'
+                    "transition-all duration-300",
+                    isActive && "bg-sonar-signal/10 border border-sonar-signal",
                   )}
                 >
                   <div className="space-y-3">
@@ -927,22 +1046,27 @@ export function VerificationStep({
                       <div className="flex items-center space-x-3">
                         <div
                           className={cn(
-                            'p-2 rounded-sonar transition-colors',
-                            isCompleted && 'bg-sonar-signal/20 text-sonar-signal',
-                            isActive && 'bg-sonar-signal/30 text-sonar-signal',
-                            isPending && 'bg-sonar-blue/10 text-sonar-blue/50'
+                            "p-2 rounded-sonar transition-colors",
+                            isCompleted &&
+                              "bg-sonar-signal/20 text-sonar-signal",
+                            isActive && "bg-sonar-signal/30 text-sonar-signal",
+                            isPending && "bg-sonar-blue/10 text-sonar-blue/50",
                           )}
                         >
-                          {isCompleted ? <CheckCircle className="w-5 h-5" /> : config.icon}
+                          {isCompleted ? (
+                            <CheckCircle className="w-5 h-5" />
+                          ) : (
+                            config.icon
+                          )}
                         </div>
 
                         <div>
                           <p
                             className={cn(
-                              'font-mono font-semibold',
-                              isCompleted && 'text-sonar-highlight/70',
-                              isActive && 'text-sonar-highlight-bright',
-                              isPending && 'text-sonar-highlight/50'
+                              "font-mono font-semibold",
+                              isCompleted && "text-sonar-highlight/70",
+                              isActive && "text-sonar-highlight-bright",
+                              isPending && "text-sonar-highlight/50",
                             )}
                           >
                             {config.label}
@@ -1010,7 +1134,7 @@ export function VerificationStep({
       )}
 
       {/* Verification Complete */}
-      {verificationState === 'completed' && result && (
+      {verificationState === "completed" && result && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1049,6 +1173,23 @@ export function VerificationStep({
               </div>
             )}
 
+            {/* AI Suggested Price */}
+            {result.suggestedPrice !== undefined && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30">
+                <p className="text-sm font-mono text-sonar-highlight/70 mb-2">
+                  AI Suggested Price
+                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-sonar-highlight/60">
+                    Based on quality, uniqueness, and market value
+                  </p>
+                  <span className="text-2xl font-mono font-bold text-sonar-signal">
+                    {result.suggestedPrice.toFixed(2)} SUI
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Insights */}
             {result.insights && result.insights.length > 0 && (
               <div className="mt-4 space-y-2">
@@ -1077,7 +1218,7 @@ export function VerificationStep({
       )}
 
       {/* Verification Failed */}
-      {verificationState === 'failed' && (
+      {verificationState === "failed" && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1091,7 +1232,8 @@ export function VerificationStep({
                   Verification Failed
                 </h3>
                 <p className="text-sm text-sonar-highlight/70">
-                  {errorMessage || 'Your audio did not pass verification checks'}
+                  {errorMessage ||
+                    "Your audio did not pass verification checks"}
                 </p>
               </div>
             </div>
@@ -1105,12 +1247,14 @@ export function VerificationStep({
                       Quality Issues:
                     </p>
                     <ul className="text-sm text-sonar-highlight/70 space-y-1">
-                      {errorDetails.errors?.map((error: string, idx: number) => (
-                        <li key={idx} className="flex items-start space-x-2">
-                          <span>•</span>
-                          <span>{error}</span>
-                        </li>
-                      ))}
+                      {errorDetails.errors?.map(
+                        (error: string, idx: number) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span>•</span>
+                            <span>{error}</span>
+                          </li>
+                        ),
+                      )}
                     </ul>
                   </div>
                 )}
@@ -1126,7 +1270,11 @@ export function VerificationStep({
                         ` by ${errorDetails.copyright.best_match.artist}`}
                     </p>
                     <p className="text-xs text-sonar-highlight/50 mt-1">
-                      Confidence: {(errorDetails.copyright.best_match?.confidence * 100).toFixed(1)}%
+                      Confidence:{" "}
+                      {(
+                        errorDetails.copyright.best_match?.confidence * 100
+                      ).toFixed(1)}
+                      %
                     </p>
                   </div>
                 )}

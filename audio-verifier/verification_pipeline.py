@@ -86,7 +86,9 @@ class VerificationPipeline:
         temp_fd, temp_path = tempfile.mkstemp(
             suffix=extension,
             prefix="verify_",
-            dir="/tmp/audio-verifier" if os.path.exists("/tmp/audio-verifier") else None
+            dir="/tmp/audio-verifier"
+            if os.path.exists("/tmp/audio-verifier")
+            else None,
         )
 
         try:
@@ -111,7 +113,7 @@ class VerificationPipeline:
         session_object_id: str,
         audio_file_path: str,
         metadata: Dict[str, Any],
-        blob_id: Optional[str] = None
+        blob_id: Optional[str] = None,
     ) -> None:
         """
         Run the complete six-stage verification pipeline from a file path.
@@ -125,20 +127,26 @@ class VerificationPipeline:
             metadata: Dataset metadata (title, description, etc.)
             blob_id: Optional Walrus blob ID for logging correlation
         """
-        logger.info(f"Starting verification pipeline for session {session_object_id[:8]}... from file {audio_file_path}")
+        logger.info(
+            f"Starting verification pipeline for session {session_object_id[:8]}... from file {audio_file_path}"
+        )
 
         try:
             # Run the standard pipeline with file path (avoids loading into RAM)
             await self.run(session_object_id, audio_file_path, metadata, blob_id)
 
         except Exception as e:
-            logger.error(f"[{session_object_id[:8]}...] Pipeline failed: {e}", exc_info=True)
-            success = await self.session_store.mark_failed(session_object_id, {
-                "errors": [f"Pipeline error: {str(e)}"],
-                "stage_failed": "system"
-            })
+            logger.error(
+                f"[{session_object_id[:8]}...] Pipeline failed: {e}", exc_info=True
+            )
+            success = await self.session_store.mark_failed(
+                session_object_id,
+                {"errors": [f"Pipeline error: {str(e)}"], "stage_failed": "system"},
+            )
             if not success:
-                logger.error(f"Failed to mark session {session_object_id[:8]}... as failed")
+                logger.error(
+                    f"Failed to mark session {session_object_id[:8]}... as failed"
+                )
         finally:
             # Always clean up temp file
             try:
@@ -153,7 +161,7 @@ class VerificationPipeline:
         session_object_id: str,
         audio_file_path: str,
         metadata: Dict[str, Any],
-        blob_id: Optional[str] = None
+        blob_id: Optional[str] = None,
     ) -> None:
         """
         Run the complete six-stage verification pipeline.
@@ -164,24 +172,29 @@ class VerificationPipeline:
             metadata: Dataset metadata (title, description, etc.)
             blob_id: Optional Walrus blob ID for logging correlation
         """
-        logger.info(f"Starting verification pipeline for session {session_object_id[:8]}...")
+        logger.info(
+            f"Starting verification pipeline for session {session_object_id[:8]}..."
+        )
 
         try:
             # Stage 1: Quality Check
             logger.info(f"[{session_object_id}] Stage 1: Quality Check")
             quality_result = await self._stage_quality_check(
-                session_object_id,
-                audio_file_path,
-                blob_id
+                session_object_id, audio_file_path, blob_id
             )
 
             # Handle quality check failure (returns None for invalid audio)
             if quality_result is None:
-                logger.warning(f"[{session_object_id}] Quality check returned None - invalid or corrupted audio file")
-                success = await self.session_store.mark_failed(session_object_id, {
-                    "errors": ["Invalid or corrupted audio file"],
-                    "stage_failed": "quality"
-                })
+                logger.warning(
+                    f"[{session_object_id}] Quality check returned None - invalid or corrupted audio file"
+                )
+                success = await self.session_store.mark_failed(
+                    session_object_id,
+                    {
+                        "errors": ["Invalid or corrupted audio file"],
+                        "stage_failed": "quality",
+                    },
+                )
                 if not success:
                     logger.error(f"Failed to mark session as failed")
                 return
@@ -190,13 +203,18 @@ class VerificationPipeline:
             quality_info = quality_result.get("quality") or {}
             if not quality_info.get("passed", False):
                 failure_reason = quality_result.get("failure_reason", "unknown")
-                logger.warning(f"[{session_object_id}] Failed quality check: {failure_reason}")
-                success = await self.session_store.mark_failed(session_object_id, {
-                    "quality": quality_info,
-                    "errors": quality_result.get("errors", []),
-                    "stage_failed": "quality",
-                    "failure_reason": failure_reason
-                })
+                logger.warning(
+                    f"[{session_object_id}] Failed quality check: {failure_reason}"
+                )
+                success = await self.session_store.mark_failed(
+                    session_object_id,
+                    {
+                        "quality": quality_info,
+                        "errors": quality_result.get("errors", []),
+                        "stage_failed": "quality",
+                        "failure_reason": failure_reason,
+                    },
+                )
                 if not success:
                     logger.error(f"Failed to mark session as failed")
                 return
@@ -204,29 +222,33 @@ class VerificationPipeline:
             # Stage 2: Copyright Check
             logger.info(f"[{session_object_id}] Stage 2: Copyright Check")
             copyright_result = await self._stage_copyright_check(
-                session_object_id,
-                audio_file_path
+                session_object_id, audio_file_path
             )
 
             # Handle copyright check failure
             if copyright_result is None:
                 logger.warning(f"[{session_object_id}] Copyright check failed")
-                copyright_result = {"copyright": {}, "errors": ["Copyright check unavailable"]}
+                copyright_result = {
+                    "copyright": {},
+                    "errors": ["Copyright check unavailable"],
+                }
 
             # Stage 3: Transcription
             logger.info(f"[{session_object_id}] Stage 3: Transcription")
             transcript = await self._stage_transcription(
-                session_object_id,
-                audio_file_path
+                session_object_id, audio_file_path
             )
 
             # Handle transcription failure
             if not transcript:
                 logger.warning(f"[{session_object_id}] Transcription returned empty")
-                success = await self.session_store.mark_failed(session_object_id, {
-                    "errors": ["Failed to transcribe audio"],
-                    "stage_failed": "transcription"
-                })
+                success = await self.session_store.mark_failed(
+                    session_object_id,
+                    {
+                        "errors": ["Failed to transcribe audio"],
+                        "stage_failed": "transcription",
+                    },
+                )
                 if not success:
                     logger.error(f"Failed to mark session as failed")
                 return
@@ -237,7 +259,7 @@ class VerificationPipeline:
                 session_object_id,
                 transcript,
                 metadata,
-                quality_result.get("quality", {})
+                quality_result.get("quality", {}),
             )
 
             # Stage 5: Aggregation
@@ -246,9 +268,7 @@ class VerificationPipeline:
 
             # Calculate final approval
             approved = self._calculate_approval(
-                quality_result,
-                copyright_result,
-                analysis_result
+                quality_result, copyright_result, analysis_result
             )
 
             # Stage 6: Finalization
@@ -260,23 +280,23 @@ class VerificationPipeline:
                 "transcript": transcript,
                 "transcriptPreview": transcript[:200],
                 "analysis": analysis_result,
-                "safetyPassed": analysis_result.get("safetyPassed", False)
+                "safetyPassed": analysis_result.get("safetyPassed", False),
             }
-            completed = await self.session_store.mark_completed(session_object_id, completion_payload)
+            completed = await self.session_store.mark_completed(
+                session_object_id, completion_payload
+            )
 
             if not completed:
                 raise RuntimeError("Failed to finalize verification")
 
-            logger.info(
-                f"[{session_object_id}] Pipeline completed approved={approved}"
-            )
+            logger.info(f"[{session_object_id}] Pipeline completed approved={approved}")
 
         except Exception as e:
             logger.error(f"[{session_object_id}] Pipeline failed: {e}", exc_info=True)
-            success = await self.session_store.mark_failed(session_object_id, {
-                "errors": [f"Pipeline error: {str(e)}"],
-                "stage_failed": "system"
-            })
+            success = await self.session_store.mark_failed(
+                session_object_id,
+                {"errors": [f"Pipeline error: {str(e)}"], "stage_failed": "system"},
+            )
             if not success:
                 logger.error(f"Failed to mark session as failed")
 
@@ -284,7 +304,7 @@ class VerificationPipeline:
         self,
         session_object_id: str,
         audio_file_path: str,
-        blob_id: Optional[str] = None
+        blob_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Stage 1: Quality Check
@@ -297,11 +317,14 @@ class VerificationPipeline:
             blob_id: Optional Walrus blob ID for logging correlation
         """
         import time
+
         stage_start = time.time()
 
         await self._update_stage(session_object_id, "quality", 0.15)
 
-        result = await self.quality_checker.check_audio_file(audio_file_path, session_id=session_object_id)
+        result = await self.quality_checker.check_audio_file(
+            audio_file_path, session_id=session_object_id
+        )
 
         quality_info = result.get("quality")
         quality_passed = quality_info.get("passed", False) if quality_info else False
@@ -319,10 +342,7 @@ class VerificationPipeline:
             await self.session_store.add_warnings(session_object_id, warnings)
             logger.info(
                 f"[{session_object_id}] Quality check captured {len(warnings)} warning(s)",
-                extra={
-                    "session_id": session_object_id,
-                    "warnings": warnings
-                }
+                extra={"session_id": session_object_id, "warnings": warnings},
             )
 
         if not quality_passed:
@@ -335,8 +355,8 @@ class VerificationPipeline:
                     "duration_seconds": round(stage_duration, 2),
                     "quality_info": quality_info,
                     "errors": errors,
-                    "failure_reason": failure_reason or "unknown"
-                }
+                    "failure_reason": failure_reason or "unknown",
+                },
             )
         else:
             logger.info(
@@ -344,8 +364,10 @@ class VerificationPipeline:
                 extra={
                     "session_id": session_object_id,
                     "duration_seconds": round(stage_duration, 2),
-                    "quality_score": quality_info.get("score") if quality_info else None
-                }
+                    "quality_score": quality_info.get("score")
+                    if quality_info
+                    else None,
+                },
             )
 
         await self._update_stage(session_object_id, "quality", 0.30)
@@ -353,9 +375,7 @@ class VerificationPipeline:
         return result
 
     async def _stage_copyright_check(
-        self,
-        session_object_id: str,
-        audio_file_path: str
+        self, session_object_id: str, audio_file_path: str
     ) -> Dict[str, Any]:
         """
         Stage 2: Copyright Check
@@ -363,10 +383,13 @@ class VerificationPipeline:
         Uses Chromaprint + AcoustID for copyright detection.
         """
         import time
+
         stage_start = time.time()
 
         await self._update_stage(session_object_id, "copyright", 0.35)
-        result = await self.copyright_detector.check_copyright_from_path(audio_file_path)
+        result = await self.copyright_detector.check_copyright_from_path(
+            audio_file_path
+        )
 
         stage_duration = time.time() - stage_start
         copyright_info = result.get("copyright", {})
@@ -378,8 +401,8 @@ class VerificationPipeline:
                 extra={
                     "session_id": session_object_id,
                     "duration_seconds": round(stage_duration, 2),
-                    "error": copyright_info.get("error")
-                }
+                    "error": copyright_info.get("error"),
+                },
             )
         else:
             logger.info(
@@ -387,8 +410,8 @@ class VerificationPipeline:
                 extra={
                     "session_id": session_object_id,
                     "duration_seconds": round(stage_duration, 2),
-                    "matches_found": len(copyright_info.get("matches", []))
-                }
+                    "matches_found": len(copyright_info.get("matches", [])),
+                },
             )
 
         await self._update_stage(session_object_id, "copyright", 0.45)
@@ -396,9 +419,7 @@ class VerificationPipeline:
         return result
 
     async def _stage_transcription(
-        self,
-        session_object_id: str,
-        audio_file_path: str
+        self, session_object_id: str, audio_file_path: str
     ) -> str:
         """
         Stage 3: Transcription
@@ -407,12 +428,15 @@ class VerificationPipeline:
         """
         import time
         import base64
+
         stage_start = time.time()
 
         await self._update_stage(session_object_id, "transcription", 0.55)
 
         try:
-            logger.debug(f"[{session_object_id}] Transcribing audio via OpenRouter Voxtral")
+            logger.debug(
+                f"[{session_object_id}] Transcribing audio via OpenRouter Voxtral"
+            )
 
             # Read audio file as base64 for chat completions API
             with open(audio_file_path, "rb") as audio_file:
@@ -423,8 +447,8 @@ class VerificationPipeline:
                 f"[{session_object_id}] Audio file loaded",
                 extra={
                     "session_id": session_object_id,
-                    "file_size_bytes": len(audio_bytes)
-                }
+                    "file_size_bytes": len(audio_bytes),
+                },
             )
 
             # Determine audio MIME type from file extension
@@ -440,21 +464,24 @@ class VerificationPipeline:
 
             # Call Voxtral via OpenRouter chat completions API
             # OpenRouter uses OpenAI-compatible format for multimodal inputs
-            transcription_messages = cast(List[Any], [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Transcribe this audio verbatim. Return only the transcript text, without any additional commentary or formatting."
-                        },
-                        {
-                            "type": "input_audio",
-                            "input_audio": f"data:{audio_mime};base64,{audio_base64}"
-                        }
-                    ]
-                }
-            ])
+            transcription_messages = cast(
+                List[Any],
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Transcribe this audio verbatim. Return only the transcript text, without any additional commentary or formatting.",
+                            },
+                            {
+                                "type": "input_audio",
+                                "input_audio": f"data:{audio_mime};base64,{audio_base64}",
+                            },
+                        ],
+                    }
+                ],
+            )
 
             api_start = time.time()
             completion = self.openai_client.chat.completions.create(
@@ -473,8 +500,8 @@ class VerificationPipeline:
                     "session_id": session_object_id,
                     "duration_seconds": round(stage_duration, 2),
                     "api_duration_seconds": round(api_duration, 2),
-                    "transcript_length_chars": len(transcript)
-                }
+                    "transcript_length_chars": len(transcript),
+                },
             )
 
             await self._update_stage(session_object_id, "transcription", 0.65)
@@ -487,9 +514,9 @@ class VerificationPipeline:
                 f"[{session_object_id}] Transcription failed: {e}",
                 extra={
                     "session_id": session_object_id,
-                    "duration_seconds": round(stage_duration, 2)
+                    "duration_seconds": round(stage_duration, 2),
                 },
-                exc_info=True
+                exc_info=True,
             )
             raise Exception(f"Failed to transcribe audio: {str(e)}")
 
@@ -498,7 +525,7 @@ class VerificationPipeline:
         session_object_id: str,
         transcript: str,
         metadata: Dict[str, Any],
-        quality_info: Dict[str, Any]
+        quality_info: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Stage 4: AI Analysis
@@ -512,12 +539,15 @@ class VerificationPipeline:
 
         try:
             # Call Gemini 2.5 Flash via OpenRouter
-            analysis_messages = cast(List[Any], [
-                {
-                    "role": "user",
-                    "content": prompt,
-                },
-            ])
+            analysis_messages = cast(
+                List[Any],
+                [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+            )
             completion = self.openai_client.chat.completions.create(
                 model=OPENROUTER_MODELS["ANALYSIS"],
                 max_tokens=2048,
@@ -543,16 +573,14 @@ class VerificationPipeline:
             # Return safe defaults if analysis fails
             return {
                 "qualityScore": 0.5,
+                "suggestedPrice": 3.0,
                 "safetyPassed": True,
                 "insights": ["Analysis parsing failed - manual review recommended"],
-                "concerns": ["Unable to parse detailed analysis"]
+                "concerns": ["Unable to parse detailed analysis"],
             }
 
     def _build_analysis_prompt(
-        self,
-        transcript: str,
-        metadata: Dict[str, Any],
-        quality_info: Dict[str, Any]
+        self, transcript: str, metadata: Dict[str, Any], quality_info: Dict[str, Any]
     ) -> str:
         """
         Build Gemini analysis prompt.
@@ -562,21 +590,23 @@ class VerificationPipeline:
         # Format audio metadata
         audio_meta_str = ""
         if quality_info:
-            audio_meta_str = f"""- Duration: {quality_info.get('duration', 0):.1f}s
-- Sample Rate: {quality_info.get('sample_rate', 0)}Hz
-- Channels: {quality_info.get('channels', 0)}
-- Bit Depth: {quality_info.get('bit_depth', 0)}"""
+            audio_meta_str = f"""- Duration: {quality_info.get("duration", 0):.1f}s
+- Sample Rate: {quality_info.get("sample_rate", 0)}Hz
+- Channels: {quality_info.get("channels", 0)}
+- Bit Depth: {quality_info.get("bit_depth", 0)}"""
 
         # Truncate transcript if too long
-        transcript_sample = transcript[:2000] + "..." if len(transcript) > 2000 else transcript
+        transcript_sample = (
+            transcript[:2000] + "..." if len(transcript) > 2000 else transcript
+        )
 
         return f"""You are an expert audio dataset quality analyst for the SONAR Protocol, a decentralized audio data marketplace. Analyze this audio dataset submission and provide a comprehensive quality assessment.
 
 ## Dataset Metadata
-- Title: {metadata.get('title', 'Unknown')}
-- Description: {metadata.get('description', 'No description')}
-- Languages: {', '.join(metadata.get('languages', []))}
-- Tags: {', '.join(metadata.get('tags', []))}
+- Title: {metadata.get("title", "Unknown")}
+- Description: {metadata.get("description", "No description")}
+- Languages: {", ".join(metadata.get("languages", []))}
+- Tags: {", ".join(metadata.get("tags", []))}
 {audio_meta_str}
 
 ## Transcript Sample
@@ -589,6 +619,7 @@ Provide your analysis in the following JSON format:
 ```json
 {{
   "qualityScore": 0.85,
+  "suggestedPrice": 5.0,
   "safetyPassed": true,
   "insights": [
     "Insight 1 about the dataset quality",
@@ -609,6 +640,19 @@ Provide your analysis in the following JSON format:
 - **Content Value** (0.3): Is the content meaningful, diverse, and useful for AI training?
 - **Metadata Accuracy** (0.2): Does the content match the provided metadata?
 - **Completeness** (0.2): Is the content complete without obvious truncation?
+
+### Purchase Price Suggestion (3-10 SUI):
+Suggest a fair market price in SUI tokens (minimum: 3, maximum: 10) based on:
+- **Quality Score** (40%): Higher quality = higher price
+- **Content Uniqueness** (30%): Rare/unique content commands premium
+- **Duration & Completeness** (20%): Longer, complete datasets worth more
+- **Metadata Richness** (10%): Well-documented datasets more valuable
+
+Pricing Guidelines:
+- 3-4 SUI: Basic quality, common content
+- 5-6 SUI: Good quality, useful content
+- 7-8 SUI: High quality, unique/specialized content
+- 9-10 SUI: Exceptional quality, rare/premium content
 
 ### Safety Screening:
 Flag as unsafe (safetyPassed: false) ONLY if content contains:
@@ -649,21 +693,32 @@ Respond ONLY with the JSON object, no additional text."""
 
             # Validate response structure
             if (
-                not isinstance(parsed.get("qualityScore"), (int, float)) or
-                not isinstance(parsed.get("safetyPassed"), bool) or
-                not isinstance(parsed.get("insights"), list)
+                not isinstance(parsed.get("qualityScore"), (int, float))
+                or not isinstance(parsed.get("safetyPassed"), bool)
+                or not isinstance(parsed.get("insights"), list)
             ):
                 raise ValueError("Invalid response structure from Gemini")
 
             # Normalize quality score to 0-1 range
             quality_score = max(0.0, min(1.0, float(parsed["qualityScore"])))
 
+            # Extract and clamp suggested price to 3-10 SUI range
+            suggested_price = parsed.get("suggestedPrice", 3.0)
+            try:
+                suggested_price = float(suggested_price)
+                suggested_price = max(
+                    3.0, min(10.0, suggested_price)
+                )  # Clamp to 3-10 range
+            except (TypeError, ValueError):
+                suggested_price = 3.0  # Default to minimum if invalid
+
             return {
                 "qualityScore": quality_score,
+                "suggestedPrice": suggested_price,
                 "safetyPassed": bool(parsed["safetyPassed"]),
                 "insights": parsed.get("insights", []),
                 "concerns": parsed.get("concerns", []),
-                "recommendations": parsed.get("recommendations", [])
+                "recommendations": parsed.get("recommendations", []),
             }
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
@@ -673,12 +728,13 @@ Respond ONLY with the JSON object, no additional text."""
             # Return safe defaults if parsing fails
             fallback = {
                 "qualityScore": 0.5,
+                "suggestedPrice": 3.0,
                 "safetyPassed": True,
                 "insights": [
                     "Analysis completed but response parsing failed",
-                    "Manual review recommended"
+                    "Manual review recommended",
                 ],
-                "concerns": ["Unable to parse detailed analysis"]
+                "concerns": ["Unable to parse detailed analysis"],
             }
             return fallback
 
@@ -686,7 +742,7 @@ Respond ONLY with the JSON object, no additional text."""
         self,
         quality_result: Dict[str, Any],
         copyright_result: Dict[str, Any],
-        analysis_result: Dict[str, Any]
+        analysis_result: Dict[str, Any],
     ) -> bool:
         """
         Calculate final approval based on all verification stages.
@@ -708,11 +764,7 @@ Respond ONLY with the JSON object, no additional text."""
 
         safety_passed = analysis_result.get("safetyPassed", False)
 
-        approved = (
-            quality_passed and
-            not high_confidence_copyright and
-            safety_passed
-        )
+        approved = quality_passed and not high_confidence_copyright and safety_passed
 
         logger.info(
             f"Approval calculation: quality={quality_passed}, "
@@ -723,26 +775,23 @@ Respond ONLY with the JSON object, no additional text."""
         return approved
 
     async def _update_stage(
-        self,
-        session_object_id: str,
-        stage_name: str,
-        progress: float
+        self, session_object_id: str, stage_name: str, progress: float
     ) -> None:
         """
         Helper to update stage in KV and raise if the update fails.
         """
         success = await self.session_store.update_stage(
-            session_object_id,
-            stage_name,
-            progress
+            session_object_id, stage_name, progress
         )
         if not success:
-            raise RuntimeError(f"Failed to update stage '{stage_name}' for session {session_object_id[:8]}...")
+            raise RuntimeError(
+                f"Failed to update stage '{stage_name}' for session {session_object_id[:8]}..."
+            )
         logger.info(
             "stage_update session=%s stage=%s progress=%.2f",
             session_object_id[:8],
             stage_name,
-            progress
+            progress,
         )
 
     def _compute_quality_score(self, quality: Dict[str, Any]) -> int:
@@ -760,7 +809,10 @@ Respond ONLY with the JSON object, no additional text."""
         silence_percent = quality.get("silence_percent", 0.0)
         volume_ok = quality.get("volume_ok", False)
 
-        if duration < self.quality_checker.MIN_DURATION or duration > self.quality_checker.MAX_DURATION:
+        if (
+            duration < self.quality_checker.MIN_DURATION
+            or duration > self.quality_checker.MAX_DURATION
+        ):
             score -= 25
         if sample_rate < self.quality_checker.MIN_SAMPLE_RATE:
             score -= 25

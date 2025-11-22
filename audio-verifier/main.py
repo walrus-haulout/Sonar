@@ -3,7 +3,18 @@ SONAR Audio Verifier Service
 FastAPI server for comprehensive audio verification including quality, copyright, transcription, and AI analysis
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Request, Depends, BackgroundTasks, Form, Body
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    HTTPException,
+    Header,
+    Request,
+    Depends,
+    BackgroundTasks,
+    Form,
+    Body,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -27,13 +38,12 @@ from seal_decryptor import (
     SealAuthenticationError,
     SealValidationError,
     SealNetworkError,
-    SealTimeoutError
+    SealTimeoutError,
 )
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -41,13 +51,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="SONAR Audio Verifier",
     description="Comprehensive audio verification: quality, copyright, transcription, and AI analysis",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 # Environment configuration
 # CORS origins - standardized to CORS_ORIGIN (matches backend naming)
 # Supports backwards compatibility with ALLOWED_ORIGINS
-CORS_ORIGIN = os.getenv("CORS_ORIGIN") or os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+CORS_ORIGIN = os.getenv("CORS_ORIGIN") or os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:3000"
+)
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGIN.split(",")]
 VERIFIER_AUTH_TOKEN = os.getenv("VERIFIER_AUTH_TOKEN")
 MAX_FILE_SIZE_GB = int(os.getenv("MAX_FILE_SIZE_GB", "13"))
@@ -65,7 +77,9 @@ ACOUSTID_API_KEY = os.getenv("ACOUSTID_API_KEY")
 # Walrus configuration
 WALRUS_UPLOAD_URL = os.getenv("WALRUS_UPLOAD_URL")  # Legacy: plaintext upload
 WALRUS_UPLOAD_TOKEN = os.getenv("WALRUS_UPLOAD_TOKEN")
-WALRUS_AGGREGATOR_URL = os.getenv("WALRUS_AGGREGATOR_URL")  # New: for fetching encrypted blobs
+WALRUS_AGGREGATOR_URL = os.getenv(
+    "WALRUS_AGGREGATOR_URL"
+)  # New: for fetching encrypted blobs
 WALRUS_AGGREGATOR_TOKEN = os.getenv("WALRUS_AGGREGATOR_TOKEN")  # Optional bearer token
 
 # Seal decryption configuration
@@ -77,9 +91,13 @@ ENABLE_LEGACY_UPLOAD = os.getenv("ENABLE_LEGACY_UPLOAD", "false").lower() == "tr
 
 # Validate Seal configuration (required for encrypted blob flow)
 if not SEAL_PACKAGE_ID:
-    logger.warning("SEAL_PACKAGE_ID not set - encrypted blob verification will be disabled")
+    logger.warning(
+        "SEAL_PACKAGE_ID not set - encrypted blob verification will be disabled"
+    )
 if not WALRUS_AGGREGATOR_URL:
-    logger.warning("WALRUS_AGGREGATOR_URL not set - encrypted blob verification will be disabled")
+    logger.warning(
+        "WALRUS_AGGREGATOR_URL not set - encrypted blob verification will be disabled"
+    )
 
 # Legacy plaintext upload (deprecated but kept for backwards compatibility)
 if not WALRUS_UPLOAD_URL and not ENABLE_LEGACY_UPLOAD:
@@ -107,7 +125,9 @@ async def validate_environment():
     missing = []
 
     if not OPENROUTER_API_KEY:
-        missing.append("OPENROUTER_API_KEY (required for audio transcription and analysis)")
+        missing.append(
+            "OPENROUTER_API_KEY (required for audio transcription and analysis)"
+        )
 
     if not ACOUSTID_API_KEY:
         missing.append("ACOUSTID_API_KEY (required for copyright detection)")
@@ -116,10 +136,14 @@ async def validate_environment():
         missing.append("VERIFIER_AUTH_TOKEN (required for authenticated access)")
 
     if not DATABASE_URL:
-        missing.append("DATABASE_URL (required for session storage - Railway provides this automatically)")
+        missing.append(
+            "DATABASE_URL (required for session storage - Railway provides this automatically)"
+        )
 
     if missing:
-        error_msg = "Missing required environment variables:\n  - " + "\n  - ".join(missing)
+        error_msg = "Missing required environment variables:\n  - " + "\n  - ".join(
+            missing
+        )
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
@@ -128,13 +152,21 @@ async def validate_environment():
     try:
         seal_key_mapping = json.loads(seal_key_server_urls)
         if not isinstance(seal_key_mapping, dict):
-            logger.warning("SEAL_KEY_SERVER_URLS is not a valid JSON object - encrypted blob verification may fail")
+            logger.warning(
+                "SEAL_KEY_SERVER_URLS is not a valid JSON object - encrypted blob verification may fail"
+            )
         elif seal_key_mapping:
-            logger.info(f"Seal key server mapping configured with {len(seal_key_mapping)} server(s)")
+            logger.info(
+                f"Seal key server mapping configured with {len(seal_key_mapping)} server(s)"
+            )
         else:
-            logger.warning("SEAL_KEY_SERVER_URLS is empty - Seal SDK will use default server discovery (may fail in Railway)")
+            logger.warning(
+                "SEAL_KEY_SERVER_URLS is empty - Seal SDK will use default server discovery (may fail in Railway)"
+            )
     except json.JSONDecodeError as e:
-        logger.warning(f"SEAL_KEY_SERVER_URLS is invalid JSON: {e} - encrypted blob verification may fail")
+        logger.warning(
+            f"SEAL_KEY_SERVER_URLS is invalid JSON: {e} - encrypted blob verification may fail"
+        )
 
     logger.info("Environment validation passed: all required variables configured")
 
@@ -171,7 +203,7 @@ def _check_riff_header(data: bytes) -> bool:
     if len(data) < 12:
         return False
     # RIFF files start with "RIFF" (0x52494646)
-    return data[:4] == b'RIFF' and data[8:12] == b'WAVE'
+    return data[:4] == b"RIFF" and data[8:12] == b"WAVE"
 
 
 def _looks_like_mp3(data: bytes) -> bool:
@@ -191,14 +223,14 @@ def _check_flac_header(data: bytes) -> bool:
     """Check if data starts with valid FLAC header (fLaC)."""
     if len(data) < 4:
         return False
-    return data[:4] == b'fLaC'
+    return data[:4] == b"fLaC"
 
 
 def _check_ogg_header(data: bytes) -> bool:
     """Check if data starts with valid OGG/Opus header (OggS)."""
     if len(data) < 4:
         return False
-    return data[:4] == b'OggS'
+    return data[:4] == b"OggS"
 
 
 def _check_m4a_header(data: bytes) -> bool:
@@ -207,10 +239,14 @@ def _check_m4a_header(data: bytes) -> bool:
         return False
     # MP4 files have ftyp box usually at start
     # ftyp can be at offset 4 with size in first 4 bytes
-    if b'ftyp' in data[:20]:
+    if b"ftyp" in data[:20]:
         # Common MP4/M4A ftyp variants
-        if b'ftypM4A' in data[:20] or b'ftypmp42' in data[:20] or \
-           b'ftypisom' in data[:20] or b'ftypmp41' in data[:20]:
+        if (
+            b"ftypM4A" in data[:20]
+            or b"ftypmp42" in data[:20]
+            or b"ftypisom" in data[:20]
+            or b"ftypmp41" in data[:20]
+        ):
             return True
     return False
 
@@ -220,7 +256,7 @@ def _check_webm_header(data: bytes) -> bool:
     if len(data) < 4:
         return False
     # EBML header signature
-    return data[:4] == b'\x1a\x45\xdf\xa3'
+    return data[:4] == b"\x1a\x45\xdf\xa3"
 
 
 def _check_3gp_header(data: bytes) -> bool:
@@ -228,8 +264,8 @@ def _check_3gp_header(data: bytes) -> bool:
     if len(data) < 12:
         return False
     # 3GP files have ftyp box with 3gp variants
-    if b'ftyp' in data[:20]:
-        if b'ftyp3gp' in data[:20] or b'ftyp3g2' in data[:20]:
+    if b"ftyp" in data[:20]:
+        if b"ftyp3gp" in data[:20] or b"ftyp3g2" in data[:20]:
             return True
     return False
 
@@ -239,29 +275,29 @@ def _check_amr_header(data: bytes) -> bool:
     if len(data) < 5:
         return False
     # AMR header is ASCII: "#!AMR" for narrowband or "#!AMR-WB" for wideband
-    return data[:5] == b'#!AMR'
+    return data[:5] == b"#!AMR"
 
 
 def _detect_audio_format(data: bytes) -> str:
     """Detect audio format from magic bytes. Returns format name or 'unknown'."""
     if _check_riff_header(data):
-        return 'WAV'
+        return "WAV"
     elif _looks_like_mp3(data):
-        return 'MP3'
+        return "MP3"
     elif _check_flac_header(data):
-        return 'FLAC'
+        return "FLAC"
     elif _check_ogg_header(data):
-        return 'OGG/Opus'
+        return "OGG/Opus"
     elif _check_m4a_header(data):
-        return 'M4A/MP4'
+        return "M4A/MP4"
     elif _check_webm_header(data):
-        return 'WebM'
+        return "WebM"
     elif _check_3gp_header(data):
-        return '3GP'
+        return "3GP"
     elif _check_amr_header(data):
-        return 'AMR'
+        return "AMR"
     else:
-        return 'unknown'
+        return "unknown"
 
 
 def get_verification_pipeline() -> VerificationPipeline:
@@ -271,13 +307,11 @@ def get_verification_pipeline() -> VerificationPipeline:
         if not OPENROUTER_API_KEY:
             raise HTTPException(
                 status_code=500,
-                detail="OpenRouter API not configured (OPENROUTER_API_KEY required)"
+                detail="OpenRouter API not configured (OPENROUTER_API_KEY required)",
             )
         session_store = get_session_store()
         _verification_pipeline = VerificationPipeline(
-            session_store,
-            OPENROUTER_API_KEY,
-            ACOUSTID_API_KEY
+            session_store, OPENROUTER_API_KEY, ACOUSTID_API_KEY
         )
         logger.info("Initialized verification pipeline with PostgreSQL backend")
     return _verification_pipeline
@@ -292,7 +326,7 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
     if not WALRUS_UPLOAD_URL:
         raise HTTPException(
             status_code=503,
-            detail="Walrus upload not configured (set WALRUS_UPLOAD_URL and optional WALRUS_UPLOAD_TOKEN)"
+            detail="Walrus upload not configured (set WALRUS_UPLOAD_URL and optional WALRUS_UPLOAD_TOKEN)",
         )
 
     headers = {}
@@ -313,7 +347,11 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
         async with httpx.AsyncClient(timeout=120.0) as client:
             with open(file_path, "rb") as file_handle:
                 files = {
-                    "file": (os.path.basename(file_path), file_handle, "application/octet-stream")
+                    "file": (
+                        os.path.basename(file_path),
+                        file_handle,
+                        "application/octet-stream",
+                    )
                 }
                 response = await client.post(
                     WALRUS_UPLOAD_URL,
@@ -332,8 +370,7 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
     except Exception as exc:
         logger.error("Walrus upload failed: %s", exc, exc_info=True)
         raise HTTPException(
-            status_code=502,
-            detail=f"Walrus upload failed: {exc}"
+            status_code=502, detail=f"Walrus upload failed: {exc}"
         ) from exc
 
 
@@ -348,10 +385,12 @@ async def limit_upload_size(request: Request, call_next):
         content_length = request.headers.get("content-length")
         if content_length:
             if int(content_length) > MAX_FILE_SIZE_BYTES:
-                logger.warning(f"Upload too large: {content_length} bytes (max {MAX_FILE_SIZE_BYTES})")
+                logger.warning(
+                    f"Upload too large: {content_length} bytes (max {MAX_FILE_SIZE_BYTES})"
+                )
                 return JSONResponse(
                     status_code=413,
-                    content={"detail": f"File exceeds {MAX_FILE_SIZE_GB}GB limit"}
+                    content={"detail": f"File exceeds {MAX_FILE_SIZE_GB}GB limit"},
                 )
     return await call_next(request)
 
@@ -359,6 +398,7 @@ async def limit_upload_size(request: Request, call_next):
 # Response type for legacy audio check endpoints
 class AudioCheckResponseDict(TypedDict, total=False):
     """Legacy audio check response structure."""
+
     approved: bool
     quality: Dict[str, Any]
     copyright: Dict[str, Any]
@@ -368,11 +408,19 @@ class AudioCheckResponseDict(TypedDict, total=False):
 # Pydantic models for API requests
 class EncryptedVerificationRequest(BaseModel):
     """Request model for encrypted blob verification."""
+
     walrusBlobId: str = Field(..., description="Walrus blob ID of encrypted audio")
-    sealIdentity: str = Field(..., description="Seal identity (hex string) used for encryption")
-    encryptedObjectBcsHex: str = Field(..., description="BCS-serialized encrypted object (hex)")
+    sealIdentity: str = Field(
+        ..., description="Seal identity (hex string) used for encryption"
+    )
+    encryptedObjectBcsHex: str = Field(
+        ..., description="BCS-serialized encrypted object (hex)"
+    )
     metadata: Dict[str, Any] = Field(..., description="Dataset metadata")
-    sessionKeyData: Optional[str] = Field(None, description="Exported SessionKey from frontend for user-authorized decryption")
+    sessionKeyData: Optional[str] = Field(
+        None,
+        description="Exported SessionKey from frontend for user-authorized decryption",
+    )
 
     class Config:
         # Accept both camelCase and snake_case for sessionKeyData
@@ -388,7 +436,9 @@ async def verify_bearer_token(authorization: str = Header(None)):
     expected = f"Bearer {VERIFIER_AUTH_TOKEN}"
     if authorization != expected:
         logger.warning(f"Invalid auth token: {authorization}")
-        raise HTTPException(status_code=401, detail="Invalid or missing authorization token")
+        raise HTTPException(
+            status_code=401, detail="Invalid or missing authorization token"
+        )
 
 
 # Health check endpoints
@@ -403,8 +453,8 @@ async def root():
             "Audio quality analysis",
             "Copyright detection (Chromaprint/AcoustID)",
             "AI transcription (Whisper via OpenRouter)",
-            "Content safety analysis (Gemini via OpenRouter)"
-        ]
+            "Content safety analysis (Gemini via OpenRouter)",
+        ],
     }
 
 
@@ -425,8 +475,8 @@ async def health():
             "database": bool(DATABASE_URL),
             "walrusUpload": bool(WALRUS_UPLOAD_URL),
             "walrusAggregator": bool(WALRUS_AGGREGATOR_URL),
-            "sealPackage": bool(SEAL_PACKAGE_ID)
-        }
+            "sealPackage": bool(SEAL_PACKAGE_ID),
+        },
     }
 
 
@@ -457,12 +507,9 @@ async def ready():
         "walrus_upload_configured": bool(WALRUS_UPLOAD_URL),  # Legacy
         "walrus_aggregator_configured": bool(WALRUS_AGGREGATOR_URL),  # New
         "seal_configured": bool(SEAL_PACKAGE_ID),
-        "auth_enabled": bool(VERIFIER_AUTH_TOKEN)
+        "auth_enabled": bool(VERIFIER_AUTH_TOKEN),
     }
-    return {
-        "status": "ready" if db_connected else "not_ready",
-        "config": config_status
-    }
+    return {"status": "ready" if db_connected else "not_ready", "config": config_status}
 
 
 # New verification endpoints (integrated pipeline)
@@ -471,7 +518,7 @@ async def create_verification(
     request: Request,
     background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
-    metadata: Optional[str] = Form(None)
+    metadata: Optional[str] = Form(None),
 ):
     """
     Start comprehensive audio verification.
@@ -505,17 +552,19 @@ async def create_verification(
                 body_data = await request.json()
                 encrypted_request = EncryptedVerificationRequest(**body_data)
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Invalid JSON request: {str(e)}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid JSON request: {str(e)}"
+                )
 
             if not WALRUS_AGGREGATOR_URL:
                 raise HTTPException(
                     status_code=503,
-                    detail="WALRUS_AGGREGATOR_URL not configured - encrypted blob verification disabled"
+                    detail="WALRUS_AGGREGATOR_URL not configured - encrypted blob verification disabled",
                 )
             if not SEAL_PACKAGE_ID:
                 raise HTTPException(
                     status_code=503,
-                    detail="Seal decryption not configured - missing SEAL_PACKAGE_ID"
+                    detail="Seal decryption not configured - missing SEAL_PACKAGE_ID",
                 )
 
             verification_id = str(uuid.uuid4())
@@ -525,12 +574,12 @@ async def create_verification(
             if not encrypted_request.sessionKeyData:
                 raise HTTPException(
                     status_code=400,
-                    detail="sessionKeyData is required for encrypted blob verification"
+                    detail="sessionKeyData is required for encrypted blob verification",
                 )
             if not encrypted_request.encryptedObjectBcsHex:
                 raise HTTPException(
                     status_code=400,
-                    detail="encryptedObjectBcsHex is required for encrypted blob verification"
+                    detail="encryptedObjectBcsHex is required for encrypted blob verification",
                 )
 
             logger.info(
@@ -540,31 +589,41 @@ async def create_verification(
             # Decrypt encrypted blob to temp file
             try:
                 # Convert hex to bytes for decryptor
-                encrypted_object_bytes = bytes.fromhex(encrypted_request.encryptedObjectBcsHex)
+                encrypted_object_bytes = bytes.fromhex(
+                    encrypted_request.encryptedObjectBcsHex
+                )
 
                 # Decrypt blob (runs in thread pool to avoid blocking)
                 plaintext_bytes = await decrypt_encrypted_blob(
                     encrypted_request.walrusBlobId,
                     encrypted_object_bytes,
                     encrypted_request.sealIdentity,
-                    encrypted_request.sessionKeyData
+                    encrypted_request.sessionKeyData,
                 )
 
                 # Write decrypted data to temp file
-                temp_dir = "/tmp/audio-verifier" if os.path.exists("/tmp/audio-verifier") else tempfile.gettempdir()
+                temp_dir = (
+                    "/tmp/audio-verifier"
+                    if os.path.exists("/tmp/audio-verifier")
+                    else tempfile.gettempdir()
+                )
                 temp_fd, temp_file_path = tempfile.mkstemp(
                     suffix=".wav",  # Default to .wav, will be detected by soundfile
                     prefix=f"decrypted_{verification_id}_",
-                    dir=temp_dir
+                    dir=temp_dir,
                 )
 
-                with os.fdopen(temp_fd, 'wb') as temp_file:
+                with os.fdopen(temp_fd, "wb") as temp_file:
                     temp_file.write(plaintext_bytes)
 
                 file_size = len(plaintext_bytes)
 
                 # Pre-quality-check diagnostics
-                blob_id_short = encrypted_request.walrusBlobId[:16] if encrypted_request.walrusBlobId else "unknown"
+                blob_id_short = (
+                    encrypted_request.walrusBlobId[:16]
+                    if encrypted_request.walrusBlobId
+                    else "unknown"
+                )
                 hex_preview = _get_hex_preview(plaintext_bytes)
                 has_riff_header = _check_riff_header(plaintext_bytes)
                 mime_type, _ = mimetypes.guess_type(temp_file_path)
@@ -577,8 +636,8 @@ async def create_verification(
                         "decrypted_bytes": file_size,
                         "temp_file_path": temp_file_path,
                         "has_riff_header": has_riff_header,
-                        "mime_type": mime_type or "unknown"
-                    }
+                        "mime_type": mime_type or "unknown",
+                    },
                 )
 
                 # Debug-level hex preview to avoid leaking audio data in INFO logs
@@ -586,8 +645,8 @@ async def create_verification(
                     f"Audio blob hex preview (first 32 bytes)",
                     extra={
                         "verification_id": verification_id,
-                        "hex_preview": hex_preview
-                    }
+                        "hex_preview": hex_preview,
+                    },
                 )
 
                 # Early validation gate: reject tiny or invalid blobs before pipeline
@@ -597,8 +656,8 @@ async def create_verification(
                         extra={
                             "verification_id": verification_id,
                             "blob_id_short": blob_id_short,
-                            "decrypted_bytes": file_size
-                        }
+                            "decrypted_bytes": file_size,
+                        },
                     )
                     # Clean up temp file
                     try:
@@ -609,13 +668,13 @@ async def create_verification(
                         status_code=400,
                         content={
                             "detail": f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB",
-                            "sessionObjectId": None
-                        }
+                            "sessionObjectId": None,
+                        },
                     )
 
                 # Detect audio format and reject unsupported formats
                 detected_format = _detect_audio_format(plaintext_bytes)
-                if detected_format == 'unknown':
+                if detected_format == "unknown":
                     logger.warning(
                         f"Rejecting decrypted audio (unsupported format)",
                         extra={
@@ -623,8 +682,10 @@ async def create_verification(
                             "blob_id_short": blob_id_short,
                             "decrypted_bytes": file_size,
                             "detected_format": detected_format,
-                            "header_preview": _get_hex_preview(plaintext_bytes[:32], 32)
-                        }
+                            "header_preview": _get_hex_preview(
+                                plaintext_bytes[:32], 32
+                            ),
+                        },
                     )
                     # Clean up temp file
                     try:
@@ -635,8 +696,8 @@ async def create_verification(
                         status_code=400,
                         content={
                             "detail": "Invalid audio blob: unsupported format or invalid RIFF header. Allowed: MP3, WAV, FLAC, OGG/Opus, M4A/AAC/MP4, WebM, 3GPP/3GP, AMR",
-                            "sessionObjectId": None
-                        }
+                            "sessionObjectId": None,
+                        },
                     )
 
                 logger.debug(
@@ -645,47 +706,68 @@ async def create_verification(
                         "verification_id": verification_id,
                         "blob_id_short": blob_id_short,
                         "detected_format": detected_format,
-                        "decrypted_bytes": file_size
-                    }
+                        "decrypted_bytes": file_size,
+                    },
                 )
 
             except SealAuthenticationError as e:
                 # 403: User not authorized (SessionKey invalid/expired, policy denied)
                 logger.warning(f"Decryption authentication failed: {e.message}")
-                raise HTTPException(status_code=403, detail=f"Decryption failed: {e.message}")
+                raise HTTPException(
+                    status_code=403, detail=f"Decryption failed: {e.message}"
+                )
             except SealValidationError as e:
                 # 400: Invalid input (malformed encrypted data, missing SessionKey)
                 logger.warning(f"Decryption validation failed: {e.message}")
-                raise HTTPException(status_code=400, detail=f"Invalid encrypted blob: {e.message}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid encrypted blob: {e.message}"
+                )
             except SealNetworkError as e:
                 # 502: Transient network error (key server unreachable)
                 logger.warning(f"Decryption network error (transient): {e.message}")
-                raise HTTPException(status_code=502, detail=f"Decryption service temporarily unavailable: {e.message}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Decryption service temporarily unavailable: {e.message}",
+                )
             except SealTimeoutError as e:
                 # 504: Operation timed out
                 logger.warning(f"Decryption timeout: {e.message}")
-                raise HTTPException(status_code=504, detail=f"Decryption operation timed out: {e.message}")
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Decryption operation timed out: {e.message}",
+                )
             except SealDecryptionError as e:
                 # Other Seal errors - use suggested HTTP status from exception
                 logger.error(f"Decryption failed ({e.error_type}): {e.message}")
-                raise HTTPException(status_code=e.http_status, detail=f"Decryption failed: {e.message}")
+                raise HTTPException(
+                    status_code=e.http_status, detail=f"Decryption failed: {e.message}"
+                )
             except ValueError as e:
                 # Fallback for any unhandled ValueError
-                raise HTTPException(status_code=400, detail=f"Invalid encrypted blob data: {str(e)}")
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid encrypted blob data: {str(e)}"
+                )
             except HTTPException as e:
                 # Propagate explicit HTTP errors without wrapping
                 raise e
             except Exception as e:
                 # Catch any other unexpected errors
                 logger.error(f"Unexpected error during decryption: {e}", exc_info=True)
-                raise HTTPException(status_code=500, detail="Unexpected error during decryption")
+                raise HTTPException(
+                    status_code=500, detail="Unexpected error during decryption"
+                )
 
             # Get audio duration from decrypted file
             try:
                 import soundfile as sf
+
                 with sf.SoundFile(temp_file_path) as sf_file:
                     frames = len(sf_file)
-                    duration_seconds = frames / float(sf_file.samplerate) if sf_file.samplerate else 0.0
+                    duration_seconds = (
+                        frames / float(sf_file.samplerate)
+                        if sf_file.samplerate
+                        else 0.0
+                    )
                 logger.info(f"Audio duration: {duration_seconds:.2f}s")
             except Exception as e:
                 logger.warning(f"Failed to extract audio duration: {e}")
@@ -693,12 +775,16 @@ async def create_verification(
 
             # Create verification session in PostgreSQL
             session_store = get_session_store()
-            session_object_id = await session_store.create_session(verification_id, {
-                "encrypted_cid": encrypted_request.walrusBlobId,  # Store encrypted blob ID
-                "plaintext_size_bytes": file_size,
-                "duration_seconds": int(duration_seconds),
-                "file_format": "audio/wav"  # Default, will be detected during verification
-            })
+            session_object_id = await session_store.create_session(
+                verification_id,
+                {
+                    "encrypted_cid": encrypted_request.walrusBlobId,  # Store encrypted blob ID
+                    "plaintext_size_bytes": file_size,
+                    "duration_seconds": int(duration_seconds),
+                    "file_format": "audio/wav",  # Default, will be detected during verification
+                    "metadata": metadata_dict,  # Store metadata for frontend polling and display
+                },
+            )
 
             logger.info(f"Created session: {session_object_id}")
 
@@ -711,7 +797,7 @@ async def create_verification(
                     session_object_id,
                     temp_file_path,
                     metadata_dict,
-                    encrypted_request.walrusBlobId  # Pass blob ID for logging
+                    encrypted_request.walrusBlobId,  # Pass blob ID for logging
                 )
             )
 
@@ -719,22 +805,27 @@ async def create_verification(
             file_size_mb = float(file_size) / (1024 * 1024)
             estimated_time = min(60.0, max(10.0, file_size_mb))
 
-            return JSONResponse(content={
-                "sessionObjectId": session_object_id,
-                "estimatedTimeSeconds": int(estimated_time),
-                "status": "processing"
-            })
+            return JSONResponse(
+                content={
+                    "sessionObjectId": session_object_id,
+                    "estimatedTimeSeconds": int(estimated_time),
+                    "status": "processing",
+                }
+            )
 
         else:
             # Legacy FormData flow (for backwards compatibility)
             if not ENABLE_LEGACY_UPLOAD:
                 raise HTTPException(
                     status_code=400,
-                    detail="Legacy file upload disabled. Use encrypted blob flow or set ENABLE_LEGACY_UPLOAD=true"
+                    detail="Legacy file upload disabled. Use encrypted blob flow or set ENABLE_LEGACY_UPLOAD=true",
                 )
 
             if not file or not metadata:
-                raise HTTPException(status_code=400, detail="Missing file or metadata in FormData request")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Missing file or metadata in FormData request",
+                )
 
             # Parse metadata
             try:
@@ -745,17 +836,21 @@ async def create_verification(
             verification_id = str(uuid.uuid4())
 
             # Stream upload to temp file to avoid loading entire file into RAM
-            temp_dir = "/tmp/audio-verifier" if os.path.exists("/tmp/audio-verifier") else tempfile.gettempdir()
+            temp_dir = (
+                "/tmp/audio-verifier"
+                if os.path.exists("/tmp/audio-verifier")
+                else tempfile.gettempdir()
+            )
             temp_fd, temp_file_path = tempfile.mkstemp(
                 suffix=os.path.splitext(file.filename or ".tmp")[1],
                 prefix=f"verify_{verification_id}_",
-                dir=temp_dir
+                dir=temp_dir,
             )
 
             file_size = 0
             try:
                 # Stream file to disk in chunks
-                with os.fdopen(temp_fd, 'wb') as temp_file:
+                with os.fdopen(temp_fd, "wb") as temp_file:
                     chunk_size = 1024 * 1024  # 1MB chunks
                     while chunk := await file.read(chunk_size):
                         temp_file.write(chunk)
@@ -766,20 +861,29 @@ async def create_verification(
                     os.unlink(temp_file_path)
                 except:
                     pass
-                raise HTTPException(status_code=400, detail=f"Failed to upload file: {str(e)}")
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to upload file: {str(e)}"
+                )
 
             if file_size == 0:
                 os.unlink(temp_file_path)
                 raise HTTPException(status_code=400, detail="Empty file uploaded")
 
-            logger.info(f"Creating legacy verification {verification_id} for file: {file.filename} ({file_size} bytes)")
+            logger.info(
+                f"Creating legacy verification {verification_id} for file: {file.filename} ({file_size} bytes)"
+            )
 
             # Get audio duration from file
             try:
                 import soundfile as sf
+
                 with sf.SoundFile(temp_file_path) as sf_file:
                     frames = len(sf_file)
-                    duration_seconds = frames / float(sf_file.samplerate) if sf_file.samplerate else 0.0
+                    duration_seconds = (
+                        frames / float(sf_file.samplerate)
+                        if sf_file.samplerate
+                        else 0.0
+                    )
                 logger.info(f"Audio duration: {duration_seconds:.2f}s")
             except Exception as e:
                 logger.warning(f"Failed to extract audio duration: {e}")
@@ -790,7 +894,7 @@ async def create_verification(
                 os.unlink(temp_file_path)
                 raise HTTPException(
                     status_code=503,
-                    detail="WALRUS_UPLOAD_URL not configured for legacy upload flow"
+                    detail="WALRUS_UPLOAD_URL not configured for legacy upload flow",
                 )
 
             plaintext_cid = await upload_plaintext_to_walrus(
@@ -799,17 +903,21 @@ async def create_verification(
                     "filename": file.filename,
                     "contentType": file.content_type,
                     "metadata": metadata_dict.get("metadata"),
-                }
+                },
             )
 
             # Create verification session in PostgreSQL
             session_store = get_session_store()
-            session_object_id = await session_store.create_session(verification_id, {
-                "plaintext_cid": plaintext_cid,
-                "plaintext_size_bytes": file_size,
-                "duration_seconds": int(duration_seconds),
-                "file_format": file.content_type or "audio/wav"
-            })
+            session_object_id = await session_store.create_session(
+                verification_id,
+                {
+                    "plaintext_cid": plaintext_cid,
+                    "plaintext_size_bytes": file_size,
+                    "duration_seconds": int(duration_seconds),
+                    "file_format": file.content_type or "audio/wav",
+                    "metadata": metadata_dict,  # Store metadata for frontend polling and display
+                },
+            )
 
             logger.info(f"Created session: {session_object_id}")
 
@@ -821,7 +929,7 @@ async def create_verification(
                     pipeline,
                     session_object_id,
                     temp_file_path,
-                    metadata_dict
+                    metadata_dict,
                 )
             )
 
@@ -829,11 +937,13 @@ async def create_verification(
             file_size_mb = float(file_size) / (1024 * 1024)
             estimated_time = min(60.0, max(10.0, file_size_mb))
 
-            return JSONResponse(content={
-                "sessionObjectId": session_object_id,
-                "estimatedTimeSeconds": int(estimated_time),
-                "status": "processing"
-            })
+            return JSONResponse(
+                content={
+                    "sessionObjectId": session_object_id,
+                    "estimatedTimeSeconds": int(estimated_time),
+                    "status": "processing",
+                }
+            )
 
     except HTTPException as exc:
         # Clean up temp file on HTTP exceptions
@@ -852,8 +962,7 @@ async def create_verification(
                 pass
         logger.error(f"Failed to start verification: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to start verification: {str(e)}"
+            status_code=500, detail=f"Failed to start verification: {str(e)}"
         )
 
 
@@ -862,7 +971,7 @@ def _run_pipeline_sync(
     session_object_id: str,
     temp_file_path: str,
     metadata_dict: Dict[str, Any],
-    blob_id: Optional[str] = None
+    blob_id: Optional[str] = None,
 ) -> None:
     """
     Synchronous wrapper for pipeline execution (runs in thread pool).
@@ -877,12 +986,15 @@ def _run_pipeline_sync(
         blob_id: Optional Walrus blob ID for logging correlation
     """
     import asyncio
+
     # Create new event loop for this thread
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(
-            pipeline.run_from_file(session_object_id, temp_file_path, metadata_dict, blob_id)
+            pipeline.run_from_file(
+                session_object_id, temp_file_path, metadata_dict, blob_id
+            )
         )
     finally:
         loop.close()
@@ -937,6 +1049,13 @@ async def get_verification_status(session_object_id: str):
         except Exception:
             quality_score = 0.0
 
+        # Extract metadata from initial_data
+        initial_data = session.get("initial_data") or {}
+        metadata = initial_data.get("metadata") or {}
+
+        # Extract suggested price from analysis (default 3.0 SUI)
+        suggested_price = analysis.get("suggestedPrice", 3.0)
+
         # Build response with both legacy and frontend keys
         response = {
             **session,
@@ -951,6 +1070,8 @@ async def get_verification_status(session_object_id: str):
             "transcriptPreview": results.get("transcriptPreview"),
             "quality": quality,
             "qualityScore": quality_score,
+            "suggestedPrice": suggested_price,
+            "metadata": metadata,
             "errors": errors_list,
             "warnings": session.get("warnings", []),
         }
@@ -962,12 +1083,13 @@ async def get_verification_status(session_object_id: str):
     except Exception as e:
         logger.error(f"Failed to get session status: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get verification status: {str(e)}"
+            status_code=500, detail=f"Failed to get verification status: {str(e)}"
         )
 
 
-@app.post("/verify/{session_object_id}/cancel", dependencies=[Depends(verify_bearer_token)])
+@app.post(
+    "/verify/{session_object_id}/cancel", dependencies=[Depends(verify_bearer_token)]
+)
 async def cancel_verification(session_object_id: str):
     """
     Cancel a running verification.
@@ -983,23 +1105,21 @@ async def cancel_verification(session_object_id: str):
             raise HTTPException(status_code=404, detail="Session not found")
 
         # Mark as cancelled in PostgreSQL
-        await session_store.mark_failed(session_object_id, {
-            "errors": ["Verification cancelled by user"],
-            "cancelled": True
-        })
+        await session_store.mark_failed(
+            session_object_id,
+            {"errors": ["Verification cancelled by user"], "cancelled": True},
+        )
 
-        return JSONResponse(content={
-            "sessionObjectId": session_object_id,
-            "status": "cancelled"
-        })
+        return JSONResponse(
+            content={"sessionObjectId": session_object_id, "status": "cancelled"}
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to cancel verification: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to cancel verification: {str(e)}"
+            status_code=500, detail=f"Failed to cancel verification: {str(e)}"
         )
 
 
@@ -1037,7 +1157,7 @@ async def check_audio(file: UploadFile = File(...)):
             "approved": approved,
             "quality": quality,
             "copyright": copyright_info,
-            "errors": []
+            "errors": [],
         }
 
         # Add quality errors
@@ -1050,9 +1170,9 @@ async def check_audio(file: UploadFile = File(...)):
         if copyright_info.get("detected"):
             matches = copyright_info.get("matches", [])
             if matches:
-                match_str = ", ".join([
-                    f"{m['title']} by {m['artist']}" for m in matches[:3]
-                ])
+                match_str = ", ".join(
+                    [f"{m['title']} by {m['artist']}" for m in matches[:3]]
+                )
                 response["errors"].append(f"Copyright detected: {match_str}")
             else:
                 response["errors"].append("Copyrighted content detected")
@@ -1062,8 +1182,7 @@ async def check_audio(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Legacy check-audio failed: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process audio: {str(e)}"
+            status_code=500, detail=f"Failed to process audio: {str(e)}"
         )
 
 
@@ -1102,7 +1221,7 @@ async def check_audio_url(url: str):
             "approved": approved,
             "quality": quality,
             "copyright": copyright_info,
-            "errors": []
+            "errors": [],
         }
 
         if "errors" in quality_result:
@@ -1113,9 +1232,9 @@ async def check_audio_url(url: str):
         if copyright_info.get("detected"):
             matches = copyright_info.get("matches", [])
             if matches:
-                match_str = ", ".join([
-                    f"{m['title']} by {m['artist']}" for m in matches[:3]
-                ])
+                match_str = ", ".join(
+                    [f"{m['title']} by {m['artist']}" for m in matches[:3]]
+                )
                 response["errors"].append(f"Copyright detected: {match_str}")
             else:
                 response["errors"].append("Copyrighted content detected")
@@ -1125,17 +1244,16 @@ async def check_audio_url(url: str):
     except httpx.HTTPError as e:
         logger.error(f"Failed to download from URL: {e}")
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to download audio from URL: {str(e)}"
+            status_code=400, detail=f"Failed to download audio from URL: {str(e)}"
         )
     except Exception as e:
         logger.error(f"Legacy check-audio-url failed: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process audio: {str(e)}"
+            status_code=500, detail=f"Failed to process audio: {str(e)}"
         )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
