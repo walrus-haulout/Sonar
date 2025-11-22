@@ -1,13 +1,12 @@
 """
 Seal Decryptor Helper
-Fetches encrypted blobs from Walrus and decrypts them using TypeScript bridge with SessionKey authentication.
+Fetches encrypted blobs from Walrus and decrypts them using Seal SDK service with SessionKey authentication.
 """
 
 import asyncio
 import json
 import logging
 import os
-import subprocess
 import tempfile
 import time
 from typing import Optional, TYPE_CHECKING
@@ -164,7 +163,7 @@ def _decrypt_sync(
 
             # Decrypt sealed key using Seal (encrypted_object_hex is the sealed key's encrypted object)
             logger.debug("Decrypting sealed AES key with Seal...")
-            aes_key_bytes = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
+            aes_key_bytes = _decrypt_with_seal_service(encrypted_object_hex, identity, session_key_data)
             logger.info(f"Seal decryption returned: {len(aes_key_bytes)} bytes (AES key)")
 
             # Decrypt file with AES
@@ -175,7 +174,7 @@ def _decrypt_sync(
         else:
             logger.debug("Using direct Seal decryption")
             # Direct Seal encryption - decrypt entire blob using provided encrypted_object_hex
-            plaintext = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
+            plaintext = _decrypt_with_seal_service(encrypted_object_hex, identity, session_key_data)
             logger.info(f"Direct Seal decryption returned: {len(plaintext)} bytes (plaintext audio)")
 
         logger.info(f"Successfully decrypted blob {walrus_blob_id[:16]}... ({len(plaintext)} bytes)")
@@ -259,47 +258,29 @@ def _is_envelope_format(data: bytes) -> bool:
     return 150 <= key_length <= 800 and len(data) > key_length + 4
 
 
-# Path to TS bridge script
-TS_BRIDGE_PATH = os.path.join(os.path.dirname(__file__), "seal-decryptor-ts", "decrypt.ts")
+# Seal service configuration
+SEAL_SERVICE_URL = os.getenv("SEAL_SERVICE_URL", "http://127.0.0.1:3001")
+SEAL_SERVICE_TIMEOUT = 120.0  # seconds
 
 # Retry configuration for transient errors
 DECRYPT_MAX_RETRIES = 3
 DECRYPT_RETRY_DELAY = 2.0  # seconds
 
 
-def _parse_seal_error(error_output: str) -> tuple[str, str]:
+def _map_service_error(error_type: str, error_msg: str) -> tuple[str, str]:
     """
-    Parse TS bridge error output to extract error type and message.
+    Map service error types to exception types.
 
     Returns:
-        Tuple of (error_type, concise_message)
+        Tuple of (exception_type, concise_message)
     """
-    # Look for common error patterns in stderr
-    error_lower = error_output.lower()
-
-    if "nosessions" in error_lower or "no access" in error_lower or "permission" in error_lower:
-        return "authentication_failed", "Access denied: SessionKey invalid or expired"
-
-    if "invalid" in error_lower and ("key" in error_lower or "signature" in error_lower):
-        return "authentication_failed", "Invalid SessionKey or signature"
-
-    if "timeout" in error_lower or "econnrefused" in error_lower or "enotfound" in error_lower:
-        return "network_error", "Key server unreachable (network error)"
-
-    if "invalid" in error_lower and ("format" in error_lower or "bcs" in error_lower):
-        return "validation_failed", "Invalid or corrupted encrypted data"
-
-    if "decrypt" in error_lower and "failed" in error_lower:
-        return "validation_failed", "Decryption failed: data may be corrupted"
-
-    # Default to generic error with first line of output
-    first_line = error_output.split('\n')[0][:200]
-    return "unknown", f"Seal error: {first_line}"
+    # Service error types: validation_failed, authentication_failed, network_error, timeout, decryption_failed, unknown
+    return error_type, error_msg
 
 
-def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key_data: str) -> bytes:
+def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session_key_data: str) -> bytes:
     """
-    Decrypt using the TypeScript bridge script with SessionKey authentication.
+    Decrypt using the Seal SDK service via HTTP with SessionKey authentication.
     Includes retry logic for transient errors and structured error handling.
 
     Args:
@@ -313,7 +294,7 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key
     Raises:
         SealValidationError: If session_key_data missing or input invalid
         SealAuthenticationError: If auth/permission failed
-        SealNetworkError: If key server unreachable (transient)
+        SealNetworkError: If service unreachable (transient)
         SealTimeoutError: If operation timed out
         SealDecryptionError: For other decrypt failures
     """
@@ -322,7 +303,7 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key
             "SessionKey is required for decryption. Please provide session_key_data from the frontend."
         )
 
-    # Prepare input for TS script
+    # Prepare request for service
     request_data = {
         "encrypted_object_hex": encrypted_object_hex,
         "identity": identity,
@@ -330,77 +311,105 @@ def _decrypt_with_seal_cli(encrypted_object_hex: str, identity: str, session_key
         "network": "mainnet"  # Default to mainnet
     }
 
-    input_json = json.dumps(request_data)
-
-    # Command to run TS script
-    cmd = ["bun", "run", TS_BRIDGE_PATH, input_json]
-
     # Retry loop for transient errors
     last_error = None
     for attempt in range(1, DECRYPT_MAX_RETRIES + 1):
-        logger.debug(f"Decrypt attempt {attempt}/{DECRYPT_MAX_RETRIES} for identity {identity[:16]}...")
+        logger.debug(f"Decrypt attempt {attempt}/{DECRYPT_MAX_RETRIES} to {SEAL_SERVICE_URL}")
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=60.0
-            )
-
-            # Output should be the hex encoded plaintext on first line
-            output_hex = result.stdout.strip()
-
-            if not output_hex:
-                raise SealValidationError("No output from TS bridge decryption")
-
-            # Validate that output is valid hex
-            if not all(c in '0123456789abcdefABCDEF' for c in output_hex):
-                raise SealValidationError(
-                    f"Invalid hex output from TS bridge (expected valid hex, got malformed data)"
+            with httpx.Client(timeout=SEAL_SERVICE_TIMEOUT) as client:
+                response = client.post(
+                    f"{SEAL_SERVICE_URL}/decrypt",
+                    json=request_data
                 )
 
-            logger.debug(f"Successfully decrypted on attempt {attempt}")
-            return bytes.fromhex(output_hex)
+                if response.status_code == 200:
+                    result = response.json()
+                    plaintext_hex = result.get("plaintextHex")
 
-        except subprocess.CalledProcessError as e:
-            error_output = e.stderr if e.stderr else "Unknown error"
-            error_type, error_msg = _parse_seal_error(error_output)
+                    if not plaintext_hex:
+                        raise SealValidationError("No plaintextHex in service response")
 
-            # Log at debug level to avoid leaking error details in INFO logs
-            logger.debug(f"TS bridge failed (exit {e.returncode}): {error_output[:500]}")
+                    # Validate that output is valid hex
+                    if not all(c in '0123456789abcdefABCDEF' for c in plaintext_hex):
+                        raise SealValidationError(
+                            f"Invalid hex from service (expected valid hex, got malformed data)"
+                        )
 
-            # Map to appropriate exception
-            if error_type == "authentication_failed":
-                raise SealAuthenticationError(error_msg) from e
-            elif error_type == "validation_failed":
-                raise SealValidationError(error_msg) from e
-            elif error_type == "network_error":
-                # Transient error - retry
-                last_error = SealNetworkError(error_msg)
-                if attempt < DECRYPT_MAX_RETRIES:
-                    logger.warning(
-                        f"Transient error, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES}): {error_msg}"
-                    )
-                    time.sleep(DECRYPT_RETRY_DELAY)
-                    continue
+                    logger.info(f"Service decryption successful (attempt {attempt})", extra={
+                        "plaintextHexLength": len(plaintext_hex),
+                        "plaintextBytes": len(plaintext_hex) // 2,
+                    })
+                    return bytes.fromhex(plaintext_hex)
+
                 else:
-                    raise last_error
-            else:
-                # Unknown error - don't retry
-                raise SealDecryptionError(error_msg, error_type="decryption_failed", http_status=500) from e
+                    # Error response from service
+                    try:
+                        error_data = response.json()
+                        error_type = error_data.get("errorType", "unknown")
+                        error_msg = error_data.get("error", f"HTTP {response.status_code}")
+                    except Exception:
+                        error_type = "unknown"
+                        error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
 
-        except subprocess.TimeoutExpired:
+                    logger.debug(f"Service returned error (HTTP {response.status_code})", extra={
+                        "errorType": error_type,
+                        "message": error_msg[:200],
+                    })
+
+                    # Map to appropriate exception
+                    if error_type == "authentication_failed":
+                        raise SealAuthenticationError(error_msg) from None
+                    elif error_type == "validation_failed":
+                        raise SealValidationError(error_msg) from None
+                    elif error_type == "network_error" or response.status_code == 502:
+                        # Transient error - retry
+                        last_error = SealNetworkError(error_msg)
+                        if attempt < DECRYPT_MAX_RETRIES:
+                            logger.warning(
+                                f"Transient error, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES})"
+                            )
+                            time.sleep(DECRYPT_RETRY_DELAY)
+                            continue
+                        else:
+                            raise last_error
+                    elif response.status_code == 504:
+                        last_error = SealTimeoutError(error_msg)
+                        if attempt < DECRYPT_MAX_RETRIES:
+                            logger.warning(
+                                f"Service timeout, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES})"
+                            )
+                            time.sleep(DECRYPT_RETRY_DELAY)
+                            continue
+                        else:
+                            raise last_error
+                    else:
+                        # Unknown error - don't retry
+                        raise SealDecryptionError(error_msg, error_type="decryption_failed", http_status=500) from None
+
+        except httpx.TimeoutException:
             if attempt < DECRYPT_MAX_RETRIES:
                 logger.warning(
-                    f"Timeout, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES})"
+                    f"Service timeout, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES})"
                 )
                 time.sleep(DECRYPT_RETRY_DELAY)
-                last_error = SealTimeoutError("Decryption operation timed out after 60 seconds")
+                last_error = SealTimeoutError(f"Decryption service timeout after {SEAL_SERVICE_TIMEOUT}s")
                 continue
             else:
-                raise SealTimeoutError("Decryption timed out after 60 seconds (all retries exhausted)") from None
+                raise SealTimeoutError(f"Decryption service timed out after {SEAL_SERVICE_TIMEOUT}s (all retries exhausted)") from None
+
+        except (httpx.ConnectError, httpx.NetworkError) as e:
+            # Network error - transient, retry
+            error_msg = f"Cannot connect to Seal service at {SEAL_SERVICE_URL}: {str(e)[:200]}"
+            last_error = SealNetworkError(error_msg)
+            if attempt < DECRYPT_MAX_RETRIES:
+                logger.warning(
+                    f"Service unavailable, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES}): {error_msg}"
+                )
+                time.sleep(DECRYPT_RETRY_DELAY)
+                continue
+            else:
+                raise last_error
 
     # Should not reach here, but just in case
     if last_error:
