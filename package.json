@@ -34,5 +34,8 @@
   "dependencies": {
     "backend": "^0.0.0",
     "pg": "^8.16.3"
+  },
+  "overrides": {
+    "@mysten/sui": "1.44.0"
   }
 }

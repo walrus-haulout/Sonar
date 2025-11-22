@@ -29,6 +29,9 @@ dependencies = [
 
     # Cryptography for AES decryption
     "cryptography>=41.0.0",
+
+    # Machine learning for feedback clustering
+    "scikit-learn>=1.3.0",
 ]
 
 [project.optional-dependencies]

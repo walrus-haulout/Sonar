@@ -32,6 +32,8 @@ from audio_checker import AudioQualityChecker
 from fingerprint import CopyrightDetector
 from session_store import SessionStore
 from verification_pipeline import VerificationPipeline
+from feedback_indexer import FeedbackIndexer
+from feedback_clustering import FeedbackClusterer
 from seal_decryptor import (
     decrypt_encrypted_blob,
     SealDecryptionError,
@@ -174,6 +176,8 @@ async def validate_environment():
 # Initialize clients (lazy initialization to avoid startup errors)
 _session_store: Optional[SessionStore] = None
 _verification_pipeline: Optional[VerificationPipeline] = None
+_feedback_indexer: Optional[FeedbackIndexer] = None
+_feedback_clusterer: Optional[FeedbackClusterer] = None
 _quality_checker = AudioQualityChecker()
 _copyright_detector = CopyrightDetector(ACOUSTID_API_KEY)
 
@@ -185,6 +189,24 @@ def get_session_store() -> SessionStore:
         _session_store = SessionStore()
         logger.info("Initialized PostgreSQL session store")
     return _session_store
+
+
+def get_feedback_indexer() -> FeedbackIndexer:
+    """Get or create feedback indexer instance."""
+    global _feedback_indexer
+    if _feedback_indexer is None:
+        _feedback_indexer = FeedbackIndexer()
+        logger.info("Initialized feedback indexer")
+    return _feedback_indexer
+
+
+def get_feedback_clusterer() -> FeedbackClusterer:
+    """Get or create feedback clusterer instance."""
+    global _feedback_clusterer
+    if _feedback_clusterer is None:
+        _feedback_clusterer = FeedbackClusterer()
+        logger.info("Initialized feedback clusterer")
+    return _feedback_clusterer
 
 
 def _get_hex_preview(data: bytes, length: int = 32) -> str:
@@ -1194,6 +1216,20 @@ async def submit_verification_feedback(
 
             logger.info(f"Feedback submitted: {feedback.vote} from {wallet_address[:8]}... for session {session_object_id[:8]}...")
 
+            # AUTO-INDEX: Generate embedding asynchronously
+            if feedback.feedback_text and feedback.feedback_text.strip():
+                indexer = get_feedback_indexer()
+                asyncio.create_task(
+                    indexer.index_feedback(
+                        str(result["id"]),
+                        feedback.feedback_text,
+                        session_object_id,
+                        feedback.vote,
+                        feedback.feedback_category,
+                    )
+                )
+                logger.debug(f"Scheduled embedding generation for feedback {result['id'][:8]}...")
+
             return JSONResponse(
                 content={
                     "feedbackId": str(result["id"]),
@@ -1209,6 +1245,179 @@ async def submit_verification_feedback(
     except Exception as e:
         logger.error(f"Failed to submit feedback: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
+
+
+# ============================================================================
+# Feedback Semantic Search & Clustering Endpoints
+# ============================================================================
+
+
+@app.get("/feedback/search")
+async def search_feedback(
+    query: str,
+    limit: int = 20,
+    vote: Optional[str] = None,
+    similarity_threshold: float = 0.75,
+):
+    """
+    Search feedback comments by semantic similarity.
+
+    Find feedback that is semantically similar to your query using embeddings.
+    Useful for finding common themes or issues mentioned by users.
+
+    Args:
+        query: Search query (e.g., "price suggestions too high")
+        limit: Max results to return (default: 20)
+        vote: Filter by 'helpful' or 'not_helpful' (optional)
+        similarity_threshold: Min similarity score 0-1 (default: 0.75)
+
+    Returns:
+        List of similar feedback with similarity scores
+    """
+    try:
+        if not query or not query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+        indexer = get_feedback_indexer()
+        results = await indexer.find_similar_feedback(
+            query, limit, similarity_threshold, vote
+        )
+
+        logger.info(f"Feedback search: found {len(results)} results for '{query[:50]}'")
+
+        return JSONResponse(
+            {
+                "query": query,
+                "results": results,
+                "count": len(results),
+                "filters": {"vote": vote, "threshold": similarity_threshold},
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Feedback search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Feedback search failed")
+
+
+@app.get("/feedback/themes")
+async def get_feedback_themes(
+    top_n: int = 5,
+    vote: Optional[str] = None,
+):
+    """
+    Get top feedback themes using clustering.
+
+    Automatically groups similar feedback into themes using machine learning.
+    Useful for identifying:
+    - Common user complaints
+    - Systematic AI issues
+    - Patterns in feedback
+
+    Args:
+        top_n: Return top N themes (by size, default: 5)
+        vote: Filter by 'helpful' or 'not_helpful' (optional)
+
+    Returns:
+        Top themes with representative feedback and vote distribution
+    """
+    try:
+        if top_n < 1 or top_n > 50:
+            raise HTTPException(status_code=400, detail="top_n must be between 1 and 50")
+
+        clusterer = get_feedback_clusterer()
+        themes = await clusterer.get_feedback_themes(top_n, vote)
+
+        logger.info(f"Feedback themes: found {len(themes)} themes")
+
+        return JSONResponse(
+            {
+                "themes": themes,
+                "count": len(themes),
+                "filters": {"top_n": top_n, "vote": vote},
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Theme clustering failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Theme clustering failed")
+
+
+@app.post("/feedback/index-batch")
+async def index_feedback_batch(limit: int = 100):
+    """
+    Manually trigger batch indexing of feedback.
+
+    Backfills embeddings for feedback that hasn't been indexed yet.
+    Useful for:
+    - Initial setup after migration
+    - Periodic re-indexing
+    - Recovery from indexing failures
+
+    Args:
+        limit: Max feedback to process (default: 100)
+
+    Returns:
+        Number of feedback items successfully indexed
+    """
+    try:
+        if limit < 1 or limit > 1000:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 1000")
+
+        indexer = get_feedback_indexer()
+        count = await indexer.batch_index_feedback(limit)
+
+        logger.info(f"Batch indexed {count} feedback items")
+
+        # Get updated stats
+        stats = await indexer.get_feedback_stats()
+
+        return JSONResponse(
+            {
+                "indexed_in_batch": count,
+                "stats": stats,
+                "message": f"Batch completed. {count} items indexed.",
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Batch indexing failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Batch indexing failed")
+
+
+@app.get("/feedback/stats")
+async def get_feedback_stats():
+    """
+    Get feedback indexing statistics.
+
+    Returns statistics about feedback embeddings and clustering readiness.
+
+    Returns:
+        Counts of total, indexed, and unindexed feedback
+    """
+    try:
+        indexer = get_feedback_indexer()
+        clustering_stats = await indexer.get_feedback_stats()
+
+        clusterer = get_feedback_clusterer()
+        quality_stats = await clusterer.analyze_feedback_quality()
+
+        return JSONResponse(
+            {
+                "indexing": clustering_stats,
+                "quality": quality_stats,
+                "ready_for_clustering": clustering_stats.get("indexed", 0) >= 3,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get feedback stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get feedback stats")
 
 
 # Legacy endpoints (kept for backward compatibility)

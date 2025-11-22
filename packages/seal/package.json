@@ -37,6 +37,7 @@
   "dependencies": {
     "@mysten/seal": "^0.9.3",
     "@mysten/bcs": "^1.6.0",
+    "@mysten/sui": "^1.44.0",
     "@noble/curves": "1.9.4",
     "@noble/hashes": "^1.8.0"
   },
