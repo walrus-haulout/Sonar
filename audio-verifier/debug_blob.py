@@ -11,7 +11,7 @@ import logging
 from seal_decryptor import (
     _fetch_walrus_blob,
     _is_envelope_format,
-    _decrypt_with_seal_cli,
+    _decrypt_with_seal_service,
     _decrypt_aes,
 )
 
@@ -47,7 +47,7 @@ def debug_decrypt(blob_id: str, sealed_key_hex: str, identity: str, session_key_
         if not is_envelope:
             print("\n  WARNING: Blob is not in envelope format!")
             print("  Attempting direct Seal decryption...")
-            plaintext = _decrypt_with_seal_cli(sealed_key_hex, identity, session_key_json)
+            plaintext = _decrypt_with_seal_service(sealed_key_hex, identity, session_key_json)
             print(f"  ✓ Direct decryption returned: {len(plaintext)} bytes")
             return plaintext
 
@@ -62,7 +62,7 @@ def debug_decrypt(blob_id: str, sealed_key_hex: str, identity: str, session_key_
         # Step 4: Decrypt sealed key
         print("\nStep 4: Decrypting sealed key with Seal...")
         print(f"  Input sealed key hex: {len(sealed_key_hex)} chars")
-        aes_key_bytes = _decrypt_with_seal_cli(sealed_key_hex, identity, session_key_json)
+        aes_key_bytes = _decrypt_with_seal_service(sealed_key_hex, identity, session_key_json)
         print(f"  ✓ Seal decryption returned: {len(aes_key_bytes)} bytes")
         if len(aes_key_bytes) == 32:
             print(f"    ✓ AES key is correct size (32 bytes)")

@@ -22,7 +22,7 @@ from seal_decryptor import (
     _decrypt_sync,
     _fetch_walrus_blob,
     _is_envelope_format,
-    _decrypt_with_seal_cli,
+    _decrypt_with_seal_service,
     _decrypt_aes,
 )
 
@@ -75,16 +75,28 @@ class TestIsEnvelopeFormat:
         assert _is_envelope_format(data) is True
 
     def test_invalid_key_length_too_small(self):
-        """Test that key length <200 is not envelope format."""
-        key_length = (100).to_bytes(4, 'little')
-        data = key_length + b'k' * 100
+        """Test that key length <150 is not envelope format."""
+        key_length = (140).to_bytes(4, 'little')
+        data = key_length + b'k' * 140
         assert _is_envelope_format(data) is False
 
     def test_invalid_key_length_too_large(self):
-        """Test that key length >400 is not envelope format."""
-        key_length = (500).to_bytes(4, 'little')
-        data = key_length + b'k' * 500
+        """Test that key length >800 is not envelope format."""
+        key_length = (850).to_bytes(4, 'little')
+        data = key_length + b'k' * 850
         assert _is_envelope_format(data) is False
+
+    def test_key_length_150_is_valid(self):
+        """Test that key length 150 (minimum) is valid envelope format."""
+        key_length = (150).to_bytes(4, 'little')
+        data = key_length + b'k' * 150 + b'encrypted_file_data'
+        assert _is_envelope_format(data) is True
+
+    def test_key_length_800_is_valid(self):
+        """Test that key length 800 (maximum) is valid envelope format."""
+        key_length = (800).to_bytes(4, 'little')
+        data = key_length + b'k' * 800 + b'encrypted_file_data'
+        assert _is_envelope_format(data) is True
 
     def test_data_too_short_for_key_length(self):
         """Test that insufficient data returns False."""
@@ -234,54 +246,75 @@ class TestFetchWalrusBlob:
         assert call_kwargs['headers']['Authorization'] == "Bearer token-123"
 
 
-class TestDecryptWithTsBridge:
-    """Test TS bridge subprocess execution (bun run decrypt.ts)."""
+class TestDecryptWithSealService:
+    """Test HTTP-based Seal SDK service integration."""
 
-    @patch('seal_decryptor.subprocess.run')
-    def test_decrypt_with_session_key(self, mock_run):
-        """Test TS bridge invocation with SessionKey."""
-        mock_result = MagicMock()
-        mock_result.stdout = "deadbeef"
-        mock_result.stderr = ""
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
+    @patch('seal_decryptor.httpx.Client')
+    def test_decrypt_with_session_key(self, mock_client_class):
+        """Test service invocation with SessionKey."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"plaintextHex": "deadbeef"}
 
-        result = _decrypt_with_seal_cli(
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__.return_value = mock_client
+        mock_client.__exit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = _decrypt_with_seal_service(
             "encrypted-hex",
             "identity",
             '{"keyType":"SessionKey","address":"0x123"}'
         )
 
-        # Verify command structure (bun run decrypt.ts)
-        call_args = mock_run.call_args[0][0]
-        assert call_args[0] == "bun"
-        assert call_args[1] == "run"
-        assert "decrypt.ts" in call_args[2]
+        # Verify HTTP POST to /decrypt endpoint
+        mock_client.post.assert_called_once()
+        call_args = mock_client.post.call_args
+        assert "/decrypt" in call_args[0][0]
 
         # Verify decrypted output
         assert result == bytes.fromhex("deadbeef")
 
-    @patch('seal_decryptor.subprocess.run')
-    def test_ts_bridge_timeout_raises_error(self, mock_run):
-        """Test that TS bridge timeout is properly handled."""
-        mock_run.side_effect = subprocess.TimeoutExpired("cmd", 60)
+    @patch('seal_decryptor.httpx.Client')
+    def test_service_timeout_raises_error(self, mock_client_class):
+        """Test that service timeout is properly handled."""
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.TimeoutException("timeout")
+        mock_client.__enter__.return_value = mock_client
+        mock_client.__exit__.return_value = None
 
-        with pytest.raises(RuntimeError, match="timed out"):
-            _decrypt_with_seal_cli(
+        mock_client_class.return_value = mock_client
+
+        from seal_decryptor import SealTimeoutError
+        with pytest.raises(SealTimeoutError):
+            _decrypt_with_seal_service(
                 "encrypted-hex",
                 "identity",
                 '{"keyType":"SessionKey"}'
             )
 
-    @patch('seal_decryptor.subprocess.run')
-    def test_ts_bridge_failure_includes_stderr(self, mock_run):
-        """Test that TS bridge errors include stderr output."""
-        mock_run.side_effect = subprocess.CalledProcessError(
-            1, "bun run", stderr="Invalid encrypted object"
-        )
+    @patch('seal_decryptor.httpx.Client')
+    def test_service_error_response(self, mock_client_class):
+        """Test that service error responses are properly handled."""
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.json.return_value = {
+            "error": "Invalid SessionKey",
+            "errorType": "authentication_failed"
+        }
 
-        with pytest.raises(RuntimeError, match="Invalid encrypted object"):
-            _decrypt_with_seal_cli(
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__.return_value = mock_client
+        mock_client.__exit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        from seal_decryptor import SealAuthenticationError
+        with pytest.raises(SealAuthenticationError):
+            _decrypt_with_seal_service(
                 "encrypted-hex",
                 "identity",
                 '{"keyType":"SessionKey"}'

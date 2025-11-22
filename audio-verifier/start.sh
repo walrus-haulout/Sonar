@@ -59,11 +59,11 @@ cleanup() {
     fi
 
     echo -e "${YELLOW}Shutdown complete${NC}"
-    exit 0
+    # Don't exit here - let the script exit naturally with its actual status
 }
 
-# Set up signal handlers
-trap cleanup SIGINT SIGTERM EXIT
+# Set up signal handlers (don't trap EXIT to preserve exit codes)
+trap cleanup SIGINT SIGTERM
 
 # Function to check if service is healthy
 check_service_health() {
@@ -129,10 +129,25 @@ cd "$(dirname "$0")"
 export SEAL_SERVICE_URL="$SEAL_SERVICE_URL"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
 
+# Source library paths for C extensions (NumPy, etc.)
+if [[ -f /etc/profile.d/nix-libs.sh ]]; then
+    source /etc/profile.d/nix-libs.sh
+fi
+
 # Activate venv if it exists
 if [[ -f ".venv/bin/activate" ]]; then
     source .venv/bin/activate
 fi
+
+# Verify NumPy can load C extensions before starting service
+echo "Verifying NumPy installation..."
+if ! python -c "import numpy; import numpy.core._multiarray_umath" 2>/dev/null; then
+    echo -e "${RED}✗ NumPy C extensions failed to load (libstdc++.so.6 missing?)${NC}"
+    echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+    cleanup
+    exit 1
+fi
+echo "✓ NumPy verified"
 
 # Start Python app
 python -m uvicorn main:app \
@@ -151,5 +166,19 @@ echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Wait for all child processes
-wait
+# Wait for background processes and capture their exit status
+wait $PYTHON_APP_PID
+PYTHON_EXIT_CODE=$?
+wait $SEAL_SERVICE_PID
+SEAL_EXIT_CODE=$?
+
+# If either service failed, exit with failure code
+if [[ $PYTHON_EXIT_CODE -ne 0 ]]; then
+    echo -e "${RED}✗ Python app exited with code $PYTHON_EXIT_CODE${NC}"
+    cleanup
+    exit $PYTHON_EXIT_CODE
+elif [[ $SEAL_EXIT_CODE -ne 0 ]]; then
+    echo -e "${RED}✗ Seal service exited with code $SEAL_EXIT_CODE${NC}"
+    cleanup
+    exit $SEAL_EXIT_CODE
+fi
