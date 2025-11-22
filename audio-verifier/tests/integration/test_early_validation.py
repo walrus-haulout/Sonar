@@ -217,4 +217,244 @@ async def test_valid_small_wav_passes_early_gate(test_client, bearer_token, monk
 
     # Should accept valid audio and create session (200, not 400)
     assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_flac_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that FLAC format is accepted in early validation."""
+    # Create minimal FLAC blob with valid header
+    flac_blob = b'fLaC' + b'\x00' * 2048  # fLaC header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return flac_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "flac_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # FLAC should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_ogg_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that OGG format is accepted in early validation."""
+    # Create minimal OGG blob with valid header
+    ogg_blob = b'OggS' + b'\x00' * 2048  # OggS header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return ogg_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "ogg_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # OGG should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_m4a_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that M4A format is accepted in early validation."""
+    # Create minimal M4A blob with valid ftyp header
+    m4a_blob = b'\x00' * 4 + b'ftypM4A ' + b'\x00' * 2040  # ftyp header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return m4a_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "m4a_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # M4A should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_webm_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that WebM format is accepted in early validation."""
+    # Create minimal WebM blob with valid EBML header
+    webm_blob = b'\x1a\x45\xdf\xa3' + b'\x00' * 2044  # EBML header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return webm_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "webm_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # WebM should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_3gp_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that 3GP format is accepted in early validation."""
+    # Create minimal 3GP blob with valid ftyp header
+    three_gp_blob = b'\x00' * 4 + b'ftyp3gp ' + b'\x00' * 2040  # 3GP ftyp header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return three_gp_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "3gp_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # 3GP should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_amr_format_passes_early_validation(test_client, bearer_token, monkeypatch):
+    """Test that AMR format is accepted in early validation."""
+    # Create minimal AMR blob with valid header
+    amr_blob = b'#!AMR' + b'\x00' * 2043  # AMR header + padding
+
+    async def mock_decrypt(*args, **kwargs):
+        return amr_blob
+
+    def mock_get_pipeline():
+        class MockPipeline:
+            async def run_from_file(self, *args, **kwargs):
+                pass
+        return MockPipeline()
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+    monkeypatch.setattr("main.get_verification_pipeline", mock_get_pipeline)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "amr_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # AMR should be accepted (200, not 400)
+    assert response.status_code == 200
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_unsupported_format_rejected_with_400(test_client, bearer_token, monkeypatch):
+    """Test that unsupported audio format is rejected with appropriate error message."""
+    # Create blob with unrecognized header
+    invalid_blob = b'INVALIDAUDIO' * 200  # ~2.4KB but no valid audio header
+
+    async def mock_decrypt(*args, **kwargs):
+        return invalid_blob
+
+    monkeypatch.setattr("main.decrypt_encrypted_blob", mock_decrypt)
+
+    response = await test_client.post(
+        "/verify",
+        json={
+            "walrusBlobId": "invalid_blob...",
+            "sealIdentity": "0x123456",
+            "encryptedObjectBcsHex": "deadbeef",
+            "metadata": {"title": "test"},
+            "sessionKeyData": "signed_key_data"
+        },
+        headers={"Authorization": bearer_token}
+    )
+
+    # Unsupported format should return 400 with helpful error message
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "unsupported format" in detail.lower() or "allowed" in detail.lower()
     assert "sessionObjectId" in response.json()

@@ -182,6 +182,83 @@ def _looks_like_mp3(data: bytes) -> bool:
     return False
 
 
+def _check_flac_header(data: bytes) -> bool:
+    """Check if data starts with valid FLAC header (fLaC)."""
+    if len(data) < 4:
+        return False
+    return data[:4] == b'fLaC'
+
+
+def _check_ogg_header(data: bytes) -> bool:
+    """Check if data starts with valid OGG/Opus header (OggS)."""
+    if len(data) < 4:
+        return False
+    return data[:4] == b'OggS'
+
+
+def _check_m4a_header(data: bytes) -> bool:
+    """Check if data contains valid MP4/M4A ftyp box."""
+    if len(data) < 12:
+        return False
+    # MP4 files have ftyp box usually at start
+    # ftyp can be at offset 4 with size in first 4 bytes
+    if b'ftyp' in data[:20]:
+        # Common MP4/M4A ftyp variants
+        if b'ftypM4A' in data[:20] or b'ftypmp42' in data[:20] or \
+           b'ftypisom' in data[:20] or b'ftypmp41' in data[:20]:
+            return True
+    return False
+
+
+def _check_webm_header(data: bytes) -> bool:
+    """Check if data starts with valid WebM EBML header."""
+    if len(data) < 4:
+        return False
+    # EBML header signature
+    return data[:4] == b'\x1a\x45\xdf\xa3'
+
+
+def _check_3gp_header(data: bytes) -> bool:
+    """Check if data contains valid 3GP ftyp box."""
+    if len(data) < 12:
+        return False
+    # 3GP files have ftyp box with 3gp variants
+    if b'ftyp' in data[:20]:
+        if b'ftyp3gp' in data[:20] or b'ftyp3g2' in data[:20]:
+            return True
+    return False
+
+
+def _check_amr_header(data: bytes) -> bool:
+    """Check if data starts with valid AMR header (#!AMR or #!AMR-WB)."""
+    if len(data) < 5:
+        return False
+    # AMR header is ASCII: "#!AMR" for narrowband or "#!AMR-WB" for wideband
+    return data[:5] == b'#!AMR'
+
+
+def _detect_audio_format(data: bytes) -> str:
+    """Detect audio format from magic bytes. Returns format name or 'unknown'."""
+    if _check_riff_header(data):
+        return 'WAV'
+    elif _looks_like_mp3(data):
+        return 'MP3'
+    elif _check_flac_header(data):
+        return 'FLAC'
+    elif _check_ogg_header(data):
+        return 'OGG/Opus'
+    elif _check_m4a_header(data):
+        return 'M4A/MP4'
+    elif _check_webm_header(data):
+        return 'WebM'
+    elif _check_3gp_header(data):
+        return '3GP'
+    elif _check_amr_header(data):
+        return 'AMR'
+    else:
+        return 'unknown'
+
+
 def get_verification_pipeline() -> VerificationPipeline:
     """Get or create verification pipeline instance."""
     global _verification_pipeline
@@ -519,17 +596,17 @@ async def create_verification(
                         detail=f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB"
                     )
 
-                # Reject blobs with unrecognized audio header (allow WAV or MP3)
-                looks_like_mp3 = _looks_like_mp3(plaintext_bytes)
-                if not has_riff_header and not looks_like_mp3:
+                # Detect audio format and reject unsupported formats
+                detected_format = _detect_audio_format(plaintext_bytes)
+                if detected_format == 'unknown':
                     logger.warning(
-                        f"Rejecting decrypted audio (unrecognized audio header)",
+                        f"Rejecting decrypted audio (unsupported format)",
                         extra={
                             "verification_id": verification_id,
                             "blob_id_short": blob_id_short,
                             "decrypted_bytes": file_size,
-                            "has_riff_header": has_riff_header,
-                            "looks_like_mp3": looks_like_mp3,
+                            "detected_format": detected_format,
+                            "header_preview": _preview_bytes_hex(plaintext_bytes[:32], 32)
                         }
                     )
                     # Clean up temp file
@@ -539,8 +616,18 @@ async def create_verification(
                         pass
                     raise HTTPException(
                         status_code=400,
-                        detail="Invalid audio blob: missing recognizable WAV/MP3 header"
+                        detail="Invalid audio blob: unsupported format. Allowed: MP3, WAV, FLAC, OGG/Opus, M4A/AAC/MP4, WebM, 3GPP/3GP, AMR"
                     )
+
+                logger.debug(
+                    f"Audio format detected: {detected_format}",
+                    extra={
+                        "verification_id": verification_id,
+                        "blob_id_short": blob_id_short,
+                        "detected_format": detected_format,
+                        "decrypted_bytes": file_size
+                    }
+                )
 
             except SealAuthenticationError as e:
                 # 403: User not authorized (SessionKey invalid/expired, policy denied)

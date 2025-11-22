@@ -164,6 +164,35 @@ The service runs a 6-stage pipeline:
    - Store results in PostgreSQL
    - Return to frontend
 
+## Supported Audio Formats
+
+The service supports the following audio formats. Each format is validated by checking its file header (magic bytes) before processing:
+
+### Format Support Matrix
+
+| Format | Extension | MIME Type | Status | Processing |
+|--------|-----------|-----------|--------|------------|
+| MP3 | `.mp3` | audio/mpeg | ✅ Full Support | Native (soundfile) or FFmpeg fallback |
+| WAV | `.wav` | audio/wav | ✅ Full Support | Native (soundfile) |
+| FLAC | `.flac` | audio/flac | ✅ Full Support | Native (soundfile) |
+| OGG/Opus | `.ogg`, `.opus` | audio/ogg, audio/opus | ✅ Full Support | Native (soundfile) |
+| M4A/AAC | `.m4a`, `.aac` | audio/m4a, audio/aac | ✅ Full Support | FFmpeg fallback |
+| MP4 Audio | `.mp4` | audio/mp4 | ✅ Full Support | FFmpeg fallback |
+| WebM | `.webm` | audio/webm | ✅ Full Support | FFmpeg fallback |
+| 3GP/3GPP | `.3gp`, `.3gpp` | audio/3gpp | ✅ Full Support | FFmpeg fallback |
+| AMR | `.amr` | audio/amr | ✅ Full Support | FFmpeg fallback |
+
+### Format Validation
+
+- **Format Detection**: Headers are checked using magic bytes (e.g., `RIFF` for WAV, `ID3` for MP3, `fLaC` for FLAC)
+- **Rejection**: Files without valid audio headers return HTTP 400 with "Invalid audio blob: unsupported format"
+- **Processing**: All formats are converted to canonical PCM WAV for quality analysis
+
+### Minimum File Size
+
+- All audio files must be at least **1 KB** (1024 bytes) after decryption
+- Files smaller than 1 KB are rejected with HTTP 400
+
 ## Dependencies
 
 The service uses:
@@ -341,7 +370,7 @@ apt-get install libchromaprint-tools ffmpeg
 
 - Check `OPENROUTER_API_KEY` is valid (get key at https://openrouter.ai/keys)
 - Verify API quota hasn't been exceeded
-- Check file is a supported audio format (WAV, MP3, M4A, etc.)
+- Check file is a supported audio format (MP3, WAV, FLAC, OGG/Opus, M4A/AAC/MP4, WebM, 3GPP/3GP, AMR)
 
 ### PostgreSQL connection errors
 
