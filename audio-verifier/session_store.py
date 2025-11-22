@@ -92,7 +92,7 @@ class SessionStore:
         return self._pool
 
     async def _ensure_schema(self):
-        """Ensure pgvector extension is available. Table created by migrations."""
+        """Ensure pgvector extension is available and warnings column exists."""
         if self._pool is None:
             return
 
@@ -105,7 +105,26 @@ class SessionStore:
                     except Exception as e:
                         logger.warning(f"Could not create pgvector extension: {e}")
 
-                    logger.info("Verified pgvector extension and table schema")
+                    # Add warnings column if it doesn't exist (migration 004)
+                    try:
+                        await conn.execute("""
+                            ALTER TABLE verification_sessions
+                            ADD COLUMN IF NOT EXISTS warnings TEXT[] DEFAULT ARRAY[]::TEXT[]
+                        """)
+                        logger.info("Verified warnings column exists")
+                    except Exception as e:
+                        logger.warning(f"Could not ensure warnings column: {e}")
+
+                    # Create index for warnings column
+                    try:
+                        await conn.execute("""
+                            CREATE INDEX IF NOT EXISTS idx_sessions_has_warnings
+                            ON verification_sessions ((array_length(warnings, 1) > 0))
+                        """)
+                    except Exception as e:
+                        logger.debug(f"Index already exists or could not be created: {e}")
+
+                    logger.info("Verified pgvector extension and warnings schema")
         except asyncio.TimeoutError:
             logger.error("Timeout verifying schema")
 
