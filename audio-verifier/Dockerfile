@@ -119,17 +119,8 @@ RUN LIBSTDCPP_FILE="" && \
     echo "export LD_LIBRARY_PATH=\"$GCC_LIB_DIR:\${LD_LIBRARY_PATH:-}\"" >> /etc/profile.d/nix-libs.sh && \
     chmod +x /etc/profile.d/nix-libs.sh
 
-# Set LD_LIBRARY_PATH for all processes using the found path
-# Read the path from the file we created and set it as an environment variable
-RUN GCC_LIB_DIR=$(cat /tmp/gcc_lib_dir.txt) && \
-    echo "export LD_LIBRARY_PATH=\"$GCC_LIB_DIR:\${LD_LIBRARY_PATH:-}\"" >> /etc/environment && \
-    echo "export LD_LIBRARY_PATH=\"$GCC_LIB_DIR:\${LD_LIBRARY_PATH:-}\"" > /tmp/ld_library_path.env
-
-# Set LD_LIBRARY_PATH as ENV directive so it's available to all processes
-# This ensures NumPy C extensions can find libstdc++.so.6
-RUN . /tmp/ld_library_path.env && echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> /etc/environment && \
-    GCC_LIB_DIR=$(cat /tmp/gcc_lib_dir.txt) && \
-    echo "Configured LD_LIBRARY_PATH to: $GCC_LIB_DIR"
+# Note: The gcc library path is saved to /tmp/gcc_lib_dir.txt above and will be read
+# by start.sh at runtime to set LD_LIBRARY_PATH for NumPy C extensions
 
 # Create directory for application
 WORKDIR /app

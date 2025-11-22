@@ -129,9 +129,24 @@ cd "$(dirname "$0")"
 export SEAL_SERVICE_URL="$SEAL_SERVICE_URL"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
 
-# Source library paths for C extensions (NumPy, etc.)
-if [[ -f /etc/profile.d/nix-libs.sh ]]; then
-    source /etc/profile.d/nix-libs.sh
+# Set LD_LIBRARY_PATH from build-time discovered gcc library path
+# This is critical for NumPy C extensions to load libstdc++.so.6
+if [[ -f /tmp/gcc_lib_dir.txt ]]; then
+    GCC_LIB_DIR=$(cat /tmp/gcc_lib_dir.txt)
+    export LD_LIBRARY_PATH="$GCC_LIB_DIR:${LD_LIBRARY_PATH:-}"
+    echo "LD_LIBRARY_PATH set to: $LD_LIBRARY_PATH"
+
+    # Verify the library file actually exists
+    if ls "$GCC_LIB_DIR"/libstdc++.so.6* >/dev/null 2>&1; then
+        echo "✓ Found libstdc++.so.6 in $GCC_LIB_DIR"
+    else
+        echo -e "${RED}✗ WARNING: libstdc++.so.6 not found in $GCC_LIB_DIR${NC}"
+        echo "Available libraries in $GCC_LIB_DIR:"
+        ls -la "$GCC_LIB_DIR"/*.so* 2>/dev/null | head -10 || echo "  (none found)"
+    fi
+else
+    echo -e "${RED}✗ ERROR: /tmp/gcc_lib_dir.txt not found${NC}"
+    echo "Cannot set LD_LIBRARY_PATH - NumPy will likely fail to load C extensions"
 fi
 
 # Activate venv if it exists
