@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
-import { CHAIN_CONFIG } from '@/lib/sui/client';
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { CHAIN_CONFIG } from "@/lib/sui/client";
 
 /**
  * Atomic Blob Registration Hook
@@ -10,6 +10,33 @@ import { CHAIN_CONFIG } from '@/lib/sui/client';
  * 1. register_blob_intent() - Creates BlobRegistration on-chain
  * 2. finalize_submission_with_blob() - Atomically links blob to AudioSubmission
  */
+
+/**
+ * Validate Walrus blob ID format
+ * Walrus blob IDs are base64url-encoded strings (A-Za-z0-9_-)
+ */
+function isValidWalrusBlobId(blobId: string): boolean {
+  if (!blobId || typeof blobId !== "string") return false;
+
+  // Walrus blob IDs should be base64url format
+  // Typical length: 32-64 characters
+  const base64urlPattern = /^[A-Za-z0-9_-]+$/;
+  return (
+    base64urlPattern.test(blobId) && blobId.length >= 16 && blobId.length <= 128
+  );
+}
+
+/**
+ * Validate Seal policy ID format
+ * Should be a hex string (Sui object ID)
+ */
+function isValidSealPolicyId(policyId: string): boolean {
+  if (!policyId || typeof policyId !== "string") return false;
+
+  // Sui object IDs are 64-character hex strings starting with 0x
+  const hexPattern = /^0x[a-fA-F0-9]{64}$/;
+  return hexPattern.test(policyId);
+}
 
 export interface BlobRegistrationState {
   registrationId?: string;
@@ -36,7 +63,7 @@ export function useAtomicBlobRegistration() {
    */
   async function registerBlobIntent(
     sealPolicyId: string,
-    durationSeconds: number
+    durationSeconds: number,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const tx = new Transaction();
@@ -68,9 +95,11 @@ export function useAtomicBlobRegistration() {
               if (txDetails.objectChanges) {
                 for (const change of txDetails.objectChanges) {
                   if (
-                    change.type === 'created' &&
+                    change.type === "created" &&
                     change.objectType &&
-                    change.objectType.includes('::marketplace::BlobRegistration')
+                    change.objectType.includes(
+                      "::marketplace::BlobRegistration",
+                    )
                   ) {
                     resolve(change.objectId);
                     return;
@@ -82,10 +111,12 @@ export function useAtomicBlobRegistration() {
               if (txDetails.events) {
                 for (const event of txDetails.events) {
                   if (
-                    event.type.includes('BlobRegistrationCreated') &&
+                    event.type.includes("BlobRegistrationCreated") &&
                     event.parsedJson
                   ) {
-                    const json = event.parsedJson as { registration_id?: string };
+                    const json = event.parsedJson as {
+                      registration_id?: string;
+                    };
                     if (json.registration_id) {
                       resolve(json.registration_id);
                       return;
@@ -95,7 +126,9 @@ export function useAtomicBlobRegistration() {
               }
 
               reject(
-                new Error('Could not find registration object ID in transaction')
+                new Error(
+                  "Could not find registration object ID in transaction",
+                ),
               );
             } catch (error) {
               reject(error);
@@ -104,11 +137,11 @@ export function useAtomicBlobRegistration() {
           onError: (error) => {
             reject(
               new Error(
-                `Failed to register blob intent: ${error instanceof Error ? error.message : 'Unknown error'}`
-              )
+                `Failed to register blob intent: ${error instanceof Error ? error.message : "Unknown error"}`,
+              ),
             );
           },
-        }
+        },
       );
     });
   }
@@ -125,20 +158,87 @@ export function useAtomicBlobRegistration() {
     sealPolicyId: string,
     durationSeconds: number,
     submissionFeeMist: number = 250_000_000, // 0.25 SUI
-    previewBlobHash?: Uint8Array
+    previewBlobHash?: Uint8Array,
   ): Promise<{ submissionId: string; digest: string }> {
     return new Promise((resolve, reject) => {
+      // Validate blob IDs before constructing transaction
+      if (!isValidWalrusBlobId(walrusBlobId)) {
+        const error = new Error(
+          `Invalid Walrus blob ID format: "${walrusBlobId}". ` +
+            `Expected base64url string (A-Za-z0-9_-), length 16-128 chars.`,
+        );
+        console.error("[AtomicRegistration] Blob ID validation failed:", {
+          walrusBlobId,
+          length: walrusBlobId.length,
+          pattern: /^[A-Za-z0-9_-]+$/.test(walrusBlobId),
+        });
+        reject(error);
+        return;
+      }
+
+      if (!isValidSealPolicyId(sealPolicyId)) {
+        const error = new Error(
+          `Invalid Seal policy ID format: "${sealPolicyId}". ` +
+            `Expected 0x-prefixed 64-char hex string.`,
+        );
+        console.error(
+          "[AtomicRegistration] Seal policy ID validation failed:",
+          {
+            sealPolicyId,
+            length: sealPolicyId.length,
+            hasPrefix: sealPolicyId.startsWith("0x"),
+          },
+        );
+        reject(error);
+        return;
+      }
+
+      // Validate registration ID (should be Sui object ID)
+      if (!registrationId || !registrationId.startsWith("0x")) {
+        const error = new Error(
+          `Invalid registration ID: "${registrationId}". ` +
+            `Expected Sui object ID (0x-prefixed hex).`,
+        );
+        console.error(
+          "[AtomicRegistration] Registration ID validation failed:",
+          {
+            registrationId,
+          },
+        );
+        reject(error);
+        return;
+      }
+
       const tx = new Transaction();
       tx.setGasBudget(50_000_000); // 0.05 SUI
 
       if (!CHAIN_CONFIG.marketplaceId) {
-        reject(new Error('Marketplace ID not configured'));
+        reject(new Error("Marketplace ID not configured"));
         return;
       }
 
       const marketplaceRef = tx.object(CHAIN_CONFIG.marketplaceId);
       const registrationRef = tx.object(registrationId);
       const submissionFeeCoin = tx.splitCoins(tx.gas, [submissionFeeMist])[0];
+
+      // Debug logging before transaction construction
+      console.log("[AtomicRegistration] Transaction parameters:", {
+        registrationId,
+        walrusBlobId,
+        walrusBlobIdLength: walrusBlobId.length,
+        walrusBlobIdSample: walrusBlobId.substring(0, 20) + "...",
+        previewBlobId,
+        previewBlobIdLength: previewBlobId.length,
+        sealPolicyId,
+        sealPolicyIdPrefix: sealPolicyId.substring(0, 10) + "...",
+        durationSeconds,
+        submissionFeeMist,
+        hasPreviewBlobHash: !!previewBlobHash,
+        previewBlobHashLength: previewBlobHash?.length,
+        marketplaceId: CHAIN_CONFIG.marketplaceId,
+        packageId: CHAIN_CONFIG.packageId,
+        gasBudget: 50_000_000,
+      });
 
       tx.moveCall({
         target: `${CHAIN_CONFIG.packageId}::marketplace::finalize_submission_with_blob`,
@@ -149,11 +249,8 @@ export function useAtomicBlobRegistration() {
           tx.pure.string(walrusBlobId),
           tx.pure.string(previewBlobId),
           previewBlobHash
-            ? tx.pure.option(
-              'vector<u8>',
-              Array.from(previewBlobHash)
-            )
-            : tx.pure.option('vector<u8>', null),
+            ? tx.pure.option("vector<u8>", Array.from(previewBlobHash))
+            : tx.pure.option("vector<u8>", null),
         ],
       });
 
@@ -177,9 +274,9 @@ export function useAtomicBlobRegistration() {
               if (txDetails.objectChanges) {
                 for (const change of txDetails.objectChanges) {
                   if (
-                    change.type === 'created' &&
+                    change.type === "created" &&
                     change.objectType &&
-                    change.objectType.includes('::marketplace::AudioSubmission')
+                    change.objectType.includes("::marketplace::AudioSubmission")
                   ) {
                     submissionId = change.objectId;
                     break;
@@ -191,7 +288,7 @@ export function useAtomicBlobRegistration() {
               if (!submissionId && txDetails.events) {
                 for (const event of txDetails.events) {
                   if (
-                    event.type.includes('SubmissionCreated') &&
+                    event.type.includes("SubmissionCreated") &&
                     event.parsedJson
                   ) {
                     const json = event.parsedJson as { submission_id?: string };
@@ -206,8 +303,8 @@ export function useAtomicBlobRegistration() {
               if (!submissionId) {
                 reject(
                   new Error(
-                    'Could not find submission object ID in transaction'
-                  )
+                    "Could not find submission object ID in transaction",
+                  ),
                 );
                 return;
               }
@@ -221,13 +318,32 @@ export function useAtomicBlobRegistration() {
             }
           },
           onError: (error) => {
+            console.error(
+              "[AtomicRegistration] Transaction execution failed:",
+              {
+                error: error instanceof Error ? error.message : String(error),
+                errorName: error instanceof Error ? error.name : "Unknown",
+                errorStack: error instanceof Error ? error.stack : undefined,
+                transactionParams: {
+                  registrationId,
+                  walrusBlobId: walrusBlobId.substring(0, 20) + "...",
+                  previewBlobId: previewBlobId.substring(0, 20) + "...",
+                  sealPolicyId: sealPolicyId.substring(0, 20) + "...",
+                  durationSeconds,
+                  marketplaceId: CHAIN_CONFIG.marketplaceId,
+                  packageId: CHAIN_CONFIG.packageId,
+                },
+              },
+            );
+
             reject(
               new Error(
-                `Failed to finalize submission: ${error instanceof Error ? error.message : 'Unknown error'}`
-              )
+                `Failed to finalize submission: ${error instanceof Error ? error.message : "Unknown error"}. ` +
+                  `Check console for transaction details.`,
+              ),
             );
           },
-        }
+        },
       );
     });
   }
@@ -245,26 +361,29 @@ export function useAtomicBlobRegistration() {
     options?: {
       existingRegistrationId?: string;
       onPhase1Complete?: (registrationId: string) => void;
-    }
+    },
   ): Promise<{ submissionId: string; registrationId: string }> {
     try {
       let registrationId = options?.existingRegistrationId;
 
       if (!registrationId) {
         // Phase 1: Register blob intent on-chain
-        console.log('[AtomicRegistration] Phase 1: Registering blob intent...');
+        console.log("[AtomicRegistration] Phase 1: Registering blob intent...");
         registrationId = await registerBlobIntent(
           sealPolicyId,
-          durationSeconds
+          durationSeconds,
         );
-        console.log('[AtomicRegistration] Phase 1 complete:', registrationId);
+        console.log("[AtomicRegistration] Phase 1 complete:", registrationId);
         options?.onPhase1Complete?.(registrationId);
       } else {
-        console.log('[AtomicRegistration] Skipping Phase 1, using existing registration:', registrationId);
+        console.log(
+          "[AtomicRegistration] Skipping Phase 1, using existing registration:",
+          registrationId,
+        );
       }
 
       // Phase 2: Finalize submission with actual blob IDs
-      console.log('[AtomicRegistration] Phase 2: Finalizing with blob IDs...');
+      console.log("[AtomicRegistration] Phase 2: Finalizing with blob IDs...");
       const { submissionId, digest } = await finalizeSubmissionWithBlob(
         registrationId,
         walrusBlobId,
@@ -272,13 +391,13 @@ export function useAtomicBlobRegistration() {
         sealPolicyId,
         durationSeconds,
         250_000_000, // 0.25 SUI
-        previewBlobHash
+        previewBlobHash,
       );
       console.log(
-        '[AtomicRegistration] Phase 2 complete:',
+        "[AtomicRegistration] Phase 2 complete:",
         submissionId,
-        'Digest:',
-        digest
+        "Digest:",
+        digest,
       );
 
       return {
@@ -286,7 +405,7 @@ export function useAtomicBlobRegistration() {
         registrationId,
       };
     } catch (error) {
-      console.error('[AtomicRegistration] Failed:', error);
+      console.error("[AtomicRegistration] Failed:", error);
       throw error;
     }
   }
