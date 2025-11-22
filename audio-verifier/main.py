@@ -908,7 +908,54 @@ async def get_verification_status(session_object_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        return JSONResponse(content=session)
+        # Derive frontend-friendly shape while keeping original fields
+        results = session.get("results") or {}
+        quality = results.get("quality") or {}
+        analysis = results.get("analysis") or {}
+        errors_raw = session.get("error")
+
+        # Normalize errors to a list
+        if isinstance(errors_raw, list):
+            errors_list = [str(e) for e in errors_raw]
+        elif errors_raw:
+            errors_list = [str(errors_raw)]
+        else:
+            errors_list = []
+
+        # Compute quality score (prefer 0-100 scale)
+        quality_score = (
+            quality.get("quality_score")
+            or quality.get("score")
+            or quality.get("qualityScore")
+            or analysis.get("qualityScore")
+            or 0
+        )
+        try:
+            quality_score = float(quality_score)
+            if 0 <= quality_score <= 1:
+                quality_score *= 100.0
+        except Exception:
+            quality_score = 0.0
+
+        # Build response with both legacy and frontend keys
+        response = {
+            **session,
+            "result": results,  # alias for compatibility with older tests
+            "state": session.get("status"),
+            "currentStage": session.get("stage"),
+            "progress": float(session.get("progress", 0.0)),
+            "approved": results.get("approved"),
+            "safetyPassed": results.get("safetyPassed"),
+            "analysis": analysis,
+            "transcript": results.get("transcript"),
+            "transcriptPreview": results.get("transcriptPreview"),
+            "quality": quality,
+            "qualityScore": quality_score,
+            "errors": errors_list,
+            "warnings": session.get("warnings", []),
+        }
+
+        return JSONResponse(content=response)
 
     except HTTPException:
         raise
