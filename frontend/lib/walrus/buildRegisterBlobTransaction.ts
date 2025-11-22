@@ -3,9 +3,10 @@ import type { SuiClient } from '@mysten/sui/client';
 import { collectCoinsForAmount } from '@/lib/sui/coin-utils';
 
 // Get env vars lazily to support testing
-function getWalrusConfig(): { packageId: string; systemObject: string } {
+function getWalrusConfig(): { packageId: string; systemObject: string; epochsAhead: number } {
   const packageId = process.env.NEXT_PUBLIC_WALRUS_PACKAGE_ID?.trim();
   const systemObject = process.env.NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT?.trim();
+  const epochsAhead = Number(process.env.NEXT_PUBLIC_WALRUS_DEFAULT_EPOCHS || '26');
 
   if (!packageId) {
     throw new Error('NEXT_PUBLIC_WALRUS_PACKAGE_ID is not configured');
@@ -14,7 +15,7 @@ function getWalrusConfig(): { packageId: string; systemObject: string } {
     throw new Error('NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT is not configured');
   }
 
-  return { packageId, systemObject };
+  return { packageId, systemObject, epochsAhead };
 }
 
 export interface RegisterBlobParams {
@@ -225,6 +226,8 @@ export interface BatchRegisterAndSubmitParams {
   walCoinId?: string;
   sponsorAddress?: string;
   suiClient?: SuiClient;
+  // Walrus configuration (optional, uses env vars if not provided)
+  walrusConfig?: { packageId: string; systemObject: string; epochsAhead: number };
 }
 
 /**
@@ -274,20 +277,108 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(params: BatchR
     );
   }
 
-  return buildBatchRegisterAndSubmitTransaction({ ...params, walCoinId: resolvedWalCoinId });
+  // Use provided walrusConfig or fetch from env vars
+  const walrusConfig = params.walrusConfig || getWalrusConfig();
+
+  return buildBatchRegisterAndSubmitTransaction({
+    ...params,
+    walCoinId: resolvedWalCoinId,
+    walrusConfig,
+  });
 }
 
 export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndSubmitParams): Transaction {
-  const { mainBlob, previewBlob, submission } = params;
+  const { mainBlob, previewBlob, submission, walCoinId } = params;
   const sonarPackageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
+  const walrusConfig = params.walrusConfig || getWalrusConfig();
 
   if (!sonarPackageId) {
     throw new Error('NEXT_PUBLIC_PACKAGE_ID is not defined');
   }
 
-  const tx = new Transaction();
+  if (!walCoinId) {
+    throw new Error('[Walrus] WAL coin ID is required for batch registration');
+  }
 
-  // Handle SUI payment (0.25 SUI)
+  const tx = new Transaction();
+  const { packageId: walrusPackageId, systemObject, epochsAhead } = walrusConfig;
+
+  console.log('[Walrus] Building batch registration transaction:', {
+    mainBlobId: mainBlob.blobId,
+    mainBlobSize: mainBlob.size,
+    previewBlobId: previewBlob.blobId,
+    previewBlobSize: previewBlob.size,
+    epochsAhead,
+    walCoinId,
+  });
+
+  // Reference to the WAL coin - will be reused for all calls
+  const walCoinRef = tx.object(walCoinId);
+
+  // Step 1: Reserve space for main blob
+  console.log('[Walrus] Reserving space for main blob:', mainBlob.size, 'bytes');
+  const [mainStorage] = tx.moveCall({
+    target: `${walrusPackageId}::system::reserve_space`,
+    arguments: [
+      tx.object(systemObject),        // self: &mut System
+      tx.pure.u64(mainBlob.size),     // storage_amount: u64
+      tx.pure.u32(epochsAhead),       // epochs_ahead: u32
+      walCoinRef,                     // payment: &mut Coin<WAL>
+    ],
+  });
+
+  // Step 2: Register main blob
+  console.log('[Walrus] Registering main blob');
+  const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
+  const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
+
+  tx.moveCall({
+    target: `${walrusPackageId}::system::register_blob`,
+    arguments: [
+      tx.object(systemObject),           // self: &mut System
+      mainStorage,                       // storage: Storage
+      tx.pure.u256(mainBlobIdBigInt),    // blob_id: u256
+      tx.pure.u256(mainBlobIdBigInt),    // root_hash: u256 (use blob_id as default)
+      tx.pure.u64(mainBlob.size),        // size: u64
+      tx.pure.u8(mainEncodingTypeU8),    // encoding_type: u8
+      tx.pure.bool(mainBlob.deletable ?? true), // deletable: bool
+      walCoinRef,                        // write_payment: &mut Coin<WAL>
+    ],
+  });
+
+  // Step 3: Reserve space for preview blob
+  console.log('[Walrus] Reserving space for preview blob:', previewBlob.size, 'bytes');
+  const [previewStorage] = tx.moveCall({
+    target: `${walrusPackageId}::system::reserve_space`,
+    arguments: [
+      tx.object(systemObject),          // self: &mut System
+      tx.pure.u64(previewBlob.size),    // storage_amount: u64
+      tx.pure.u32(epochsAhead),         // epochs_ahead: u32
+      walCoinRef,                       // payment: &mut Coin<WAL>
+    ],
+  });
+
+  // Step 4: Register preview blob
+  console.log('[Walrus] Registering preview blob');
+  const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
+  const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
+
+  tx.moveCall({
+    target: `${walrusPackageId}::system::register_blob`,
+    arguments: [
+      tx.object(systemObject),            // self: &mut System
+      previewStorage,                     // storage: Storage
+      tx.pure.u256(previewBlobIdBigInt),  // blob_id: u256
+      tx.pure.u256(previewBlobIdBigInt),  // root_hash: u256 (use blob_id as default)
+      tx.pure.u64(previewBlob.size),      // size: u64
+      tx.pure.u8(previewEncodingTypeU8),  // encoding_type: u8
+      tx.pure.bool(previewBlob.deletable ?? true), // deletable: bool
+      walCoinRef,                         // write_payment: &mut Coin<WAL>
+    ],
+  });
+
+  // Step 5: Submit to marketplace (collect 0.25 SUI fee)
+  console.log('[Walrus] Submitting blobs to marketplace');
   let suiPaymentCoin;
   if (submission.suiPaymentCoinId && submission.suiPaymentCoinId !== 'GAS_COIN_PLACEHOLDER') {
     suiPaymentCoin = tx.object(submission.suiPaymentCoinId);
@@ -297,8 +388,6 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     suiPaymentCoin = coin;
   }
 
-  // Simple submission - just collect fee and emit event
-  // Publisher already registered the blobs on Walrus
   tx.moveCall({
     target: `${sonarPackageId}::blob_manager::submit_blobs`,
     arguments: [
@@ -310,5 +399,6 @@ export function buildBatchRegisterAndSubmitTransaction(params: BatchRegisterAndS
     ],
   });
 
+  console.log('[Walrus] Batch registration transaction built successfully');
   return tx;
 }
