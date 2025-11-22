@@ -3,26 +3,92 @@
  * High-level encryption functions for files and data
  */
 
-import type { SealClient } from '@mysten/seal';
+import type { SealClient } from "@mysten/seal";
 import type {
   EncryptFileOptions,
   EncryptionResult,
   EncryptionMetadata,
   ProgressCallback,
-} from './types';
-import { DemType } from './types';
-import { EncryptionError } from './errors';
+} from "./types";
+import { DemType } from "./types";
+import { EncryptionError } from "./errors";
 import {
   DEFAULT_THRESHOLD,
   DEFAULT_DEM_TYPE,
   SEAL_OVERHEAD_BYTES,
-} from './constants';
+  RETRY_CONFIG,
+} from "./constants";
 import {
   generateRandomIdentity,
   bytesToHex,
   shouldUseEnvelopeEncryption,
   estimateEncryptedSize,
-} from './utils';
+  sleep,
+} from "./utils";
+
+/**
+ * Retry wrapper for encryption operations that may timeout
+ * Retries on timeout errors with exponential backoff
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxAttempts: number = RETRY_CONFIG.MAX_ATTEMPTS,
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      const isTimeout =
+        lastError.message.toLowerCase().includes("timeout") ||
+        lastError.message.toLowerCase().includes("timed out");
+
+      const isNetworkError =
+        lastError.message.toLowerCase().includes("network") ||
+        lastError.message.toLowerCase().includes("fetch");
+
+      // Only retry on timeout or network errors
+      if (!isTimeout && !isNetworkError) {
+        throw new EncryptionError(
+          `${operationName} failed: ${lastError.message}`,
+          lastError,
+        );
+      }
+
+      // Don't retry on last attempt
+      if (attempt >= maxAttempts) {
+        throw new EncryptionError(
+          `${operationName} failed after ${maxAttempts} attempts: ${lastError.message}`,
+          lastError,
+        );
+      }
+
+      // Calculate delay with exponential backoff
+      const delayMs = Math.min(
+        RETRY_CONFIG.INITIAL_DELAY_MS *
+          Math.pow(RETRY_CONFIG.BACKOFF_FACTOR, attempt - 1),
+        RETRY_CONFIG.MAX_DELAY_MS,
+      );
+
+      console.warn(
+        `[Seal] ${operationName} attempt ${attempt}/${maxAttempts} failed: ${lastError.message}. ` +
+          `Retrying in ${delayMs}ms...`,
+      );
+
+      await sleep(delayMs);
+    }
+  }
+
+  // This should never be reached, but TypeScript requires it
+  throw new EncryptionError(
+    `${operationName} failed after ${maxAttempts} attempts`,
+    lastError,
+  );
+}
 
 /**
  * Encrypt a file or data blob
@@ -32,9 +98,9 @@ export async function encryptFile(
   client: SealClient,
   data: File | Uint8Array,
   options: EncryptFileOptions,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
 ): Promise<EncryptionResult> {
-  onProgress?.(0, 'Preparing encryption...');
+  onProgress?.(0, "Preparing encryption...");
 
   // Convert File to Uint8Array if needed
   const dataBytes =
@@ -44,15 +110,14 @@ export async function encryptFile(
 
   // Determine encryption strategy
   const shouldEnvelope =
-    options.useEnvelope ??
-    shouldUseEnvelopeEncryption(originalSize);
+    options.useEnvelope ?? shouldUseEnvelopeEncryption(originalSize);
 
   if (shouldEnvelope) {
-    onProgress?.(10, 'Using envelope encryption for large file...');
+    onProgress?.(10, "Using envelope encryption for large file...");
     return encryptLargeFile(client, dataBytes, options, onProgress);
   }
 
-  onProgress?.(10, 'Using direct Seal encryption...');
+  onProgress?.(10, "Using direct Seal encryption...");
   return encryptSmallFile(client, dataBytes, options, onProgress);
 }
 
@@ -64,7 +129,7 @@ async function encryptSmallFile(
   client: SealClient,
   data: Uint8Array,
   options: EncryptFileOptions,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
 ): Promise<EncryptionResult> {
   const {
     threshold = DEFAULT_THRESHOLD,
@@ -74,15 +139,15 @@ async function encryptSmallFile(
   } = options;
 
   try {
-    onProgress?.(20, 'Generating identity...');
+    onProgress?.(20, "Generating identity...");
 
     // Generate or use custom identity
     const identity = customId || generateRandomIdentity();
     const identityHex = bytesToHex(identity);
 
-    onProgress?.(40, 'Encrypting with Seal...');
+    onProgress?.(40, "Encrypting with Seal...");
 
-    // Encrypt with Seal
+    // Encrypt with Seal with retry on timeout
     // packageId is optional - only needed for decryption with custom policies
     const encryptParams: any = {
       threshold,
@@ -94,9 +159,12 @@ async function encryptSmallFile(
       encryptParams.packageId = packageId;
     }
 
-    const { encryptedObject } = await client.encrypt(encryptParams);
+    const { encryptedObject } = await withRetry(
+      () => client.encrypt(encryptParams),
+      "Seal encryption",
+    );
 
-    onProgress?.(90, 'Finalizing...');
+    onProgress?.(90, "Finalizing...");
 
     const metadata: EncryptionMetadata = {
       threshold,
@@ -109,7 +177,7 @@ async function encryptSmallFile(
       isEnvelope: false,
     };
 
-    onProgress?.(100, 'Encryption complete');
+    onProgress?.(100, "Encryption complete");
 
     return {
       encryptedData: encryptedObject,
@@ -118,8 +186,8 @@ async function encryptSmallFile(
     };
   } catch (error) {
     throw new EncryptionError(
-      'Encryption failed',
-      error instanceof Error ? error : undefined
+      "Encryption failed",
+      error instanceof Error ? error : undefined,
     );
   }
 }
@@ -138,7 +206,7 @@ async function encryptLargeFile(
   client: SealClient,
   data: Uint8Array,
   options: EncryptFileOptions,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
 ): Promise<EncryptionResult> {
   const {
     threshold = DEFAULT_THRESHOLD,
@@ -148,23 +216,23 @@ async function encryptLargeFile(
   } = options;
 
   try {
-    onProgress?.(10, 'Generating AES key...');
+    onProgress?.(10, "Generating AES key...");
 
     // Generate random AES-256 key
     const aesKey = crypto.getRandomValues(new Uint8Array(32)); // 256 bits
 
-    onProgress?.(20, 'Encrypting file with AES-GCM...');
+    onProgress?.(20, "Encrypting file with AES-GCM...");
 
     // Encrypt file with AES-GCM
     const encryptedFile = await encryptWithAES(data, aesKey);
 
-    onProgress?.(60, 'Sealing AES key...');
+    onProgress?.(60, "Sealing AES key...");
 
     // Generate identity for the AES key
     const identity = customId || generateRandomIdentity();
     const identityHex = bytesToHex(identity);
 
-    // Seal-encrypt the AES key
+    // Seal-encrypt the AES key with retry on timeout
     // packageId is optional - only needed for decryption with custom policies
     const sealParams: any = {
       threshold,
@@ -176,10 +244,12 @@ async function encryptLargeFile(
       sealParams.packageId = packageId;
     }
 
-    const { encryptedObject: sealedKey } =
-      await client.encrypt(sealParams);
+    const { encryptedObject: sealedKey } = await withRetry(
+      () => client.encrypt(sealParams),
+      "Seal key encryption (envelope)",
+    );
 
-    onProgress?.(90, 'Creating envelope...');
+    onProgress?.(90, "Creating envelope...");
 
     // Create envelope: [sealed key length (4 bytes)][sealed key][encrypted file]
     const envelope = createEnvelope(sealedKey, encryptedFile);
@@ -195,7 +265,7 @@ async function encryptLargeFile(
       isEnvelope: true,
     };
 
-    onProgress?.(100, 'Envelope encryption complete');
+    onProgress?.(100, "Envelope encryption complete");
 
     return {
       encryptedData: envelope,
@@ -204,8 +274,8 @@ async function encryptLargeFile(
     };
   } catch (error) {
     throw new EncryptionError(
-      'Envelope encryption failed',
-      error instanceof Error ? error : undefined
+      "Envelope encryption failed",
+      error instanceof Error ? error : undefined,
     );
   }
 }
@@ -216,22 +286,22 @@ async function encryptLargeFile(
  */
 async function encryptWithAES(
   data: Uint8Array,
-  key: Uint8Array
+  key: Uint8Array,
 ): Promise<Uint8Array> {
-  if (typeof crypto === 'undefined' || !crypto.subtle) {
+  if (typeof crypto === "undefined" || !crypto.subtle) {
     throw new EncryptionError(
-      'Web Crypto API not available. This feature requires a browser environment or Node.js with webcrypto support.'
+      "Web Crypto API not available. This feature requires a browser environment or Node.js with webcrypto support.",
     );
   }
 
   try {
     // Import AES key
     const cryptoKey = await crypto.subtle.importKey(
-      'raw',
+      "raw",
       new Uint8Array(key),
-      { name: 'AES-GCM' },
+      { name: "AES-GCM" },
       false,
-      ['encrypt']
+      ["encrypt"],
     );
 
     // Generate random IV (12 bytes for GCM)
@@ -240,11 +310,11 @@ async function encryptWithAES(
     // Encrypt data
     const encrypted = await crypto.subtle.encrypt(
       {
-        name: 'AES-GCM',
+        name: "AES-GCM",
         iv: new Uint8Array(iv),
       },
       cryptoKey,
-      new Uint8Array(data)
+      new Uint8Array(data),
     );
 
     // Prepend IV to encrypted data: [IV (12 bytes)][encrypted data]
@@ -255,8 +325,8 @@ async function encryptWithAES(
     return result;
   } catch (error) {
     throw new EncryptionError(
-      'AES encryption failed',
-      error instanceof Error ? error : undefined
+      "AES encryption failed",
+      error instanceof Error ? error : undefined,
     );
   }
 }
@@ -267,7 +337,7 @@ async function encryptWithAES(
  */
 function createEnvelope(
   sealedKey: Uint8Array,
-  encryptedFile: Uint8Array
+  encryptedFile: Uint8Array,
 ): Uint8Array {
   // Store sealed key length as 4-byte little-endian integer
   const keyLength = new Uint8Array(4);
@@ -276,7 +346,7 @@ function createEnvelope(
 
   // Concatenate: [key length][sealed key][encrypted file]
   const envelope = new Uint8Array(
-    keyLength.length + sealedKey.length + encryptedFile.length
+    keyLength.length + sealedKey.length + encryptedFile.length,
   );
   envelope.set(keyLength, 0);
   envelope.set(sealedKey, keyLength.length);
@@ -291,7 +361,7 @@ function createEnvelope(
 export async function encryptMetadata(
   client: SealClient,
   metadata: any,
-  options: Omit<EncryptFileOptions, 'useEnvelope'>
+  options: Omit<EncryptFileOptions, "useEnvelope">,
 ): Promise<EncryptionResult> {
   // Serialize metadata to JSON
   const json = JSON.stringify(metadata);
@@ -307,7 +377,7 @@ export async function encryptMetadata(
  */
 export function estimateEncryptedFileSize(
   originalSize: number,
-  useEnvelope?: boolean
+  useEnvelope?: boolean,
 ): number {
   const shouldEnvelope =
     useEnvelope ?? shouldUseEnvelopeEncryption(originalSize);

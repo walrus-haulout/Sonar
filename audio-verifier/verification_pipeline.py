@@ -563,6 +563,43 @@ class VerificationPipeline:
             # Parse JSON response
             analysis = self._parse_analysis_response(response_text)
 
+            # Generate per-file analysis if per-file metadata is present
+            per_file_metadata = metadata.get("perFileMetadata", [])
+            if per_file_metadata and len(per_file_metadata) > 1:
+                per_file_data = [
+                    {
+                        "title": pf.get("title", f"File {i+1}"),
+                        "description": pf.get("description", ""),
+                    }
+                    for i, pf in enumerate(per_file_metadata)
+                ]
+
+                # Build and call per-file analysis
+                pf_prompt = self._build_per_file_analysis_prompt(
+                    transcript, metadata, per_file_data
+                )
+
+                try:
+                    pf_messages = cast(
+                        List[Any],
+                        [{"role": "user", "content": pf_prompt}],
+                    )
+                    pf_completion = self.openai_client.chat.completions.create(
+                        model=OPENROUTER_MODELS["ANALYSIS"],
+                        max_tokens=1024,
+                        temperature=0.3,
+                        messages=pf_messages,
+                    )
+
+                    pf_content = pf_completion.choices[0].message.content
+                    if pf_content:
+                        pf_analyses = self._parse_per_file_response(pf_content.strip())
+                        if pf_analyses:
+                            analysis["fileAnalyses"] = pf_analyses
+
+                except Exception as e:
+                    logger.warning(f"Per-file analysis failed: {e}")
+
             await self._update_stage(session_object_id, "analysis", 0.85)
 
             return analysis
@@ -583,7 +620,7 @@ class VerificationPipeline:
         self, transcript: str, metadata: Dict[str, Any], quality_info: Dict[str, Any]
     ) -> str:
         """
-        Build Gemini analysis prompt.
+        Build enhanced Gemini analysis prompt with structured reasoning.
 
         Ported from frontend/lib/ai/analysis.ts
         """
@@ -600,7 +637,7 @@ class VerificationPipeline:
             transcript[:2000] + "..." if len(transcript) > 2000 else transcript
         )
 
-        return f"""You are an expert audio dataset quality analyst for the SONAR Protocol, a decentralized audio data marketplace. Analyze this audio dataset submission and provide a comprehensive quality assessment.
+        return f"""You are an expert audio dataset quality analyst for the SONAR Protocol, a decentralized audio data marketplace. Analyze this audio dataset submission and provide a comprehensive, detailed quality assessment with transparent reasoning.
 
 ## Dataset Metadata
 - Title: {metadata.get("title", "Unknown")}
@@ -614,45 +651,75 @@ class VerificationPipeline:
 
 ## Analysis Required
 
-Provide your analysis in the following JSON format:
+Provide your analysis in the following JSON format with detailed reasoning:
 
 ```json
 {{
   "qualityScore": 0.85,
   "suggestedPrice": 5.0,
   "safetyPassed": true,
+  "overallSummary": "2-3 sentence narrative describing the audio's overall quality, clarity, and key characteristics",
+  "qualityAnalysis": {{
+    "clarity": {{
+      "score": 0.9,
+      "reasoning": "Explanation of clarity assessment (transcription coherence, minimal errors, etc.)"
+    }},
+    "contentValue": {{
+      "score": 0.8,
+      "reasoning": "Explanation of content value (usefulness for AI training, diversity, relevance, etc.)"
+    }},
+    "metadataAccuracy": {{
+      "score": 0.85,
+      "reasoning": "Explanation of how well content matches provided metadata"
+    }},
+    "completeness": {{
+      "score": 0.8,
+      "reasoning": "Explanation of completeness (no obvious truncation, full context preserved, etc.)"
+    }}
+  }},
+  "priceAnalysis": {{
+    "basePrice": 3.0,
+    "qualityMultiplier": 1.4,
+    "rarityMultiplier": 1.0,
+    "finalPrice": 5.0,
+    "breakdown": "Step-by-step explanation of pricing calculation (e.g., 'Base 3 SUI × quality multiplier 1.4 × rarity 1.0 = 4.2, rounded to 5 SUI based on market positioning')"
+  }},
   "insights": [
-    "Insight 1 about the dataset quality",
-    "Insight 2 about content value",
-    "Insight 3 about potential use cases"
+    "Key strength or characteristic 1",
+    "Key strength or characteristic 2",
+    "Key strength or characteristic 3"
   ],
   "concerns": [
     "Any quality concerns (if applicable)"
   ],
-  "recommendations": [
-    "Suggestions for improvement"
-  ]
+  "recommendations": {{
+    "critical": ["High-priority improvements needed"],
+    "suggested": ["Recommended improvements"],
+    "optional": ["Nice-to-have enhancements"]
+  }}
 }}
 ```
 
 ### Quality Scoring Criteria (0-1 scale):
-- **Audio Clarity** (0.3): Is the transcript coherent? Minimal transcription errors?
-- **Content Value** (0.3): Is the content meaningful, diverse, and useful for AI training?
-- **Metadata Accuracy** (0.2): Does the content match the provided metadata?
-- **Completeness** (0.2): Is the content complete without obvious truncation?
+- **Audio Clarity** (0.3): Is the transcript coherent? Minimal transcription errors? Clear speaker articulation?
+- **Content Value** (0.3): Is the content meaningful, diverse, and useful for AI training? Does it offer unique training signal?
+- **Metadata Accuracy** (0.2): Does the content match the provided metadata? Are descriptions accurate?
+- **Completeness** (0.2): Is the content complete without obvious truncation? Are complete thoughts/sentences included?
 
 ### Purchase Price Suggestion (3-10 SUI):
 Suggest a fair market price in SUI tokens (minimum: 3, maximum: 10) based on:
-- **Quality Score** (40%): Higher quality = higher price
-- **Content Uniqueness** (30%): Rare/unique content commands premium
+- **Quality Score** (40%): Higher quality = higher price (0.5-0.7 = 1.0-1.3x, 0.7-0.85 = 1.3-1.6x, 0.85-1.0 = 1.6-2.0x)
+- **Content Uniqueness** (30%): Rare/unique content commands premium (common = 1.0x, unique = 1.2x, rare = 1.5x)
 - **Duration & Completeness** (20%): Longer, complete datasets worth more
 - **Metadata Richness** (10%): Well-documented datasets more valuable
 
 Pricing Guidelines:
-- 3-4 SUI: Basic quality, common content
-- 5-6 SUI: Good quality, useful content
-- 7-8 SUI: High quality, unique/specialized content
-- 9-10 SUI: Exceptional quality, rare/premium content
+- 3-4 SUI: Basic quality, common content, limited value
+- 5-6 SUI: Good quality, useful content, practical value
+- 7-8 SUI: High quality, unique/specialized content, strong value
+- 9-10 SUI: Exceptional quality, rare/premium content, exceptional value
+
+Show your calculation: Base price × quality multiplier × rarity multiplier
 
 ### Safety Screening:
 Flag as unsafe (safetyPassed: false) ONLY if content contains:
@@ -665,19 +732,106 @@ Flag as unsafe (safetyPassed: false) ONLY if content contains:
 Conversational datasets with mild profanity, political discussion, or sensitive topics are generally ACCEPTABLE if contextually appropriate.
 
 ### Insights:
-Provide 3-5 actionable insights about:
-- Content quality and clarity
+Provide 3-5 specific, actionable insights about:
+- Content quality and clarity assessment
 - Potential use cases (conversational AI, voice synthesis, etc.)
-- Unique characteristics of the dataset
-- Market value proposition
+- Unique characteristics or standout features
+- Market value proposition and competitive positioning
+
+### Recommendations:
+Categorize suggestions by priority:
+- **Critical**: Issues that significantly impact quality (e.g., missing segments, poor audio quality)
+- **Suggested**: Improvements that would enhance value (e.g., better metadata, additional context)
+- **Optional**: Nice-to-have enhancements (e.g., extended analysis, supplementary materials)
 
 Respond ONLY with the JSON object, no additional text."""
 
+    def _build_per_file_analysis_prompt(
+        self, transcript: str, metadata: Dict[str, Any], per_file_data: List[Dict[str, str]]
+    ) -> str:
+        """
+        Build prompt for per-file AI analysis.
+
+        Args:
+            transcript: Full transcript of the audio
+            metadata: Dataset metadata
+            per_file_data: List of per-file metadata (title, description)
+
+        Returns:
+            Prompt string requesting per-file analysis
+        """
+        files_description = ""
+        for i, file_info in enumerate(per_file_data, 1):
+            files_description += f"\n{i}. {file_info.get('title', f'File {i}')}"
+            if file_info.get('description'):
+                files_description += f" - {file_info['description']}"
+
+        transcript_sample = (
+            transcript[:2000] + "..." if len(transcript) > 2000 else transcript
+        )
+
+        return f"""You are analyzing a multi-file audio dataset. Based on the transcript and file information, provide per-file quality insights.
+
+## Files in Dataset:{files_description}
+
+## Transcript Sample
+{transcript_sample}
+
+Provide your analysis in the following JSON format:
+
+```json
+{{
+  "fileAnalyses": [
+    {{
+      "fileIndex": 0,
+      "title": "File Title",
+      "score": 0.85,
+      "summary": "One-sentence assessment of this file's quality",
+      "strengths": ["Strength 1", "Strength 2"],
+      "concerns": ["Concern 1"],
+      "recommendations": ["Recommendation 1"]
+    }}
+  ]
+}}
+```
+
+For each file:
+- Estimate its relative quality based on the transcript
+- Identify file-specific strengths and concerns
+- Suggest improvements
+- Keep assessments concise
+
+Respond ONLY with the JSON object, no additional text."""
+
+    def _parse_per_file_response(self, response_text: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Parse per-file analysis response from AI.
+
+        Returns None if parsing fails (not critical).
+        """
+        try:
+            # Extract JSON from markdown code blocks if present
+            json_match = response_text.find("```json")
+            if json_match != -1:
+                start = json_match + 7
+                end = response_text.find("```", start)
+                json_string = response_text[start:end].strip()
+            else:
+                json_string = response_text.strip()
+
+            parsed = json.loads(json_string)
+            return parsed.get("fileAnalyses", []) if isinstance(parsed, dict) else None
+
+        except Exception as e:
+            logger.warning(f"Failed to parse per-file analysis: {e}")
+            return None
+
     def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
         """
-        Parse Gemini's analysis JSON response.
+        Parse Gemini's enhanced analysis JSON response.
 
-        Handles markdown code blocks and validates structure.
+        Handles new structured fields (qualityAnalysis, priceAnalysis, overallSummary)
+        while maintaining backward compatibility.
         """
         try:
             # Extract JSON from markdown code blocks if present
@@ -712,14 +866,37 @@ Respond ONLY with the JSON object, no additional text."""
             except (TypeError, ValueError):
                 suggested_price = 3.0  # Default to minimum if invalid
 
-            return {
+            # Extract new structured fields (gracefully handle if missing)
+            quality_analysis = parsed.get("qualityAnalysis")
+            price_analysis = parsed.get("priceAnalysis")
+            overall_summary = parsed.get("overallSummary", "")
+
+            # Handle both new categorized and legacy flat recommendations
+            recommendations_raw = parsed.get("recommendations", [])
+            if isinstance(recommendations_raw, dict):
+                # New format: {"critical": [...], "suggested": [...], "optional": [...]}
+                recommendations = recommendations_raw
+            else:
+                # Legacy format: flat list
+                recommendations = {"suggested": recommendations_raw} if recommendations_raw else {}
+
+            result = {
                 "qualityScore": quality_score,
                 "suggestedPrice": suggested_price,
                 "safetyPassed": bool(parsed["safetyPassed"]),
                 "insights": parsed.get("insights", []),
                 "concerns": parsed.get("concerns", []),
-                "recommendations": parsed.get("recommendations", []),
+                "recommendations": recommendations,
+                "overallSummary": overall_summary,
             }
+
+            # Add enhanced fields if present
+            if quality_analysis:
+                result["qualityAnalysis"] = quality_analysis
+            if price_analysis:
+                result["priceAnalysis"] = price_analysis
+
+            return result
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             logger.error(f"Failed to parse analysis response: {e}")
@@ -735,6 +912,8 @@ Respond ONLY with the JSON object, no additional text."""
                     "Manual review recommended",
                 ],
                 "concerns": ["Unable to parse detailed analysis"],
+                "recommendations": {},
+                "overallSummary": "",
             }
             return fallback
 

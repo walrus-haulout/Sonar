@@ -3,7 +3,7 @@
  * Configuration constants and defaults
  */
 
-import { DemType } from './types';
+import { DemType } from "./types";
 
 /**
  * Default encryption threshold
@@ -29,8 +29,9 @@ export const MAX_SESSION_TTL_MIN = 30;
 
 /**
  * Default request timeout in milliseconds
+ * Increased to 60 seconds to handle network latency and key server response times
  */
-export const DEFAULT_TIMEOUT_MS = 10000;
+export const DEFAULT_TIMEOUT_MS = 60000;
 
 /**
  * Default DEM (Data Encapsulation Method)
@@ -41,7 +42,7 @@ export const DEFAULT_DEM_TYPE: DemType = DemType.AES;
 /**
  * Default cache strategy
  */
-export const DEFAULT_CACHE_STRATEGY: 'indexeddb' | 'memory' = 'indexeddb';
+export const DEFAULT_CACHE_STRATEGY: "indexeddb" | "memory" = "indexeddb";
 
 /**
  * File size threshold for envelope encryption (1MB)
@@ -81,7 +82,7 @@ export const SESSION_CACHE_TTL_MS = 30 * 60 * 1000;
 /**
  * IndexedDB database name
  */
-export const INDEXEDDB_NAME = 'sonar_seal';
+export const INDEXEDDB_NAME = "sonar_seal";
 
 /**
  * IndexedDB version
@@ -92,8 +93,8 @@ export const INDEXEDDB_VERSION = 1;
  * IndexedDB store names
  */
 export const INDEXEDDB_STORES = {
-  SESSIONS: 'sessions',
-  KEYS: 'keys',
+  SESSIONS: "sessions",
+  KEYS: "keys",
 } as const;
 
 /**
@@ -117,8 +118,8 @@ export const DEFAULT_IDENTITY_LENGTH = 16;
  * These should be replaced with actual values from environment
  */
 export const TESTNET_KEY_SERVERS = [
-  process.env.SEAL_SERVER_1_TESTNET || '',
-  process.env.SEAL_SERVER_2_TESTNET || '',
+  process.env.SEAL_SERVER_1_TESTNET || "",
+  process.env.SEAL_SERVER_2_TESTNET || "",
 ].filter(Boolean);
 
 /**
@@ -126,22 +127,23 @@ export const TESTNET_KEY_SERVERS = [
  * These should be replaced with actual values from environment
  */
 export const MAINNET_KEY_SERVERS = [
-  process.env.SEAL_SERVER_1_MAINNET || '',
-  process.env.SEAL_SERVER_2_MAINNET || '',
+  process.env.SEAL_SERVER_1_MAINNET || "",
+  process.env.SEAL_SERVER_2_MAINNET || "",
 ].filter(Boolean);
 
 /**
  * Environment detection
  */
-export const IS_BROWSER = typeof window !== 'undefined';
-export const IS_NODE = typeof process !== 'undefined' && process.versions?.node;
+export const IS_BROWSER = typeof window !== "undefined";
+export const IS_NODE = typeof process !== "undefined" && process.versions?.node;
 
 /**
  * Feature detection
  */
-export const HAS_CRYPTO = typeof crypto !== 'undefined';
-export const HAS_INDEXEDDB = IS_BROWSER && typeof indexedDB !== 'undefined';
-export const HAS_WEB_CRYPTO = HAS_CRYPTO && typeof crypto.subtle !== 'undefined';
+export const HAS_CRYPTO = typeof crypto !== "undefined";
+export const HAS_INDEXEDDB = IS_BROWSER && typeof indexedDB !== "undefined";
+export const HAS_WEB_CRYPTO =
+  HAS_CRYPTO && typeof crypto.subtle !== "undefined";
 
 /**
  * Sui Clock Object ID
@@ -149,6 +151,7 @@ export const HAS_WEB_CRYPTO = HAS_CRYPTO && typeof crypto.subtle !== 'undefined'
  * Can be overridden via NEXT_PUBLIC_SUI_CLOCK_ID environment variable for custom networks
  */
 export const CLOCK_OBJECT_ID =
-  typeof window !== 'undefined' && typeof (process.env as any).NEXT_PUBLIC_SUI_CLOCK_ID === 'string'
+  typeof window !== "undefined" &&
+  typeof (process.env as any).NEXT_PUBLIC_SUI_CLOCK_ID === "string"
     ? (process.env as any).NEXT_PUBLIC_SUI_CLOCK_ID
-    : '0x6';
+    : "0x6";

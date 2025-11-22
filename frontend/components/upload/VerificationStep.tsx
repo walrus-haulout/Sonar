@@ -1190,11 +1190,186 @@ export function VerificationStep({
               </div>
             )}
 
+            {/* Overall Summary */}
+            {result.analysis?.overallSummary && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/30">
+                <p className="text-sm font-mono text-sonar-highlight/70 mb-3">
+                  Summary
+                </p>
+                <p className="text-sm text-sonar-highlight/90 leading-relaxed">
+                  {result.analysis.overallSummary}
+                </p>
+              </div>
+            )}
+
+            {/* Quality Analysis Breakdown */}
+            {result.analysis?.qualityAnalysis && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright mb-3">
+                  Quality Analysis Breakdown
+                </p>
+                <div className="space-y-3">
+                  {[
+                    { label: "Clarity", component: result.analysis.qualityAnalysis.clarity },
+                    { label: "Content Value", component: result.analysis.qualityAnalysis.contentValue },
+                    { label: "Metadata Accuracy", component: result.analysis.qualityAnalysis.metadataAccuracy },
+                    { label: "Completeness", component: result.analysis.qualityAnalysis.completeness },
+                  ].map(({ label, component }) => (
+                    <div key={label} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-sonar-highlight/70">{label}</span>
+                        <span className="text-sm font-mono font-semibold text-sonar-signal">
+                          {Math.round(component.score * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-1 bg-sonar-blue/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-sonar-signal to-sonar-blue"
+                          style={{ width: `${component.score * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-sonar-highlight/60 italic">
+                        {component.reasoning}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Price Analysis Breakdown */}
+            {result.analysis?.priceAnalysis && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright mb-3">
+                  Price Analysis
+                </p>
+                <div className="space-y-2 text-sm text-sonar-highlight/80">
+                  <div className="flex justify-between">
+                    <span>Base Price:</span>
+                    <span className="font-mono">{result.analysis.priceAnalysis.basePrice.toFixed(2)} SUI</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Quality Multiplier:</span>
+                    <span className="font-mono">{result.analysis.priceAnalysis.qualityMultiplier.toFixed(2)}×</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Rarity Multiplier:</span>
+                    <span className="font-mono">{result.analysis.priceAnalysis.rarityMultiplier.toFixed(2)}×</span>
+                  </div>
+                  <div className="border-t border-sonar-blue/30 pt-2 mt-2 flex justify-between font-semibold">
+                    <span>Final Price:</span>
+                    <span className="font-mono text-sonar-signal">{result.analysis.priceAnalysis.finalPrice.toFixed(2)} SUI</span>
+                  </div>
+                  <p className="text-xs text-sonar-highlight/60 italic mt-3">
+                    {result.analysis.priceAnalysis.breakdown}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Per-File Analysis */}
+            {result.analysis?.fileAnalyses && result.analysis.fileAnalyses.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+                  Per-File Analysis
+                </p>
+                {result.analysis.fileAnalyses.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20 space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="font-mono text-sm font-semibold text-sonar-highlight">
+                        {file.title}
+                      </p>
+                      <span className="text-sm font-mono font-bold text-sonar-signal">
+                        {Math.round(file.score * 100)}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-sonar-highlight/70">{file.summary}</p>
+                    {file.strengths && file.strengths.length > 0 && (
+                      <div className="text-xs text-sonar-highlight/70">
+                        <span className="font-semibold text-sonar-signal">Strengths:</span> {file.strengths.join(", ")}
+                      </div>
+                    )}
+                    {file.concerns && file.concerns.length > 0 && (
+                      <div className="text-xs text-sonar-highlight/70">
+                        <span className="font-semibold text-sonar-coral">Concerns:</span> {file.concerns.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {result.analysis?.recommendations && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 space-y-3">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+                  Recommendations
+                </p>
+                {typeof result.analysis.recommendations === "object" && !Array.isArray(result.analysis.recommendations) ? (
+                  // Categorized recommendations
+                  <div className="space-y-3">
+                    {result.analysis.recommendations.critical && result.analysis.recommendations.critical.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-sonar-coral mb-2">🔴 Critical:</p>
+                        <ul className="space-y-1">
+                          {result.analysis.recommendations.critical.map((rec, idx) => (
+                            <li key={idx} className="text-xs text-sonar-highlight/70 flex items-start space-x-2">
+                              <span className="text-sonar-coral">→</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {result.analysis.recommendations.suggested && result.analysis.recommendations.suggested.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-sonar-highlight-bright mb-2">🟡 Suggested:</p>
+                        <ul className="space-y-1">
+                          {result.analysis.recommendations.suggested.map((rec, idx) => (
+                            <li key={idx} className="text-xs text-sonar-highlight/70 flex items-start space-x-2">
+                              <span className="text-sonar-signal">→</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {result.analysis.recommendations.optional && result.analysis.recommendations.optional.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-sonar-highlight/70 mb-2">⚪ Optional:</p>
+                        <ul className="space-y-1">
+                          {result.analysis.recommendations.optional.map((rec, idx) => (
+                            <li key={idx} className="text-xs text-sonar-highlight/60 flex items-start space-x-2">
+                              <span className="text-sonar-highlight/50">→</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Flat recommendations (fallback)
+                  <ul className="space-y-2">
+                    {(result.analysis.recommendations as string[]).map((rec, idx) => (
+                      <li key={idx} className="flex items-start space-x-2 text-xs text-sonar-highlight/70">
+                        <span className="text-sonar-signal">•</span>
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             {/* Insights */}
             {result.insights && result.insights.length > 0 && (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-                  AI Insights:
+                  Key Insights:
                 </p>
                 {result.insights.map((insight, idx) => (
                   <div

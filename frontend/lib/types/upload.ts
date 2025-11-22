@@ -147,6 +147,56 @@ export interface VerificationStage {
   message?: string;
 }
 
+// AI Analysis Output Types
+export interface QualityComponent {
+  score: number; // 0-1 scale
+  reasoning: string; // Explanation of the score
+}
+
+export interface QualityAnalysis {
+  clarity: QualityComponent;
+  contentValue: QualityComponent;
+  metadataAccuracy: QualityComponent;
+  completeness: QualityComponent;
+}
+
+export interface PriceAnalysis {
+  basePrice: number; // Base price in SUI (typically 3)
+  qualityMultiplier: number; // Quality-based multiplier (e.g., 1.4)
+  rarityMultiplier: number; // Rarity-based multiplier (e.g., 1.0)
+  finalPrice: number; // Final suggested price (3-10 SUI)
+  breakdown: string; // Step-by-step explanation of pricing calculation
+}
+
+export interface FileAnalysis {
+  fileIndex: number;
+  title: string;
+  score: number; // 0-1 scale for individual file quality
+  summary: string; // One-sentence assessment
+  strengths: string[];
+  concerns: string[];
+  recommendations: string[];
+}
+
+export interface CategorizedRecommendations {
+  critical?: string[]; // High-priority improvements
+  suggested?: string[]; // Recommended improvements
+  optional?: string[]; // Nice-to-have enhancements
+}
+
+export interface AnalysisOutput {
+  qualityScore: number; // Overall quality (0-1 scale)
+  suggestedPrice: number; // Suggested price in SUI (3-10)
+  safetyPassed: boolean;
+  overallSummary?: string; // 2-3 sentence narrative about audio quality
+  qualityAnalysis?: QualityAnalysis; // Detailed breakdown of quality components
+  priceAnalysis?: PriceAnalysis; // Transparent pricing breakdown
+  insights: string[]; // Key insights about the dataset
+  concerns?: string[]; // Quality concerns
+  recommendations?: CategorizedRecommendations | string[]; // Categorized or flat recommendations
+  fileAnalyses?: FileAnalysis[]; // Per-file insights if multi-file dataset
+}
+
 export interface VerificationSession {
   stage: VerificationStage["name"];
   progress: number;
@@ -168,6 +218,7 @@ export interface VerificationResult {
   suggestedPrice?: number; // AI-suggested price in SUI (3-10 range)
   safetyPassed?: boolean;
   insights?: string[];
+  analysis?: AnalysisOutput; // Full enhanced AI analysis output
   error?: string;
   updatedAt: number;
 }

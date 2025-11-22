@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import type { SessionKey, SealClient } from '@mysten/seal';
-import type { SuiClient } from '@mysten/sui/client';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import type { SessionKey, SealClient } from "@mysten/seal";
+import type { SuiClient } from "@mysten/sui/client";
 import {
   createSonarSealClient,
   createSession,
@@ -16,15 +16,15 @@ import {
   type EncryptionResult,
   type DecryptionResult,
   type ProgressCallback,
-} from '@sonar/seal';
-import { suiClient, CHAIN_CONFIG, NETWORK } from '@/lib/sui/client';
+} from "@sonar/seal";
+import { suiClient, CHAIN_CONFIG, NETWORK } from "@/lib/sui/client";
 
-const RAW_KEY_SERVERS = process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS || '';
-const RAW_SEAL_THRESHOLD = process.env.NEXT_PUBLIC_SEAL_THRESHOLD || '4';
+const RAW_KEY_SERVERS = process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS || "";
+const RAW_SEAL_THRESHOLD = process.env.NEXT_PUBLIC_SEAL_THRESHOLD || "4";
 
 function parseKeyServers(value: string) {
   const servers = value
-    .split(',')
+    .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((objectId) => ({
@@ -38,7 +38,9 @@ function parseKeyServers(value: string) {
 function parseThreshold(value: string): number {
   const parsed = parseInt(value, 10);
   if (isNaN(parsed) || parsed < 1) {
-    console.warn(`Invalid NEXT_PUBLIC_SEAL_THRESHOLD "${value}", using default 4`);
+    console.warn(
+      `Invalid NEXT_PUBLIC_SEAL_THRESHOLD "${value}", using default 4`,
+    );
     return 4;
   }
   return parsed;
@@ -63,18 +65,19 @@ export function useSeal() {
   useEffect(() => {
     if (!hasKeyServersConfigured) {
       console.warn(
-        'Seal client disabled: set NEXT_PUBLIC_SEAL_KEY_SERVERS with comma-separated key server object IDs to enable encryption.'
+        "Seal client disabled: set NEXT_PUBLIC_SEAL_KEY_SERVERS with comma-separated key server object IDs to enable encryption.",
       );
-      setError('Seal client disabled: missing key server configuration');
+      setError("Seal client disabled: missing key server configuration");
       return;
     }
 
     try {
       const client = createSonarSealClient({
         suiClient: suiClient as SuiClient,
-        network: NETWORK as 'testnet' | 'mainnet',
+        network: NETWORK as "testnet" | "mainnet",
         keyServers,
         threshold, // Explicitly set threshold based on environment config
+        timeout: 60000, // 60 second timeout for Seal operations (increased from 10s default)
       });
       setSealClient(client);
       setIsInitialized(true);
@@ -83,15 +86,19 @@ export function useSeal() {
       // Clear any persisted session for this package so we always prompt for a fresh one on load
       const packageId = CHAIN_CONFIG.packageId;
       if (!packageId) {
-        console.warn('Cannot clear Seal session cache: CHAIN_CONFIG.packageId is missing');
+        console.warn(
+          "Cannot clear Seal session cache: CHAIN_CONFIG.packageId is missing",
+        );
       } else {
         clearSession(packageId).catch((err) => {
-          console.warn('Failed to clear cached Seal session on init:', err);
+          console.warn("Failed to clear cached Seal session on init:", err);
         });
       }
     } catch (err) {
-      console.error('Failed to initialize Seal client:', err);
-      setError(err instanceof Error ? err.message : 'Failed to initialize Seal');
+      console.error("Failed to initialize Seal client:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to initialize Seal",
+      );
     }
   }, [hasKeyServersConfigured, keyServers, threshold]);
 
@@ -133,15 +140,17 @@ export function useSeal() {
     }) => {
       const packageId = CHAIN_CONFIG.packageId;
       if (!packageId) {
-        throw new Error('Blockchain contracts not configured (missing packageId)');
+        throw new Error(
+          "Blockchain contracts not configured (missing packageId)",
+        );
       }
 
       if (!account?.address) {
-        throw new Error('Wallet not connected');
+        throw new Error("Wallet not connected");
       }
 
       if (!sealClient) {
-        throw new Error('Seal client not initialized');
+        throw new Error("Seal client not initialized");
       }
 
       setIsInitializing(true);
@@ -160,7 +169,10 @@ export function useSeal() {
 
         // Do not persist sessions between page loads; clear any cached copy immediately
         clearSession(packageId).catch((err) => {
-          console.warn('Failed to clear cached Seal session after creation:', err);
+          console.warn(
+            "Failed to clear cached Seal session after creation:",
+            err,
+          );
         });
 
         setSessionKey(session);
@@ -168,14 +180,14 @@ export function useSeal() {
         return session;
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : 'Failed to create session';
+          err instanceof Error ? err.message : "Failed to create session";
         setError(errorMessage);
         throw err;
       } finally {
         setIsInitializing(false);
       }
     },
-    [account?.address, sealClient]
+    [account?.address, sealClient],
   );
 
   /**
@@ -185,10 +197,10 @@ export function useSeal() {
     async (
       data: File | Uint8Array,
       options: Partial<EncryptFileOptions> = {},
-      onProgress?: ProgressCallback
+      onProgress?: ProgressCallback,
     ): Promise<EncryptionResult> => {
       if (!sealClient) {
-        throw new Error('Seal client not initialized');
+        throw new Error("Seal client not initialized");
       }
 
       setError(null);
@@ -200,22 +212,22 @@ export function useSeal() {
           sealClient,
           data,
           {
-            accessPolicy: 'purchase',
+            accessPolicy: "purchase",
             packageId: resolvedPackageId,
             ...options,
           },
-          onProgress
+          onProgress,
         );
 
         return result;
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : 'Encryption failed';
+          err instanceof Error ? err.message : "Encryption failed";
         setError(errorMessage);
         throw err;
       }
     },
-    [sealClient, hasKeyServersConfigured]
+    [sealClient, hasKeyServersConfigured],
   );
 
   /**
@@ -227,19 +239,21 @@ export function useSeal() {
       encryptedData: Uint8Array,
       identity: string,
       options: Partial<DecryptFileOptions> = {},
-      onProgress?: ProgressCallback
+      onProgress?: ProgressCallback,
     ): Promise<DecryptionResult> => {
       if (!sealClient) {
-        throw new Error('Seal client not initialized');
+        throw new Error("Seal client not initialized");
       }
 
       if (!sessionKey) {
-        throw new Error('No active session. Please create a session first.');
+        throw new Error("No active session. Please create a session first.");
       }
 
       const packageId = CHAIN_CONFIG.packageId;
       if (!packageId) {
-        throw new Error('Blockchain contracts not configured (missing packageId)');
+        throw new Error(
+          "Blockchain contracts not configured (missing packageId)",
+        );
       }
 
       setError(null);
@@ -255,18 +269,18 @@ export function useSeal() {
             suiClient: suiClient as SuiClient,
             ...options,
           },
-          onProgress
+          onProgress,
         );
 
         return result;
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : 'Decryption failed';
+          err instanceof Error ? err.message : "Decryption failed";
         setError(errorMessage);
         throw err;
       }
     },
-    [sealClient, sessionKey]
+    [sealClient, sessionKey],
   );
 
   /**
@@ -280,7 +294,7 @@ export function useSeal() {
     }) => {
       // Check if we have a valid cached session
       if (sessionKey && isSessionValid(sessionKey)) {
-        console.log('[useSeal] Valid session found, returning cached export');
+        console.log("[useSeal] Valid session found, returning cached export");
         return sessionKey.export();
       }
 
@@ -288,7 +302,7 @@ export function useSeal() {
       const newSession = await createNewSession(options);
       return newSession.export();
     },
-    [sessionKey, createNewSession]
+    [sessionKey, createNewSession],
   );
 
   /**
@@ -336,7 +350,7 @@ export function useSealEncryption() {
 }
 
 export interface DecryptionProgress {
-  stage: 'fetching' | 'decrypting' | 'complete' | 'error';
+  stage: "fetching" | "decrypting" | "complete" | "error";
   progress: number; // 0-100
   message: string;
   error?: string;
@@ -354,113 +368,136 @@ export interface DecryptAudioOptions {
  * Handles the full flow: fetch encrypted blob, request Seal capsules, decrypt
  */
 export function useSealDecryption() {
-  const { decrypt, sealClient, sessionKey, createSession, isReady, error: sealError } = useSeal();
+  const {
+    decrypt,
+    sealClient,
+    sessionKey,
+    createSession,
+    isReady,
+    error: sealError,
+  } = useSeal();
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [progress, setProgress] = useState<DecryptionProgress | null>(null);
 
   /**
    * Fetch encrypted blob from Walrus
    */
-  const fetchEncryptedBlob = useCallback(async (blobId: string): Promise<Uint8Array> => {
-    const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus.space';
-    const response = await fetch(`${walrusAggregator}/v1/${blobId}`);
+  const fetchEncryptedBlob = useCallback(
+    async (blobId: string): Promise<Uint8Array> => {
+      const walrusAggregator =
+        process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
+        "https://aggregator.walrus.space";
+      const response = await fetch(`${walrusAggregator}/v1/${blobId}`);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch blob from Walrus: ${response.statusText}`);
-    }
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch blob from Walrus: ${response.statusText}`,
+        );
+      }
 
-    const arrayBuffer = await response.arrayBuffer();
-    return new Uint8Array(arrayBuffer);
-  }, []);
+      const arrayBuffer = await response.arrayBuffer();
+      return new Uint8Array(arrayBuffer);
+    },
+    [],
+  );
 
   /**
    * Decrypt audio blob for playback
    * Returns decrypted audio data as Uint8Array
    */
-  const decryptAudio = useCallback(async (options: DecryptAudioOptions): Promise<Uint8Array> => {
-    const { blobId, sealPolicyId, policyModule = 'purchase_policy', onProgress } = options;
-
-    if (!sessionKey) {
-      throw new Error('No active session. Please create a session first.');
-    }
-
-    if (!sealClient) {
-      throw new Error('Seal client not initialized');
-    }
-
-    setIsDecrypting(true);
-
-    try {
-      // Stage 1: Fetch encrypted blob from Walrus
-      const updateProgress = (update: Partial<DecryptionProgress>) => {
-        setProgress((prev) => {
-          const next = { ...(prev ?? {}), ...update } as DecryptionProgress;
-          onProgress?.(next);
-          return next;
-        });
-      };
-
-      updateProgress({
-        stage: 'fetching',
-        progress: 0,
-        message: 'Fetching encrypted audio from Walrus...',
-      });
-
-      const encryptedData = await fetchEncryptedBlob(blobId);
-
-      updateProgress({
-        stage: 'fetching',
-        progress: 30,
-        message: `Fetched ${(encryptedData.length / 1024 / 1024).toFixed(2)} MB encrypted data`,
-      });
-
-      // Stage 2: Decrypt using Seal
-      updateProgress({
-        stage: 'decrypting',
-        progress: 40,
-        message: 'Requesting key shares from Seal servers...',
-      });
-
-      const result = await decrypt(
-        encryptedData,
+  const decryptAudio = useCallback(
+    async (options: DecryptAudioOptions): Promise<Uint8Array> => {
+      const {
+        blobId,
         sealPolicyId,
-        { policyModule },
-        (decryptProgress) => {
-          // Map Seal progress (0-1) to our progress (40-90)
-          const progressPercent = 40 + Math.floor(decryptProgress * 50);
-          updateProgress({
-            stage: 'decrypting',
-            progress: progressPercent,
-            message: `Decrypting audio... ${Math.floor(decryptProgress * 100)}%`,
+        policyModule = "purchase_policy",
+        onProgress,
+      } = options;
+
+      if (!sessionKey) {
+        throw new Error("No active session. Please create a session first.");
+      }
+
+      if (!sealClient) {
+        throw new Error("Seal client not initialized");
+      }
+
+      setIsDecrypting(true);
+
+      try {
+        // Stage 1: Fetch encrypted blob from Walrus
+        const updateProgress = (update: Partial<DecryptionProgress>) => {
+          setProgress((prev) => {
+            const next = { ...(prev ?? {}), ...update } as DecryptionProgress;
+            onProgress?.(next);
+            return next;
           });
-        }
-      );
+        };
 
-      updateProgress({
-        stage: 'complete',
-        progress: 100,
-        message: 'Audio decrypted successfully',
-      });
+        updateProgress({
+          stage: "fetching",
+          progress: 0,
+          message: "Fetching encrypted audio from Walrus...",
+        });
 
-      return result.data;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Decryption failed';
+        const encryptedData = await fetchEncryptedBlob(blobId);
 
-      const errorProgress: DecryptionProgress = {
-        stage: 'error',
-        progress: 0,
-        message: 'Decryption failed',
-        error: errorMessage,
-      };
+        updateProgress({
+          stage: "fetching",
+          progress: 30,
+          message: `Fetched ${(encryptedData.length / 1024 / 1024).toFixed(2)} MB encrypted data`,
+        });
 
-      setProgress(errorProgress);
-      onProgress?.(errorProgress);
+        // Stage 2: Decrypt using Seal
+        updateProgress({
+          stage: "decrypting",
+          progress: 40,
+          message: "Requesting key shares from Seal servers...",
+        });
 
-      throw err;
-    } finally {
-      setIsDecrypting(false);
-    }
-  }, [sessionKey, sealClient, decrypt, fetchEncryptedBlob, progress]);
+        const result = await decrypt(
+          encryptedData,
+          sealPolicyId,
+          { policyModule },
+          (decryptProgress) => {
+            // Map Seal progress (0-1) to our progress (40-90)
+            const progressPercent = 40 + Math.floor(decryptProgress * 50);
+            updateProgress({
+              stage: "decrypting",
+              progress: progressPercent,
+              message: `Decrypting audio... ${Math.floor(decryptProgress * 100)}%`,
+            });
+          },
+        );
+
+        updateProgress({
+          stage: "complete",
+          progress: 100,
+          message: "Audio decrypted successfully",
+        });
+
+        return result.data;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Decryption failed";
+
+        const errorProgress: DecryptionProgress = {
+          stage: "error",
+          progress: 0,
+          message: "Decryption failed",
+          error: errorMessage,
+        };
+
+        setProgress(errorProgress);
+        onProgress?.(errorProgress);
+
+        throw err;
+      } finally {
+        setIsDecrypting(false);
+      }
+    },
+    [sessionKey, sealClient, decrypt, fetchEncryptedBlob, progress],
+  );
 
   /**
    * Reset progress state
