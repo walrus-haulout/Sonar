@@ -148,29 +148,35 @@ def _decrypt_sync(
         # Step 1: Fetch encrypted blob from Walrus
         logger.debug(f"Fetching encrypted blob {walrus_blob_id} from Walrus...")
         encrypted_blob_bytes = _fetch_walrus_blob(walrus_blob_id)
+        logger.info(f"Fetched blob from Walrus: {len(encrypted_blob_bytes)} bytes")
 
         # Step 2: Check if envelope encryption
         # Envelope format: [4 bytes key length][sealed key][encrypted file]
         is_envelope = _is_envelope_format(encrypted_blob_bytes)
+        logger.info(f"Envelope format detected: {is_envelope}")
 
         if is_envelope:
             logger.debug("Detected envelope encryption format")
             # Extract encrypted file from envelope (skip sealed key, which we decrypt separately)
             key_length = int.from_bytes(encrypted_blob_bytes[:4], byteorder='little')
             encrypted_file_bytes = encrypted_blob_bytes[4 + key_length:]
+            logger.info(f"Envelope structure: keyLength={key_length} bytes, encryptedFileSize={len(encrypted_file_bytes)} bytes")
 
             # Decrypt sealed key using Seal (encrypted_object_hex is the sealed key's encrypted object)
             logger.debug("Decrypting sealed AES key with Seal...")
             aes_key_bytes = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
+            logger.info(f"Seal decryption returned: {len(aes_key_bytes)} bytes (AES key)")
 
             # Decrypt file with AES
             logger.debug("Decrypting file with AES...")
             plaintext = _decrypt_aes(encrypted_file_bytes, aes_key_bytes)
+            logger.info(f"AES decryption returned: {len(plaintext)} bytes (plaintext audio)")
 
         else:
             logger.debug("Using direct Seal decryption")
             # Direct Seal encryption - decrypt entire blob using provided encrypted_object_hex
             plaintext = _decrypt_with_seal_cli(encrypted_object_hex, identity, session_key_data)
+            logger.info(f"Direct Seal decryption returned: {len(plaintext)} bytes (plaintext audio)")
 
         logger.info(f"Successfully decrypted blob {walrus_blob_id[:16]}... ({len(plaintext)} bytes)")
         return plaintext
@@ -247,8 +253,10 @@ def _is_envelope_format(data: bytes) -> bool:
     # Read key length from first 4 bytes (little-endian)
     key_length = int.from_bytes(data[:4], byteorder='little')
 
-    # Sanity check: sealed key should be 200-400 bytes
-    return 200 <= key_length <= 400 and len(data) > key_length + 4
+    # Sanity check: sealed key should be 150-800 bytes (depends on number of key servers)
+    # - Minimum: ~150 bytes (2 key servers)
+    # - Maximum: ~800 bytes (7+ key servers)
+    return 150 <= key_length <= 800 and len(data) > key_length + 4
 
 
 # Path to TS bridge script
