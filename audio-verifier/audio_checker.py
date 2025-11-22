@@ -88,12 +88,17 @@ class AudioQualityChecker:
             return {
                 "quality": None,
                 "errors": [probe_result["error"]],
-                "failure_reason": "format_probe_failed"
+                "failure_reason": "format_probe_failed",
+                "warnings": []
             }
+
+        warnings = []
 
         try:
             with sf.SoundFile(file_path) as audio_file:
-                return self._analyze_stream(audio_file, session_id)
+                result = self._analyze_stream(audio_file, session_id)
+                result["warnings"] = warnings
+                return result
         except Exception as exc:
             logger.warning(
                 f"Soundfile failed to read audio, attempting ffmpeg fallback: {exc}",
@@ -111,6 +116,7 @@ class AudioQualityChecker:
                     with sf.SoundFile(converted_path) as audio_file:
                         result = self._analyze_stream(audio_file, session_id)
                         result["failure_reason"] = "converted_with_ffmpeg"
+                        result["warnings"] = warnings
                         return result
                 finally:
                     # Clean up temporary converted file
@@ -125,7 +131,8 @@ class AudioQualityChecker:
                 return {
                     "quality": None,
                     "errors": [f"Failed to analyze audio: soundfile and ffmpeg both failed"],
-                    "failure_reason": "analysis_failed"
+                    "failure_reason": "analysis_failed",
+                    "warnings": []
                 }
 
     def _analyze_bytes(self, audio_bytes: bytes) -> Dict[str, Any]:
@@ -438,3 +445,36 @@ class AudioQualityChecker:
             errors.append(f"Detected audio format: {subtype}")
 
         return errors
+
+    def _parse_audio_warnings(self, stderr: str) -> list[str]:
+        """Parse non-fatal warnings from ffmpeg/mpg123 stderr.
+
+        Args:
+            stderr: Standard error output from subprocess
+
+        Returns:
+            List of warning messages (deduplicated, max 5)
+        """
+        warnings = set()
+
+        for line in stderr.split('\n'):
+            line_lower = line.lower()
+
+            # Capture mpg123 warnings but classify as non-fatal
+            if 'mpg123' in line_lower and 'warning' in line_lower:
+                if 'part2_3_length' in line_lower:
+                    warnings.add("MP3 frame truncation detected (common in short clips)")
+                else:
+                    # Generic mpg123 warning
+                    warnings.add(f"MP3 decode warning: {line.strip()}")
+
+            # Capture other decoder warnings
+            elif 'warning' in line_lower and any(
+                kw in line_lower for kw in ['header', 'frame', 'stream', 'decode']
+            ):
+                # Only add if it's not too verbose
+                if len(line) < 150:
+                    warnings.add(f"Audio decode warning: {line.strip()}")
+
+        # Deduplicate and limit to 5 warnings
+        return sorted(list(warnings))[:5]

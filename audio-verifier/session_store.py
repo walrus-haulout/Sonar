@@ -338,7 +338,7 @@ class SessionStore:
                 async with pool.acquire() as conn:
                     row = await conn.fetchrow("""
                         SELECT id, verification_id, status, stage, progress,
-                               created_at, updated_at, initial_data, results, error
+                               created_at, updated_at, initial_data, results, error, warnings
                         FROM verification_sessions
                         WHERE id = $1
                     """, session_id)
@@ -358,7 +358,8 @@ class SessionStore:
                         "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
                         "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
                         "results": json.loads(row["results"]) if row["results"] else None,
-                        "error": row["error"]
+                        "error": row["error"],
+                        "warnings": row["warnings"] if row["warnings"] else []
                     }
 
                     logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")
@@ -379,14 +380,14 @@ class SessionStore:
     ) -> bool:
         """
         Update verification stage and progress.
-        
+
         Convenience method that wraps update_session.
-        
+
         Args:
             session_id: Session ID
             stage_name: Stage name (e.g., "quality", "copyright", "transcription")
             progress: Progress percentage (0.0-1.0)
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -394,6 +395,43 @@ class SessionStore:
             "stage": stage_name,
             "progress": progress
         })
+
+    async def add_warnings(
+        self,
+        session_id: str,
+        new_warnings: list[str]
+    ) -> bool:
+        """
+        Append warnings to a session's warnings array.
+
+        Args:
+            session_id: Session ID
+            new_warnings: List of warning messages to add
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not new_warnings:
+            return True
+
+        try:
+            pool = await self._get_pool()
+            async with asyncio.timeout(10):
+                async with pool.acquire() as conn:
+                    await conn.execute("""
+                        UPDATE verification_sessions
+                        SET
+                            warnings = warnings || $1::TEXT[],
+                            updated_at = NOW()
+                        WHERE id = $2
+                    """,
+                        new_warnings,
+                        session_id
+                    )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add warnings to session {session_id[:8]}...: {e}")
+            return False
 
     async def close(self):
         """Close database connection pool."""

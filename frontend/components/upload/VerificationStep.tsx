@@ -223,6 +223,7 @@ export function VerificationStep({
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
   const isAuthorizingRef = useRef(false); // Guard against duplicate authorization attempts
@@ -346,6 +347,7 @@ export function VerificationStep({
     console.log('[VerificationStep] Starting verification...');
     setErrorMessage(null);
     setErrorDetails(null);
+    setWarnings([]);
 
     if (!sessionKeyExport) {
       setErrorMessage('Session expired. Please authorize again.');
@@ -631,6 +633,12 @@ export function VerificationStep({
         const safetyPassed = session.safetyPassed ?? false;
         const analysis = session.analysis || {};
         const errors = session.errors || [];
+        const sessionWarnings = session.warnings || [];
+
+        // Capture warnings from session (non-fatal)
+        if (sessionWarnings.length > 0) {
+          setWarnings(sessionWarnings);
+        }
 
         // Update stages based on current stage
         updateStagesFromSession({
@@ -706,6 +714,12 @@ export function VerificationStep({
         }
 
         const session = await response.json();
+
+        // Capture warnings from session (non-fatal)
+        const sessionWarnings = session.warnings || [];
+        if (sessionWarnings.length > 0) {
+          setWarnings(sessionWarnings);
+        }
 
         // Update stages based on current stage
         updateStagesFromSession(session);
@@ -962,6 +976,27 @@ export function VerificationStep({
               );
             })}
           </div>
+
+          {/* Warnings */}
+          {warnings.length > 0 && (
+            <GlassCard className="bg-amber-500/5 border border-amber-500/20">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-mono font-semibold text-amber-600 mb-2">
+                    Processing Notes:
+                  </p>
+                  <ul className="space-y-1">
+                    {warnings.map((warning, idx) => (
+                      <li key={idx} className="text-xs text-amber-600/80">
+                        • {warning}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </GlassCard>
+          )}
 
           <GlassCard className="bg-sonar-blue/5 text-center">
             <div className="flex items-center justify-center space-x-2 text-sonar-highlight/70">

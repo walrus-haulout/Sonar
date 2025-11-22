@@ -307,11 +307,23 @@ class VerificationPipeline:
         quality_passed = quality_info.get("passed", False) if quality_info else False
         errors = result.get("errors", [])
         failure_reason = result.get("failure_reason")
+        warnings = result.get("warnings", [])
 
         if quality_info:
             quality_info["score"] = self._compute_quality_score(quality_info)
 
         stage_duration = time.time() - stage_start
+
+        # Store warnings in session (non-fatal, stored regardless of pass/fail)
+        if warnings:
+            await self.session_store.add_warnings(session_object_id, warnings)
+            logger.info(
+                f"[{session_object_id}] Quality check captured {len(warnings)} warning(s)",
+                extra={
+                    "session_id": session_object_id,
+                    "warnings": warnings
+                }
+            )
 
         if not quality_passed:
             blob_id_short = blob_id[:16] if blob_id else "unknown"

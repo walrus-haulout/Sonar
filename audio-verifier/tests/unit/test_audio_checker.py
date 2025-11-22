@@ -556,3 +556,132 @@ class TestTinyBlobDetection:
         else:
             # If passed, size validation succeeded
             pass
+
+
+class TestAudioWarnings:
+    """Test non-fatal warning capture and parsing."""
+
+    def test_parse_audio_warnings_empty_stderr(self):
+        """Test warning parser with empty stderr."""
+        checker = AudioQualityChecker()
+        warnings = checker._parse_audio_warnings("")
+        assert warnings == []
+
+    def test_parse_audio_warnings_mp3_frame_truncation(self):
+        """Test detection of MP3 frame truncation warning."""
+        checker = AudioQualityChecker()
+        stderr = "mpg123: Warning: Unmatched part2_3_length too large detected"
+        warnings = checker._parse_audio_warnings(stderr)
+        assert len(warnings) == 1
+        assert "MP3 frame truncation" in warnings[0]
+
+    def test_parse_audio_warnings_generic_mpg123_warning(self):
+        """Test detection of generic mpg123 warnings."""
+        checker = AudioQualityChecker()
+        stderr = "mpg123: Warning: Stream corrupted at frame boundary"
+        warnings = checker._parse_audio_warnings(stderr)
+        assert len(warnings) == 1
+        assert "MP3 decode warning" in warnings[0]
+
+    def test_parse_audio_warnings_header_warning(self):
+        """Test detection of audio header warnings."""
+        checker = AudioQualityChecker()
+        stderr = "ffmpeg: warning: Invalid header detected in stream"
+        warnings = checker._parse_audio_warnings(stderr)
+        assert len(warnings) == 1
+        assert "Audio decode warning" in warnings[0]
+
+    def test_parse_audio_warnings_deduplication(self):
+        """Test that duplicate warnings are deduplicated."""
+        checker = AudioQualityChecker()
+        stderr = """mpg123: Warning: Unmatched part2_3_length too large detected
+mpg123: Warning: Unmatched part2_3_length too large detected
+mpg123: Warning: Unmatched part2_3_length too large detected"""
+        warnings = checker._parse_audio_warnings(stderr)
+        assert len(warnings) == 1
+        assert "MP3 frame truncation" in warnings[0]
+
+    def test_parse_audio_warnings_max_five_warnings(self):
+        """Test that warnings are limited to 5."""
+        checker = AudioQualityChecker()
+        warnings_lines = [
+            "ffmpeg: warning: Header issue frame 1",
+            "ffmpeg: warning: Stream issue frame 2",
+            "ffmpeg: warning: Decode issue frame 3",
+            "ffmpeg: warning: Frame issue frame 4",
+            "ffmpeg: warning: Boundary issue frame 5",
+            "ffmpeg: warning: Extra issue frame 6",
+            "ffmpeg: warning: Too many issue frame 7",
+        ]
+        stderr = "\n".join(warnings_lines)
+        warnings = checker._parse_audio_warnings(stderr)
+        assert len(warnings) <= 5
+
+    def test_parse_audio_warnings_ignores_long_lines(self):
+        """Test that very long warning lines are ignored."""
+        checker = AudioQualityChecker()
+        long_line = "ffmpeg: warning: " + "x" * 200  # > 150 chars
+        warnings = checker._parse_audio_warnings(long_line)
+        assert len(warnings) == 0
+
+    def test_parse_audio_warnings_accepts_reasonable_length(self):
+        """Test that reasonable length warnings are captured."""
+        checker = AudioQualityChecker()
+        line = "ffmpeg: warning: " + "x" * 100  # < 150 chars
+        warnings = checker._parse_audio_warnings(line)
+        assert len(warnings) == 1
+
+    def test_parse_audio_warnings_mixed_warnings(self):
+        """Test parsing mixed warning types."""
+        checker = AudioQualityChecker()
+        stderr = """mpg123: Warning: Unmatched part2_3_length too large detected
+ffmpeg: warning: Invalid header in frame 1
+some other log line
+mpg123: Warning: Stream decoding issue"""
+        warnings = checker._parse_audio_warnings(stderr)
+        # Should have multiple warnings but be deduplicated and limited
+        assert len(warnings) > 0
+        assert len(warnings) <= 5
+
+    def test_parse_audio_warnings_returns_list(self):
+        """Test that parser returns list type."""
+        checker = AudioQualityChecker()
+        warnings = checker._parse_audio_warnings("some stderr output")
+        assert isinstance(warnings, list)
+
+    def test_parse_audio_warnings_returns_strings(self):
+        """Test that all warnings are strings."""
+        checker = AudioQualityChecker()
+        stderr = """mpg123: Warning: Unmatched part2_3_length too large detected
+ffmpeg: warning: Invalid header in frame"""
+        warnings = checker._parse_audio_warnings(stderr)
+        assert all(isinstance(w, str) for w in warnings)
+        assert all(len(w) > 0 for w in warnings)
+
+    def test_parse_audio_warnings_sorted_output(self):
+        """Test that warnings are sorted for consistency."""
+        checker = AudioQualityChecker()
+        stderr = """frame warning test
+stream warning test
+header warning test"""
+        warnings1 = checker._parse_audio_warnings(stderr)
+        warnings2 = checker._parse_audio_warnings(stderr)
+        # Same input should produce identical sorted output
+        assert warnings1 == warnings2
+
+    @pytest.mark.asyncio
+    async def test_check_audio_file_includes_warnings_in_result(self, valid_audio_file):
+        """Test that audio analysis result includes warnings field."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+        assert "warnings" in result
+        assert isinstance(result["warnings"], list)
+
+    @pytest.mark.asyncio
+    async def test_warnings_dont_fail_valid_audio(self, valid_audio_file):
+        """Test that warnings are non-fatal (don't fail audio)."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+        # Warnings should not cause failure if quality passes
+        if result["quality"]["passed"]:
+            assert result["quality"]["passed"] is True
