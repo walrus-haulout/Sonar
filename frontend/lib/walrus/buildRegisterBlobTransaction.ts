@@ -424,7 +424,10 @@ export function buildBatchRegisterAndSubmitTransaction(
   });
 
   // Step 2: Register main blob
-  console.log("[Walrus] Registering main blob");
+  console.log(
+    "[Walrus] Registering main blob with encoded size:",
+    mainStorageSize,
+  );
   const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
   const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
 
@@ -435,7 +438,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       mainStorage, // storage: Storage
       tx.pure.u256(mainBlobIdBigInt), // blob_id: u256
       tx.pure.u256(mainBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(mainBlob.size), // size: u64
+      tx.pure.u64(mainStorageSize), // size: u64 (encoded size with 5x overhead)
       tx.pure.u8(mainEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(mainBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>
@@ -463,7 +466,10 @@ export function buildBatchRegisterAndSubmitTransaction(
   });
 
   // Step 4: Register preview blob
-  console.log("[Walrus] Registering preview blob");
+  console.log(
+    "[Walrus] Registering preview blob with encoded size:",
+    previewStorageSize,
+  );
   const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
   const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
 
@@ -474,7 +480,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       previewStorage, // storage: Storage
       tx.pure.u256(previewBlobIdBigInt), // blob_id: u256
       tx.pure.u256(previewBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(previewBlob.size), // size: u64
+      tx.pure.u64(previewStorageSize), // size: u64 (encoded size with 5x overhead)
       tx.pure.u8(previewEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(previewBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>
