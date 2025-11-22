@@ -321,6 +321,15 @@ export function useWalrusParallelUpload() {
         previewDeletable = previewResult.deletable;
       }
 
+      console.log("[Upload] HTTP upload complete:", {
+        mainBlobId: result.blobId,
+        mainEncodingType: result.encodingType,
+        mainSize: result.size,
+        previewBlobId: finalPreviewBlobId,
+        previewEncodingType,
+        previewSize,
+      });
+
       return {
         blobId: result.blobId,
         size: result.size,
