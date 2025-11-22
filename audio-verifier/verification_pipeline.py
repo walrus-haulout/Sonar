@@ -756,7 +756,7 @@ Respond ONLY with the JSON object, no additional text."""
 
         duration = quality.get("duration", 0)
         sample_rate = quality.get("sample_rate", 0)
-        clipping = quality.get("clipping", False)
+        clipping = quality.get("clipping_detected", quality.get("clipping", False))
         silence_percent = quality.get("silence_percent", 0.0)
         volume_ok = quality.get("volume_ok", False)
 

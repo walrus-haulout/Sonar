@@ -86,7 +86,9 @@ class AudioQualityChecker:
         self.MIN_SAMPLE_RATE = 8000  # Hz
         self.SILENCE_THRESHOLD = -50  # dB
         self.MAX_SILENCE_PERCENT = 30  # %
-        self.CLIPPING_THRESHOLD = 0.99  # normalized amplitude
+        # Treat clipping as sustained digital full-scale, tolerate brief transients
+        self.CLIPPING_THRESHOLD = 0.995  # normalized amplitude
+        self.MIN_CLIPPING_PERCENT = 0.5  # minimum percent of samples above threshold to flag
         self._silence_linear_threshold = 10 ** (self.SILENCE_THRESHOLD / 20.0)
 
     async def check_audio(self, audio_bytes: bytes) -> Dict[str, Any]:
@@ -243,6 +245,7 @@ class AudioQualityChecker:
         silence_samples = 0
         sum_squares = 0.0
         clipping_detected = False
+        clipping_samples = 0
 
         while True:
             block = audio_file.read(block_frames, dtype="float32", always_2d=True)
@@ -257,8 +260,8 @@ class AudioQualityChecker:
             silence_samples += int(np.sum(abs_block < self._silence_linear_threshold))
             sum_squares += float(np.sum(block_mono ** 2))
 
-            if not clipping_detected and np.any(abs_block >= self.CLIPPING_THRESHOLD):
-                clipping_detected = True
+            # Count samples at/above clipping threshold; require sustained ratio later
+            clipping_samples += int(np.sum(abs_block >= self.CLIPPING_THRESHOLD))
 
         if total_samples == 0:
             raise ValueError("Audio file contained no samples")
@@ -267,6 +270,8 @@ class AudioQualityChecker:
         rms_db = 20 * np.log10(max(rms, 1e-10))
         silence_percent = (silence_samples / total_samples) * 100.0
         volume_ok = -40 <= rms_db <= -6
+        clipping_percent = (clipping_samples / total_samples) * 100.0
+        clipping_detected = clipping_percent >= self.MIN_CLIPPING_PERCENT
 
         passed = all([
             self.MIN_DURATION <= duration <= self.MAX_DURATION,
@@ -283,13 +288,23 @@ class AudioQualityChecker:
             "bit_depth": bit_depth,
             "volume_ok": volume_ok,
             "rms_db": round(rms_db, 2),
+            "clipping": clipping_detected,  # backward-compatible key
             "clipping_detected": clipping_detected,
+            "clipping_percent": round(clipping_percent, 4),
             "silence_percent": round(silence_percent, 2),
             "quality_score": self._calculate_quality_score(passed, volume_ok, clipping_detected, silence_percent),
             "passed": passed
         }
 
-        errors = self._get_errors(duration, sample_rate, clipping_detected, silence_percent, volume_ok, subtype)
+        errors = self._get_errors(
+            duration,
+            sample_rate,
+            clipping_detected,
+            silence_percent,
+            volume_ok,
+            subtype,
+            clipping_percent
+        )
 
         result = {
             "quality": quality,
@@ -492,7 +507,8 @@ class AudioQualityChecker:
         clipping: bool,
         silence_percent: float,
         volume_ok: bool,
-        subtype: str = ""
+        subtype: str = "",
+        clipping_percent: float = 0.0
     ) -> list[str]:
         """Get list of quality issues based on thresholds."""
         errors: list[str] = []
@@ -506,7 +522,9 @@ class AudioQualityChecker:
             errors.append(f"Sample rate too low: {sample_rate}Hz (minimum {self.MIN_SAMPLE_RATE}Hz)")
 
         if clipping:
-            errors.append("Audio is clipping - reduce input gain")
+            errors.append(
+                f"Audio clipping detected: {clipping_percent:.3f}% samples >= {self.CLIPPING_THRESHOLD:.3f} (reduce input gain)"
+            )
 
         if silence_percent >= self.MAX_SILENCE_PERCENT:
             errors.append(f"Too much silence: {silence_percent:.1f}% (maximum {self.MAX_SILENCE_PERCENT}%)")
