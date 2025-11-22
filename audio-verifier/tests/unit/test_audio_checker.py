@@ -685,3 +685,16 @@ header warning test"""
         # Warnings should not cause failure if quality passes
         if result["quality"]["passed"]:
             assert result["quality"]["passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_soundfile_path_includes_warnings_field(self, valid_audio_file):
+        """Test that soundfile path (not ffmpeg fallback) includes warnings field."""
+        checker = AudioQualityChecker()
+        result = await checker.check_audio_file(str(valid_audio_file))
+
+        # Warnings field should always be present
+        assert "warnings" in result
+        assert isinstance(result["warnings"], list)
+        # Warnings should contain only strings
+        for warning in result["warnings"]:
+            assert isinstance(warning, str)

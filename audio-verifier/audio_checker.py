@@ -8,14 +8,72 @@ import io
 import logging
 import mimetypes
 import os
+import platform
 import subprocess
+import sys
 import tempfile
+from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
 import numpy as np
 import soundfile as sf
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def capture_c_stderr():
+    """
+    Capture stderr at C level (file descriptor 2) for soundfile/mpg123 warnings.
+
+    Platform-aware: Only active on POSIX systems (Linux/macOS), no-op on Windows.
+    Exception-safe: Always restores fd 2 and closes temp file, even on exceptions.
+
+    Yields:
+        Callable that returns captured stderr as string
+    """
+    # No-op on Windows
+    if platform.system() == 'Windows':
+        yield lambda: ""
+        return
+
+    # Save original stderr fd
+    stderr_fd = sys.stderr.fileno()
+    original_stderr_fd = None
+    tmp_file = None
+
+    try:
+        # Duplicate original stderr fd (must close later)
+        original_stderr_fd = os.dup(stderr_fd)
+
+        # Create temp file for capture
+        tmp_file = tempfile.TemporaryFile(mode='w+b')
+        tmp_fd = tmp_file.fileno()
+
+        # Flush before redirecting
+        sys.stderr.flush()
+
+        # Redirect stderr (fd 2) to temp file
+        os.dup2(tmp_fd, stderr_fd)
+
+        def get_stderr() -> str:
+            """Read captured stderr content."""
+            tmp_file.flush()
+            tmp_file.seek(0)
+            return tmp_file.read().decode('utf-8', errors='ignore')
+
+        yield get_stderr
+
+    finally:
+        # ALWAYS restore original stderr, even on exception
+        if original_stderr_fd is not None:
+            sys.stderr.flush()
+            os.dup2(original_stderr_fd, stderr_fd)
+            os.close(original_stderr_fd)
+
+        # ALWAYS close temp file
+        if tmp_file is not None:
+            tmp_file.close()
 
 
 class AudioQualityChecker:
@@ -95,10 +153,18 @@ class AudioQualityChecker:
         warnings = []
 
         try:
-            with sf.SoundFile(file_path) as audio_file:
-                result = self._analyze_stream(audio_file, session_id)
-                result["warnings"] = warnings
-                return result
+            # Capture C-level stderr (mpg123 warnings from soundfile) on POSIX systems
+            with capture_c_stderr() as get_stderr:
+                with sf.SoundFile(file_path) as audio_file:
+                    result = self._analyze_stream(audio_file, session_id)
+
+                # Parse any C-level warnings (mpg123, etc.)
+                stderr_output = get_stderr()
+                if stderr_output:
+                    warnings = self._parse_audio_warnings(stderr_output)
+
+            result["warnings"] = warnings
+            return result
         except Exception as exc:
             logger.warning(
                 f"Soundfile failed to read audio, attempting ffmpeg fallback: {exc}",
@@ -113,11 +179,18 @@ class AudioQualityChecker:
                     extra={"session_id": session_id}
                 )
                 try:
-                    with sf.SoundFile(converted_path) as audio_file:
-                        result = self._analyze_stream(audio_file, session_id)
-                        result["failure_reason"] = "converted_with_ffmpeg"
-                        result["warnings"] = warnings
-                        return result
+                    with capture_c_stderr() as get_stderr:
+                        with sf.SoundFile(converted_path) as audio_file:
+                            result = self._analyze_stream(audio_file, session_id)
+
+                        # Capture warnings from converted file too
+                        stderr_output = get_stderr()
+                        if stderr_output:
+                            warnings = self._parse_audio_warnings(stderr_output)
+
+                    result["failure_reason"] = "converted_with_ffmpeg"
+                    result["warnings"] = warnings
+                    return result
                 finally:
                     # Clean up temporary converted file
                     if os.path.exists(converted_path):
