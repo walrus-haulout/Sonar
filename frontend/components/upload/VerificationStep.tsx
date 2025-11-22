@@ -586,7 +586,11 @@ export function VerificationStep({
         displayError = 'Access denied. Please check your wallet connection and try again.';
       } else if (errorMsg.includes('Invalid upload timestamp') || errorMsg.includes('Did you pass seconds')) {
         displayError = 'Invalid timestamp format. Please refresh and try verification again.';
-      } else if (errorMsg.includes('network') || errorMsg.includes('timeout')) {
+      } else if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
+        displayError = 'Decryption service temporarily unavailable. Please try again in a few moments. If the issue persists, contact support.';
+      } else if (errorMsg.includes('504') || errorMsg.includes('Gateway Timeout')) {
+        displayError = 'Decryption service is taking too long. Please try again. Large files may require additional time.';
+      } else if (errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('unreachable')) {
         displayError = 'Network error during verification. Please check your connection and retry.';
       } else if (errorMsg.includes('corrupted') || errorMsg.includes('invalid')) {
         displayError = 'The audio file appears corrupted. Please re-upload and try again.';

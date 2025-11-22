@@ -123,6 +123,19 @@ async def validate_environment():
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
+    # Validate Seal configuration for encrypted blob verification
+    seal_key_server_urls = os.getenv("SEAL_KEY_SERVER_URLS", "{}")
+    try:
+        seal_key_mapping = json.loads(seal_key_server_urls)
+        if not isinstance(seal_key_mapping, dict):
+            logger.warning("SEAL_KEY_SERVER_URLS is not a valid JSON object - encrypted blob verification may fail")
+        elif seal_key_mapping:
+            logger.info(f"Seal key server mapping configured with {len(seal_key_mapping)} server(s)")
+        else:
+            logger.warning("SEAL_KEY_SERVER_URLS is empty - Seal SDK will use default server discovery (may fail in Railway)")
+    except json.JSONDecodeError as e:
+        logger.warning(f"SEAL_KEY_SERVER_URLS is invalid JSON: {e} - encrypted blob verification may fail")
+
     logger.info("Environment validation passed: all required variables configured")
 
 

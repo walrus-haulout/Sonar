@@ -314,7 +314,11 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
     # Retry loop for transient errors
     last_error = None
     for attempt in range(1, DECRYPT_MAX_RETRIES + 1):
-        logger.debug(f"Decrypt attempt {attempt}/{DECRYPT_MAX_RETRIES} to {SEAL_SERVICE_URL}")
+        attempt_start = time.time()
+        logger.debug(f"Decrypt attempt {attempt}/{DECRYPT_MAX_RETRIES} to {SEAL_SERVICE_URL}", extra={
+            "sealServiceUrl": SEAL_SERVICE_URL,
+            "timeout": SEAL_SERVICE_TIMEOUT,
+        })
 
         try:
             with httpx.Client(timeout=SEAL_SERVICE_TIMEOUT) as client:
@@ -322,6 +326,8 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
                     f"{SEAL_SERVICE_URL}/decrypt",
                     json=request_data
                 )
+
+                elapsed = time.time() - attempt_start
 
                 if response.status_code == 200:
                     result = response.json()
@@ -339,6 +345,7 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
                     logger.info(f"Service decryption successful (attempt {attempt})", extra={
                         "plaintextHexLength": len(plaintext_hex),
                         "plaintextBytes": len(plaintext_hex) // 2,
+                        "elapsedSeconds": round(elapsed, 2),
                     })
                     return bytes.fromhex(plaintext_hex)
 
@@ -352,9 +359,12 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
                         error_type = "unknown"
                         error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
 
-                    logger.debug(f"Service returned error (HTTP {response.status_code})", extra={
+                    logger.warning(f"Service returned error (HTTP {response.status_code})", extra={
+                        "attempt": attempt,
+                        "maxRetries": DECRYPT_MAX_RETRIES,
                         "errorType": error_type,
                         "message": error_msg[:200],
+                        "elapsedSeconds": round(elapsed, 2),
                     })
 
                     # Map to appropriate exception
@@ -387,25 +397,40 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
                         # Unknown error - don't retry
                         raise SealDecryptionError(error_msg, error_type="decryption_failed", http_status=500) from None
 
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as e:
+            elapsed = time.time() - attempt_start
+            error_msg = f"Decryption service timeout after {SEAL_SERVICE_TIMEOUT}s"
+            logger.warning(f"Service timeout", extra={
+                "attempt": attempt,
+                "maxRetries": DECRYPT_MAX_RETRIES,
+                "sealServiceUrl": SEAL_SERVICE_URL,
+                "timeout": SEAL_SERVICE_TIMEOUT,
+                "elapsedSeconds": round(elapsed, 2),
+                "error": str(e)[:200],
+            })
             if attempt < DECRYPT_MAX_RETRIES:
-                logger.warning(
-                    f"Service timeout, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES})"
-                )
+                logger.debug(f"Retrying in {DECRYPT_RETRY_DELAY}s...")
                 time.sleep(DECRYPT_RETRY_DELAY)
-                last_error = SealTimeoutError(f"Decryption service timeout after {SEAL_SERVICE_TIMEOUT}s")
+                last_error = SealTimeoutError(error_msg)
                 continue
             else:
-                raise SealTimeoutError(f"Decryption service timed out after {SEAL_SERVICE_TIMEOUT}s (all retries exhausted)") from None
+                raise SealTimeoutError(f"{error_msg} (all retries exhausted)") from None
 
-        except (httpx.ConnectError, httpx.NetworkError) as e:
+        except (httpx.ConnectError, httpx.TransportError) as e:
             # Network error - transient, retry
+            elapsed = time.time() - attempt_start
             error_msg = f"Cannot connect to Seal service at {SEAL_SERVICE_URL}: {str(e)[:200]}"
+            logger.warning(f"Service unreachable", extra={
+                "attempt": attempt,
+                "maxRetries": DECRYPT_MAX_RETRIES,
+                "sealServiceUrl": SEAL_SERVICE_URL,
+                "elapsedSeconds": round(elapsed, 2),
+                "error": str(e)[:200],
+                "exceptionType": type(e).__name__,
+            })
             last_error = SealNetworkError(error_msg)
             if attempt < DECRYPT_MAX_RETRIES:
-                logger.warning(
-                    f"Service unavailable, retrying in {DECRYPT_RETRY_DELAY}s (attempt {attempt}/{DECRYPT_MAX_RETRIES}): {error_msg}"
-                )
+                logger.debug(f"Retrying in {DECRYPT_RETRY_DELAY}s...")
                 time.sleep(DECRYPT_RETRY_DELAY)
                 continue
             else:
