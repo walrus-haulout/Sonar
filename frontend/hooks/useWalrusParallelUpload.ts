@@ -12,6 +12,7 @@ import { useState, useCallback } from 'react';
 import { useSuiClient, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { normalizeAudioMimeType, getExtensionForMime } from '@/lib/audio/mime';
 import { buildRegisterBlobTransactionAsync } from '@/lib/walrus/buildRegisterBlobTransaction';
+import { collectCoinsForAmount } from '@/lib/sui/coin-utils';
 import type { WalrusUploadResult } from '@/lib/types/upload';
 
 const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
@@ -67,6 +68,37 @@ function inferFileName(base: string, mime?: string): string {
 
   const extension = getExtensionForMime(normalizedMime);
   return extension ? `${base}.${extension}` : base;
+}
+
+/**
+ * Preflight check for WAL balance before blob registration
+ */
+async function checkWalBalance(
+  suiClient: any,
+  walletAddress: string
+): Promise<{ hasBalance: boolean; totalBalance: bigint }> {
+  const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
+
+  try {
+    const coinsResult = await collectCoinsForAmount(
+      suiClient,
+      walletAddress,
+      walCoinType,
+      1n // Check if at least 1 unit available
+    );
+
+    const hasBalance = coinsResult.coins.length > 0;
+    console.log('[Walrus] Preflight WAL check:', {
+      hasBalance,
+      totalBalance: coinsResult.total.toString(),
+      coinCount: coinsResult.coins.length,
+    });
+
+    return { hasBalance, totalBalance: coinsResult.total };
+  } catch (error) {
+    console.error('[Walrus] WAL preflight check failed:', error);
+    return { hasBalance: false, totalBalance: 0n };
+  }
 }
 
 export function useWalrusParallelUpload() {
@@ -381,7 +413,22 @@ export function useWalrusParallelUpload() {
       options
     );
 
-    // 2. Batch Register & Submit
+    // 2. Preflight check for WAL balance
+    if (!currentAccount) {
+      throw new Error('Wallet not connected');
+    }
+
+    const walBalance = await checkWalBalance(suiClient, currentAccount.address);
+    if (!walBalance.hasBalance) {
+      throw new Error(
+        'Insufficient WAL balance. You need at least 1 WAL token to register blobs on-chain. ' +
+        'Please acquire WAL tokens before attempting to upload.'
+      );
+    }
+
+    console.log('[Walrus] WAL balance verified, proceeding with registration');
+
+    // 3. Batch Register & Submit
     // We need to ensure we have preview metadata if a preview was uploaded
     if (publisherResult.previewBlobId && !publisherResult.previewStorageId) {
       console.warn('Preview uploaded but missing storage ID. Registration might fail.');

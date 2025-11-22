@@ -5,10 +5,6 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**.walrus-testnet.walrus.space',
-      },
-      {
-        protocol: 'https',
         hostname: '**.walrus.space',
       },
     ],

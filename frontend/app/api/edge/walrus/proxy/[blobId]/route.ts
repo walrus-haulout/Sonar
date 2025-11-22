@@ -5,7 +5,7 @@ export const runtime = 'edge';
 
 const WALRUS_AGGREGATOR_URL =
   process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
-  'https://aggregator.walrus-testnet.walrus.space';
+  'https://aggregator.walrus.space';
 
 /**
  * Edge Function: Walrus Blob Proxy

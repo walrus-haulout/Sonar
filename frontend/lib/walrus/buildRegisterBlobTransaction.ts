@@ -109,8 +109,15 @@ export async function buildRegisterBlobTransactionAsync(params: RegisterBlobPara
         );
       }
 
-      resolvedWalCoinId = coinsResult.coins[0].coinObjectId;
-      console.log('[Walrus] Found WAL coin:', resolvedWalCoinId);
+      const selectedCoin = coinsResult.coins[0];
+      resolvedWalCoinId = selectedCoin.coinObjectId;
+
+      console.log('[Walrus] WAL coin fetching successful:', {
+        totalBalance: coinsResult.total.toString(),
+        coinCount: coinsResult.coins.length,
+        selectedCoinId: resolvedWalCoinId,
+        selectedCoinBalance: selectedCoin.balance.toString(),
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch WAL coins';
       throw new Error(`[Walrus] Could not obtain WAL payment coin: ${errorMsg}`);
@@ -245,8 +252,15 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(params: BatchR
         );
       }
 
-      resolvedWalCoinId = coinsResult.coins[0].coinObjectId;
-      console.log('[Walrus] Found WAL coin:', resolvedWalCoinId);
+      const selectedCoin = coinsResult.coins[0];
+      resolvedWalCoinId = selectedCoin.coinObjectId;
+
+      console.log('[Walrus] WAL coin fetching successful:', {
+        totalBalance: coinsResult.total.toString(),
+        coinCount: coinsResult.coins.length,
+        selectedCoinId: resolvedWalCoinId,
+        selectedCoinBalance: selectedCoin.balance.toString(),
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch WAL coins';
       throw new Error(`[Walrus] Could not obtain WAL payment coin: ${errorMsg}`);
