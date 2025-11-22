@@ -303,6 +303,23 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
             "SessionKey is required for decryption. Please provide session_key_data from the frontend."
         )
 
+    # Debug: Log SessionKey structure to diagnose auth failures
+    try:
+        session_key_obj = json.loads(session_key_data) if isinstance(session_key_data, str) else session_key_data
+        logger.debug(
+            "SessionKey structure validation",
+            extra={
+                "sessionKeyFields": list(session_key_obj.keys()),
+                "hasKeyServers": "keyServers" in session_key_obj,
+                "keyServersCount": len(session_key_obj.get("keyServers", [])),
+                "hasThreshold": "threshold" in session_key_obj,
+                "threshold": session_key_obj.get("threshold"),
+                "identityPrefix": identity[:16] if identity else None,
+            }
+        )
+    except Exception as e:
+        logger.warning(f"Could not parse SessionKey for debugging: {e}")
+
     # Prepare request for service
     request_data = {
         "encrypted_object_hex": encrypted_object_hex,

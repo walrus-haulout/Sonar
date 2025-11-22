@@ -83,14 +83,26 @@ async function decryptWithSessionKey(
     fastify.log.debug('[decryptWithSessionKey] Session key data:', {
       keyServersCount: sessionKeyObj.keyServers?.length ?? 0,
       threshold: sessionKeyObj.threshold ?? 'missing',
+      hasKeyServers: Array.isArray(sessionKeyObj.keyServers),
     });
+
+    // Validate required fields for SessionKey import
+    if (!sessionKeyObj.keyServers || !Array.isArray(sessionKeyObj.keyServers) || sessionKeyObj.keyServers.length === 0) {
+      throw new Error(
+        'SessionKey missing keyServers array. Frontend must include key server configuration (NEXT_PUBLIC_SEAL_KEY_SERVERS env var).'
+      );
+    }
+
+    if (sessionKeyObj.threshold === undefined || sessionKeyObj.threshold === null) {
+      throw new Error('SessionKey missing threshold. Frontend must include NEXT_PUBLIC_SEAL_THRESHOLD env var.');
+    }
 
     sessionKey = SessionKey.import(sessionKeyObj, suiClient);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw {
       error: `Failed to import SessionKey: ${msg}`,
-      errorType: 'authentication_failed',
+      errorType: msg.includes('keyServers') || msg.includes('threshold') ? 'validation_failed' : 'authentication_failed',
     };
   }
 
@@ -99,7 +111,7 @@ async function decryptWithSessionKey(
 
   if (serverConfigs.length === 0) {
     throw {
-      error: 'No key servers configured',
+      error: 'Failed to build server configurations from keyServers. Check SEAL_KEY_SERVER_URLS environment variable.',
       errorType: 'validation_failed',
     };
   }
