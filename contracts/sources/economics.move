@@ -32,31 +32,29 @@ module sonar::economics {
     const E_INVALID_BPS: u64 = 4002;
 
     /// Create default economic configuration
-    /// Fixed 60/40 split: 60% to creators, 40% to protocol
+    /// Dynamic tier system with decreasing burn rates as supply increases
     /// Used during marketplace initialization
     public fun default_config(): EconomicConfig {
         EconomicConfig {
             // Tier thresholds (ABSOLUTE values in base units)
-            // All tiers use same split, thresholds kept for future extensibility
             tier_1_floor: 50_000_000_000_000_000,   // 50M SNR
             tier_2_floor: 35_000_000_000_000_000,   // 35M SNR
             tier_3_floor: 20_000_000_000_000_000,   // 20M SNR
 
-            // Burn rates (basis points) - no burn in simplified model
-            tier_1_burn_bps: 0,                     // 0%
-            tier_2_burn_bps: 0,                     // 0%
-            tier_3_burn_bps: 0,                     // 0%
-            tier_4_burn_bps: 0,                     // 0%
+            // Burn rates (basis points) - tier-dependent
+            tier_1_burn_bps: 6000,                  // 60%
+            tier_2_burn_bps: 4500,                  // 45%
+            tier_3_burn_bps: 3000,                  // 30%
+            tier_4_burn_bps: 2000,                  // 20%
 
-            // Liquidity rates (basis points) - no separate liquidity vault
+            // Liquidity rates (basis points) - tier-dependent
             tier_1_liquidity_bps: 0,                // 0%
-            tier_2_liquidity_bps: 0,                // 0%
-            tier_3_liquidity_bps: 0,                // 0%
-            tier_4_liquidity_bps: 0,                // 0%
+            tier_2_liquidity_bps: 1000,             // 10%
+            tier_3_liquidity_bps: 1500,             // 15%
+            tier_4_liquidity_bps: 2000,             // 20%
 
-            // Treasury rate (40% to protocol)
-            // Uploader share = 10000 - burn - liquidity - treasury = 10000 - 0 - 0 - 4000 = 6000 (60%)
-            treasury_bps: 4000,                     // 40%
+            // Treasury rate (constant across all tiers)
+            treasury_bps: 1000,                     // 10%
         }
     }
 
