@@ -161,6 +161,11 @@ def _get_hex_preview(data: bytes, length: int = 32) -> str:
     return preview.hex()
 
 
+def get_file_size(file_path: str) -> int:
+    """Get file size in bytes. Mockable for testing."""
+    return os.path.getsize(file_path)
+
+
 def _check_riff_header(data: bytes) -> bool:
     """Check if data starts with valid RIFF header for WAV files."""
     if len(data) < 12:
@@ -606,7 +611,7 @@ async def create_verification(
                             "blob_id_short": blob_id_short,
                             "decrypted_bytes": file_size,
                             "detected_format": detected_format,
-                            "header_preview": _preview_bytes_hex(plaintext_bytes[:32], 32)
+                            "header_preview": _get_hex_preview(plaintext_bytes[:32], 32)
                         }
                     )
                     # Clean up temp file
