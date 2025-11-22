@@ -359,11 +359,12 @@ def _decrypt_with_seal_service(encrypted_object_hex: str, identity: str, session
                         error_type = "unknown"
                         error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
 
+                    # Avoid reserved LogRecord fields (e.g., "message") in extra
                     logger.warning(f"Service returned error (HTTP {response.status_code})", extra={
                         "attempt": attempt,
                         "maxRetries": DECRYPT_MAX_RETRIES,
                         "errorType": error_type,
-                        "message": error_msg[:200],
+                        "errorMessage": error_msg[:200],
                         "elapsedSeconds": round(elapsed, 2),
                     })
 
@@ -488,4 +489,3 @@ def _decrypt_aes(encrypted_data: bytes, aes_key: bytes) -> bytes:
                 "AES decryption requires 'cryptography' or 'pycryptodome' package. "
                 "Install with: pip install cryptography"
             )
-
