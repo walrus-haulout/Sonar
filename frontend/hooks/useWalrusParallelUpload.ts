@@ -131,13 +131,21 @@ export function useWalrusParallelUpload() {
   });
 
   /**
-   * Fetch upload with client-side retry tracking and progress updates
+   * Direct upload to Walrus Publisher with client-side retry tracking and progress updates
+   * Bypasses Edge Function proxy to eliminate 504 timeouts
    */
   const fetchUploadWithRetry = useCallback(
     async (
-      formData: FormData,
+      blob: Blob,
+      epochs: number = 26,
       maxRetries: number = 10,
     ): Promise<{ response: Response; attempt: number }> => {
+      const walrusPublisherUrl = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL;
+
+      if (!walrusPublisherUrl) {
+        throw new Error("NEXT_PUBLIC_WALRUS_PUBLISHER_URL is not configured");
+      }
+
       let lastError: Error | null = null;
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -149,18 +157,28 @@ export function useWalrusParallelUpload() {
             maxRetries,
           }));
 
-          // Create a new FormData for each attempt (since body can only be read once)
-          const attemptFormData = new FormData();
-          for (const [key, value] of formData.entries()) {
-            attemptFormData.append(key, value);
-          }
+          console.log(
+            `[Upload] Direct upload attempt ${attempt}/${maxRetries} to Walrus Publisher:`,
+            {
+              url: walrusPublisherUrl,
+              size: blob.size,
+              epochs,
+            },
+          );
 
-          const response = await fetch("/api/edge/walrus/upload", {
-            method: "POST",
-            body: attemptFormData,
-          });
+          const response = await fetch(
+            `${walrusPublisherUrl}/v1/blobs?epochs=${epochs}`,
+            {
+              method: "PUT",
+              body: blob,
+              headers: {
+                "Content-Type": "application/octet-stream",
+              },
+            },
+          );
 
           if (response.ok) {
+            console.log(`[Upload] Success on attempt ${attempt}`);
             return { response, attempt };
           }
 
@@ -189,6 +207,11 @@ export function useWalrusParallelUpload() {
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
 
+          console.error(
+            `[Upload] Attempt ${attempt}/${maxRetries} failed with error:`,
+            lastError.message,
+          );
+
           // If last attempt, throw error
           if (attempt === maxRetries) {
             throw lastError;
@@ -196,6 +219,7 @@ export function useWalrusParallelUpload() {
 
           // Retry with progressive delay
           const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
+          console.log(`[Upload] Retrying in ${delayMs}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
@@ -206,7 +230,7 @@ export function useWalrusParallelUpload() {
   );
 
   /**
-   * Upload encrypted blob to Walrus Publisher
+   * Upload encrypted blob to Walrus Publisher (Direct)
    * Returns metadata needed for on-chain registration
    */
   const uploadToPublisher = useCallback(
@@ -229,22 +253,9 @@ export function useWalrusParallelUpload() {
       mimeType?: string;
       previewMimeType?: string;
     }> => {
-      const formData = new FormData();
-      formData.append(
-        "file",
-        encryptedBlob,
-        options.fileName ?? "encrypted-audio.bin",
-      );
-      formData.append("seal_policy_id", seal_policy_id);
-      formData.append("epochs", "26"); // Explicitly set to 1 year (26 epochs)
-      if (metadata) {
-        formData.append("metadata", JSON.stringify(metadata));
-      }
-
-      // Log FormData for debugging
       const fileSizeMB = (encryptedBlob.size / (1024 * 1024)).toFixed(2);
       console.log(
-        `[Upload] Uploading main blob: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
+        `[Upload] Direct upload main blob: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
         {
           sealed_policy_id: seal_policy_id.substring(0, 20) + "...",
           epochs: "26",
@@ -252,7 +263,12 @@ export function useWalrusParallelUpload() {
         },
       );
 
-      const { response, attempt } = await fetchUploadWithRetry(formData, 10);
+      // Upload main blob directly to Walrus
+      const { response, attempt } = await fetchUploadWithRetry(
+        encryptedBlob,
+        26,
+        10,
+      );
 
       if (!response.ok) {
         let errorMessage = `Publisher upload failed on attempt ${attempt}: ${response.statusText}`;
@@ -267,8 +283,41 @@ export function useWalrusParallelUpload() {
 
       const result = await response.json();
 
+      // Parse Walrus response format
+      let blobId: string;
+      let storageId: string | undefined;
+      let encodingType: string | undefined;
+      let deletable: boolean | undefined;
+      let certifiedEpoch: number | undefined;
+
+      if (result.newlyCreated) {
+        const blobObject = result.newlyCreated.blobObject;
+        blobId = blobObject.blobId;
+        storageId = blobObject.storage?.id;
+        encodingType = blobObject.encodingType;
+        deletable = blobObject.deletable;
+        certifiedEpoch = blobObject.certifiedEpoch;
+
+        console.log("[Upload] Main blob newly created:", {
+          blobId,
+          storageId,
+          encodingType,
+          deletable,
+          certifiedEpoch,
+        });
+      } else if (result.alreadyCertified) {
+        blobId = result.alreadyCertified.blobId;
+        certifiedEpoch = result.alreadyCertified.certifiedEpoch;
+        console.log("[Upload] Main blob already certified:", {
+          blobId,
+          certifiedEpoch,
+        });
+      } else {
+        throw new Error("Unexpected Walrus response format");
+      }
+
       // Upload preview blob if provided
-      let finalPreviewBlobId = result.previewBlobId as string | undefined;
+      let finalPreviewBlobId: string | undefined;
       let previewStorageId: string | undefined;
       let previewSize: number | undefined;
       let previewEncodingType: string | undefined;
@@ -278,7 +327,6 @@ export function useWalrusParallelUpload() {
         normalizeAudioMimeType(options.previewBlob?.type);
 
       if (options.previewBlob) {
-        const previewFormData = new FormData();
         const previewBlob =
           ensureBlobMimeType(options.previewBlob, options.previewMimeType) ??
           options.previewBlob;
@@ -288,20 +336,18 @@ export function useWalrusParallelUpload() {
           options.previewFileName ?? "preview",
           effectivePreviewMimeType,
         );
-        previewFormData.append("file", previewBlob, previewFileName);
-        previewFormData.append("seal_policy_id", seal_policy_id);
 
         // Log preview upload for debugging
         const previewSizeMB = (previewBlob.size / (1024 * 1024)).toFixed(2);
         console.log(
-          `[Upload] Uploading preview blob: ${previewFileName} (${previewSizeMB}MB)`,
+          `[Upload] Direct upload preview blob: ${previewFileName} (${previewSizeMB}MB)`,
         );
 
-        const { response: previewResponse, attempt } =
-          await fetchUploadWithRetry(previewFormData, 10);
+        const { response: previewResponse, attempt: previewAttempt } =
+          await fetchUploadWithRetry(previewBlob, 26, 10);
 
         if (!previewResponse.ok) {
-          let previewErrorMessage = `Preview upload failed on attempt ${attempt}: ${previewResponse.statusText}`;
+          let previewErrorMessage = `Preview upload failed on attempt ${previewAttempt}: ${previewResponse.statusText}`;
           try {
             const errorBody = await previewResponse.json();
             previewErrorMessage =
@@ -313,29 +359,48 @@ export function useWalrusParallelUpload() {
         }
 
         const previewResult = await previewResponse.json();
-        finalPreviewBlobId =
-          previewResult.previewBlobId || previewResult.blobId;
-        previewStorageId = previewResult.storageId;
-        previewSize = previewResult.fileSize;
-        previewEncodingType = previewResult.encodingType;
-        previewDeletable = previewResult.deletable;
+
+        // Parse preview Walrus response
+        if (previewResult.newlyCreated) {
+          const previewBlobObject = previewResult.newlyCreated.blobObject;
+          finalPreviewBlobId = previewBlobObject.blobId;
+          previewStorageId = previewBlobObject.storage?.id;
+          previewEncodingType = previewBlobObject.encodingType;
+          previewDeletable = previewBlobObject.deletable;
+          previewSize = previewBlob.size;
+
+          console.log("[Upload] Preview blob newly created:", {
+            blobId: finalPreviewBlobId,
+            storageId: previewStorageId,
+            encodingType: previewEncodingType,
+            size: previewSize,
+          });
+        } else if (previewResult.alreadyCertified) {
+          finalPreviewBlobId = previewResult.alreadyCertified.blobId;
+          previewSize = previewBlob.size;
+          console.log("[Upload] Preview blob already certified:", {
+            blobId: finalPreviewBlobId,
+          });
+        } else {
+          throw new Error("Unexpected Walrus preview response format");
+        }
       }
 
-      console.log("[Upload] HTTP upload complete:", {
-        mainBlobId: result.blobId,
-        mainEncodingType: result.encodingType,
-        mainSize: result.size,
+      console.log("[Upload] Direct upload complete:", {
+        mainBlobId: blobId,
+        mainEncodingType: encodingType,
+        mainSize: encryptedBlob.size,
         previewBlobId: finalPreviewBlobId,
         previewEncodingType,
         previewSize,
       });
 
       return {
-        blobId: result.blobId,
-        size: result.size,
-        encodingType: result.encodingType,
-        storageId: result.storageId,
-        deletable: result.deletable,
+        blobId,
+        size: encryptedBlob.size,
+        encodingType,
+        storageId,
+        deletable,
         previewBlobId: finalPreviewBlobId,
         previewStorageId,
         previewSize,
