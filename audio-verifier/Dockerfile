@@ -171,7 +171,8 @@ WORKDIR /app
 EXPOSE 8000
 
 # Health check (using venv Python, respects PORT env var)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# start-period: 30s gives app time to initialize before health checks begin
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD /app/.venv/bin/python -c "import os, httpx; port=os.environ.get('PORT', '8000'); httpx.get(f'http://localhost:{port}/health', timeout=5.0)"
 
 # Start server using start.sh script (handles PORT env var for Railway/cloud platforms)

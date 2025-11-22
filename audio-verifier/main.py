@@ -302,7 +302,25 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
+    """
+    Liveness check endpoint for load balancers and orchestrators.
+
+    Returns immediately if the application process is running.
+    Does not test external dependencies to avoid false negatives during startup.
+    """
+    return {
+        "status": "healthy"
+    }
+
+
+@app.get("/ready")
+async def ready():
+    """
+    Readiness check endpoint for detailed service status.
+
+    Tests database connectivity and configuration status.
+    Useful for monitoring, but not used by Railway health checks.
+    """
     # Test database connection
     db_connected = False
     if DATABASE_URL:
@@ -313,7 +331,7 @@ async def health():
             db_connected = True
         except Exception as e:
             logger.warning(f"Database connection test failed: {e}")
-    
+
     config_status = {
         "database_configured": bool(DATABASE_URL),
         "database_connected": db_connected,
@@ -325,7 +343,7 @@ async def health():
         "auth_enabled": bool(VERIFIER_AUTH_TOKEN)
     }
     return {
-        "status": "healthy",
+        "status": "ready" if db_connected else "not_ready",
         "config": config_status
     }
 
