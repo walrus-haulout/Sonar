@@ -372,7 +372,7 @@ class TestDecryptSync:
     """Test full synchronous decryption flow."""
 
     @patch('seal_decryptor._fetch_walrus_blob')
-    @patch('seal_decryptor._decrypt_with_seal_cli')
+    @patch('seal_decryptor._decrypt_with_seal_service')
     @patch('seal_decryptor._decrypt_aes')
     def test_envelope_format_decryption(self, mock_aes, mock_seal, mock_fetch):
         """Test decryption of envelope-format encrypted blob."""
@@ -394,7 +394,7 @@ class TestDecryptSync:
         mock_aes.assert_called_once()
 
     @patch('seal_decryptor._fetch_walrus_blob')
-    @patch('seal_decryptor._decrypt_with_seal_cli')
+    @patch('seal_decryptor._decrypt_with_seal_service')
     def test_direct_encryption_decryption(self, mock_seal, mock_fetch):
         """Test decryption of direct (non-envelope) encryption."""
         # Non-envelope: just encrypted data
@@ -471,7 +471,7 @@ class TestTimeoutScenarios:
 
     @pytest.mark.timeout(5)
     @patch('seal_decryptor._fetch_walrus_blob')
-    @patch('seal_decryptor._decrypt_with_seal_cli')
+    @patch('seal_decryptor._decrypt_with_seal_service')
     def test_sync_decryption_completes_quickly(self, mock_seal, mock_fetch):
         """Test that decryption completes quickly without hanging."""
         mock_fetch.return_value = b'small-blob'
