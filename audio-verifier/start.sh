@@ -129,6 +129,11 @@ cd "$(dirname "$0")"
 export SEAL_SERVICE_URL="$SEAL_SERVICE_URL"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
 
+# Activate venv if it exists
+if [[ -f ".venv/bin/activate" ]]; then
+    source .venv/bin/activate
+fi
+
 # Start Python app
 python -m uvicorn main:app \
     --host "$PYTHON_HOST" \
