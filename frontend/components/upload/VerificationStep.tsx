@@ -28,6 +28,7 @@ import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { RadarScanTarget } from "@/components/animations/RadarScanTarget";
 import { DataAccessNotice } from "@/components/upload/DataAccessNotice";
+import { VerificationFeedback } from "@/components/upload/VerificationFeedback";
 
 /**
  * Extract error message from unknown error type
@@ -1380,6 +1381,21 @@ export function VerificationStep({
                     <span>{insight}</span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Verification Feedback - User Voting */}
+            {result && (
+              <div className="mt-8 pt-6 border-t border-sonar-blue/20">
+                <VerificationFeedback
+                  sessionObjectId={verificationId!}
+                  onFeedbackSubmitted={() => {
+                    console.log(
+                      "Feedback submitted for session:",
+                      verificationId
+                    );
+                  }}
+                />
               </div>
             )}
           </GlassCard>

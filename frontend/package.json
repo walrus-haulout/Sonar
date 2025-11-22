@@ -17,6 +17,7 @@
     "@hookform/resolvers": "^3.9.1",
     "@mysten/dapp-kit": "^0.19.8",
     "@mysten/sui": "^1.44.0",
+    "@mysten/walrus": "^0.8.4",
     "@radix-ui/react-dialog": "^1.1.2",
     "@sonar/seal": "workspace:*",
     "@sonar/shared": "workspace:*",

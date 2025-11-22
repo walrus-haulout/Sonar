@@ -1123,6 +1123,94 @@ async def cancel_verification(session_object_id: str):
         )
 
 
+# ============================================================================
+# Verification Feedback Endpoint
+# ============================================================================
+
+
+class VerificationFeedback(BaseModel):
+    """User feedback on verification results"""
+
+    vote: str = Field(..., pattern="^(helpful|not_helpful)$", description="Vote: 'helpful' or 'not_helpful'")
+    feedback_text: Optional[str] = Field(None, max_length=500, description="Optional feedback comment")
+    feedback_category: Optional[str] = Field(None, description="Optional feedback category")
+    wallet_address: Optional[str] = Field(None, description="Wallet address (from header if not provided)")
+
+
+@app.post("/verify/{session_object_id}/feedback")
+async def submit_verification_feedback(
+    session_object_id: str,
+    feedback: VerificationFeedback,
+):
+    """
+    Submit user feedback/vote on verification results.
+
+    Args:
+        session_object_id: Verification session ID (UUID)
+        feedback: Vote and optional comment
+
+    Returns:
+        Confirmation with feedback ID and timestamp
+    """
+    try:
+        session_store = get_session_store()
+
+        # Verify session exists
+        session = await session_store.get_session(session_object_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get wallet address from feedback body or header
+        wallet_address = feedback.wallet_address
+        if not wallet_address:
+            raise HTTPException(
+                status_code=400,
+                detail="Wallet address required (provide in feedback_body or X-Wallet-Address header)",
+            )
+
+        # Insert feedback into database (UPSERT to allow vote changes)
+        pool = await session_store._get_pool()
+
+        async with pool.acquire() as conn:
+            result = await conn.fetchrow(
+                """
+                INSERT INTO verification_feedback
+                (session_id, wallet_address, vote, feedback_text, feedback_category)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (session_id, wallet_address)
+                DO UPDATE SET
+                    vote = EXCLUDED.vote,
+                    feedback_text = EXCLUDED.feedback_text,
+                    feedback_category = EXCLUDED.feedback_category,
+                    updated_at = NOW()
+                RETURNING id, created_at, updated_at
+                """,
+                session_object_id,
+                wallet_address,
+                feedback.vote,
+                feedback.feedback_text,
+                feedback.feedback_category,
+            )
+
+            logger.info(f"Feedback submitted: {feedback.vote} from {wallet_address[:8]}... for session {session_object_id[:8]}...")
+
+            return JSONResponse(
+                content={
+                    "feedbackId": str(result["id"]),
+                    "sessionObjectId": session_object_id,
+                    "vote": feedback.vote,
+                    "createdAt": result["created_at"].isoformat(),
+                    "updatedAt": result["updated_at"].isoformat(),
+                }
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to submit feedback: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
+
+
 # Legacy endpoints (kept for backward compatibility)
 @app.post("/check-audio")
 async def check_audio(file: UploadFile = File(...)):

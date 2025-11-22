@@ -1,6 +1,7 @@
 import { Transaction } from "@mysten/sui/transactions";
 import type { SuiClient } from "@mysten/sui/client";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
+import { WalrusClient } from "@mysten/walrus";
 
 // Get env vars lazily to support testing
 function getWalrusConfig(): {
@@ -72,6 +73,30 @@ function encodingTypeToU8(encodingType: string | undefined): number {
     `[Walrus] Encoding type "${encodingType}" mapped to u8: ${value}`,
   );
   return value;
+}
+
+/**
+ * Calculate storage size for Walrus blob reservation
+ * Walrus erasure coding increases blob size by 4-5x
+ * Using 5x as a safe multiplier to ensure sufficient storage
+ *
+ * @param unencodedSize - Original blob size in bytes
+ * @returns Storage size to reserve (5x original)
+ */
+function calculateWalrusStorageSize(unencodedSize: number): number {
+  // Walrus erasure coding overhead: 4-5x depending on sharding configuration
+  // Using 5x for safety to avoid EResourceSize errors
+  const WALRUS_ERASURE_OVERHEAD = 5;
+
+  const storageSize = Math.ceil(unencodedSize * WALRUS_ERASURE_OVERHEAD);
+
+  console.log("[Walrus] Storage size calculation:", {
+    unencodedSize,
+    storageSize,
+    overhead: WALRUS_ERASURE_OVERHEAD + "x",
+  });
+
+  return storageSize;
 }
 
 /**
@@ -379,16 +404,20 @@ export function buildBatchRegisterAndSubmitTransaction(
   const walCoinRef = tx.object(walCoinId);
 
   // Step 1: Reserve space for main blob
+  // Calculate storage size with 5x erasure coding overhead
+  const mainStorageSize = calculateWalrusStorageSize(mainBlob.size);
   console.log(
     "[Walrus] Reserving space for main blob:",
     mainBlob.size,
-    "bytes",
+    "bytes (unencoded) →",
+    mainStorageSize,
+    "bytes (encoded storage)",
   );
   const [mainStorage] = tx.moveCall({
     target: `${walrusPackageId}::system::reserve_space`,
     arguments: [
       tx.object(systemObject), // self: &mut System
-      tx.pure.u64(mainBlob.size), // storage_amount: u64
+      tx.pure.u64(mainStorageSize), // storage_amount: u64 (5x for erasure coding)
       tx.pure.u32(epochsAhead), // epochs_ahead: u32
       walCoinRef, // payment: &mut Coin<WAL>
     ],
@@ -414,16 +443,20 @@ export function buildBatchRegisterAndSubmitTransaction(
   });
 
   // Step 3: Reserve space for preview blob
+  // Calculate storage size with 5x erasure coding overhead
+  const previewStorageSize = calculateWalrusStorageSize(previewBlob.size);
   console.log(
     "[Walrus] Reserving space for preview blob:",
     previewBlob.size,
-    "bytes",
+    "bytes (unencoded) →",
+    previewStorageSize,
+    "bytes (encoded storage)",
   );
   const [previewStorage] = tx.moveCall({
     target: `${walrusPackageId}::system::reserve_space`,
     arguments: [
       tx.object(systemObject), // self: &mut System
-      tx.pure.u64(previewBlob.size), // storage_amount: u64
+      tx.pure.u64(previewStorageSize), // storage_amount: u64 (5x for erasure coding)
       tx.pure.u32(epochsAhead), // epochs_ahead: u32
       walCoinRef, // payment: &mut Coin<WAL>
     ],
