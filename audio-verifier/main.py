@@ -169,6 +169,19 @@ def _check_riff_header(data: bytes) -> bool:
     return data[:4] == b'RIFF' and data[8:12] == b'WAVE'
 
 
+def _looks_like_mp3(data: bytes) -> bool:
+    """Heuristic check for MP3 files (ID3 tag or MPEG frame sync)."""
+    if len(data) < 2:
+        return False
+    # ID3v2 tag
+    if data[:3] == b"ID3":
+        return True
+    # MPEG audio frame sync: 0xFFE? in first two bytes
+    if data[0] == 0xFF and (data[1] & 0xE0) == 0xE0:
+        return True
+    return False
+
+
 def get_verification_pipeline() -> VerificationPipeline:
     """Get or create verification pipeline instance."""
     global _verification_pipeline
@@ -506,14 +519,17 @@ async def create_verification(
                         detail=f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB"
                     )
 
-                # Reject blobs with invalid RIFF header for .wav files
-                if not has_riff_header:
+                # Reject blobs with unrecognized audio header (allow WAV or MP3)
+                looks_like_mp3 = _looks_like_mp3(plaintext_bytes)
+                if not has_riff_header and not looks_like_mp3:
                     logger.warning(
-                        f"Rejecting decrypted audio (invalid RIFF header)",
+                        f"Rejecting decrypted audio (unrecognized audio header)",
                         extra={
                             "verification_id": verification_id,
                             "blob_id_short": blob_id_short,
-                            "decrypted_bytes": file_size
+                            "decrypted_bytes": file_size,
+                            "has_riff_header": has_riff_header,
+                            "looks_like_mp3": looks_like_mp3,
                         }
                     )
                     # Clean up temp file
@@ -523,7 +539,7 @@ async def create_verification(
                         pass
                     raise HTTPException(
                         status_code=400,
-                        detail="Invalid audio blob: missing or corrupted RIFF/WAV header"
+                        detail="Invalid audio blob: missing recognizable WAV/MP3 header"
                     )
 
             except SealAuthenticationError as e:
