@@ -26,6 +26,7 @@ class FakeSession:
     error: Optional[str] = None
     cancelled: bool = False
     stage_transitions: list = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class FakeSessionStore:
@@ -73,6 +74,7 @@ class FakeSessionStore:
             "result": session.result,
             "error": session.error,
             "cancelled": session.cancelled,
+            "warnings": list(session.warnings),
         }
 
     async def update_session(self, session_id: str, updates: dict) -> bool:
@@ -83,6 +85,14 @@ class FakeSessionStore:
         for key, value in updates.items():
             if hasattr(session, key):
                 setattr(session, key, value)
+        return True
+
+    async def add_warnings(self, session_id: str, new_warnings: list[str]) -> bool:
+        """Append warnings to a session."""
+        if session_id not in self.sessions:
+            return False
+        session = self.sessions[session_id]
+        session.warnings.extend(new_warnings or [])
         return True
 
     async def update_stage(

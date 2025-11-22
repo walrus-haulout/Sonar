@@ -417,7 +417,16 @@ async def health():
     Does not test external dependencies to avoid false negatives during startup.
     """
     return {
-        "status": "healthy"
+        "status": "healthy",
+        "config": {
+            "openrouter": bool(OPENROUTER_API_KEY),
+            "acoustid": bool(ACOUSTID_API_KEY),
+            "verifierAuth": bool(VERIFIER_AUTH_TOKEN),
+            "database": bool(DATABASE_URL),
+            "walrusUpload": bool(WALRUS_UPLOAD_URL),
+            "walrusAggregator": bool(WALRUS_AGGREGATOR_URL),
+            "sealPackage": bool(SEAL_PACKAGE_ID)
+        }
     }
 
 
@@ -596,9 +605,12 @@ async def create_verification(
                         os.unlink(temp_file_path)
                     except OSError:
                         pass
-                    raise HTTPException(
+                    return JSONResponse(
                         status_code=400,
-                        detail=f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB"
+                        content={
+                            "detail": f"Invalid audio blob: decrypted size {file_size} bytes is below minimum 1KB",
+                            "sessionObjectId": None
+                        }
                     )
 
                 # Detect audio format and reject unsupported formats
@@ -619,9 +631,12 @@ async def create_verification(
                         os.unlink(temp_file_path)
                     except OSError:
                         pass
-                    raise HTTPException(
+                    return JSONResponse(
                         status_code=400,
-                        detail="Invalid audio blob: unsupported format. Allowed: MP3, WAV, FLAC, OGG/Opus, M4A/AAC/MP4, WebM, 3GPP/3GP, AMR"
+                        content={
+                            "detail": "Invalid audio blob: unsupported format or invalid RIFF header. Allowed: MP3, WAV, FLAC, OGG/Opus, M4A/AAC/MP4, WebM, 3GPP/3GP, AMR",
+                            "sessionObjectId": None
+                        }
                     )
 
                 logger.debug(
@@ -657,6 +672,9 @@ async def create_verification(
             except ValueError as e:
                 # Fallback for any unhandled ValueError
                 raise HTTPException(status_code=400, detail=f"Invalid encrypted blob data: {str(e)}")
+            except HTTPException as e:
+                # Propagate explicit HTTP errors without wrapping
+                raise e
             except Exception as e:
                 # Catch any other unexpected errors
                 logger.error(f"Unexpected error during decryption: {e}", exc_info=True)

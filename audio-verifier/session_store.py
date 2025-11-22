@@ -10,9 +10,37 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Dict, Any, Optional
 import asyncpg
+
+
+def _json_safe_default(obj):
+    """
+    Fallback serializer for JSON dumps.
+
+    Normalizes common non-serializable types (e.g., numpy scalars) into
+    plain Python primitives so we don't crash when persisting results.
+    """
+    try:
+        import numpy as np  # Local import to avoid hard dependency at import time
+
+        if isinstance(obj, (np.bool_, np.bool8)):
+            return bool(obj)
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+    except Exception:
+        # If numpy isn't available or another error occurs, fall through
+        pass
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, set):
+        return list(obj)
+
+    return str(obj)
 
 logger = logging.getLogger(__name__)
 
@@ -66,17 +94,22 @@ class SessionStore:
             raise RuntimeError("No running event loop")
 
         # Recreate pool if event loop changed (e.g., background task with new loop)
-        if self._pool is not None and self._pool_loop != current_loop:
-            logger.info("Event loop changed, recreating connection pool")
-            try:
-                await self._pool.close()
-            except (RuntimeError, asyncio.InvalidStateError) as e:
-                # Expected when closing pool from different event loop
-                logger.debug(f"Expected error closing old pool from different loop: {type(e).__name__}")
-            except Exception as e:
-                logger.warning(f"Error closing old pool: {e}")
-            self._pool = None
-            self._pool_loop = None
+        if self._pool is not None:
+            if self._pool_loop is None:
+                # Allow test mocks to inject a preconfigured pool without recreating it
+                self._pool_loop = current_loop
+                return self._pool
+            if self._pool_loop != current_loop:
+                logger.info("Event loop changed, recreating connection pool")
+                try:
+                    await self._pool.close()
+                except (RuntimeError, asyncio.InvalidStateError) as e:
+                    # Expected when closing pool from different event loop
+                    logger.debug(f"Expected error closing old pool from different loop: {type(e).__name__}")
+                except Exception as e:
+                    logger.warning(f"Error closing old pool: {e}")
+                self._pool = None
+                self._pool_loop = None
 
         if self._pool is None:
             self._pool = await asyncpg.create_pool(
@@ -166,7 +199,7 @@ class SessionStore:
                         0.0,
                         now,
                         now,
-                        json.dumps(initial_data)
+                        json.dumps(initial_data, default=_json_safe_default)
                     )
 
             logger.info(f"Created session {session_id[:8]}... in PostgreSQL")
@@ -221,7 +254,7 @@ class SessionStore:
 
         if "results" in updates:
             update_fields.append(f"results = ${param_num}")
-            update_values.append(json.dumps(updates["results"]))
+            update_values.append(json.dumps(updates["results"], default=_json_safe_default))
             param_num += 1
 
         if "error" in updates:
@@ -366,6 +399,11 @@ class SessionStore:
                         logger.warning(f"Session {session_id[:8]}... not found in PostgreSQL")
                         return None
 
+                    try:
+                        warnings = row["warnings"] if row["warnings"] else []
+                    except Exception:
+                        warnings = []
+
                     # Convert row to dict
                     session_data = {
                         "id": str(row["id"]),
@@ -378,7 +416,7 @@ class SessionStore:
                         "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
                         "results": json.loads(row["results"]) if row["results"] else None,
                         "error": row["error"],
-                        "warnings": row["warnings"] if row["warnings"] else []
+                        "warnings": warnings
                     }
 
                     logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")

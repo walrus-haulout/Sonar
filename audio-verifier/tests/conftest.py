@@ -1,8 +1,15 @@
+import sys
+from pathlib import Path
+
 import pytest
 import numpy as np
 import soundfile as sf
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+
+# Ensure project root is on sys.path for direct module imports in tests
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 @pytest.fixture
@@ -292,6 +299,11 @@ def mock_session_store():
 def mock_audio_quality_checker():
     """Create mock AudioQualityChecker."""
     checker = AsyncMock()
+    # Provide scalar attributes used by _compute_quality_score
+    checker.MIN_DURATION = 1.0
+    checker.MAX_DURATION = 3600.0
+    checker.MIN_SAMPLE_RATE = 8000
+    checker.MAX_SILENCE_PERCENT = 30
     checker.check_audio_file = AsyncMock(return_value={
         "quality": {
             "passed": True,
@@ -321,6 +333,16 @@ def mock_audio_quality_checker():
 def mock_fingerprinter():
     """Create mock Fingerprinter."""
     fingerprinter = AsyncMock()
+    fingerprinter.check_copyright_from_path = AsyncMock(return_value={
+        "copyright": {
+            "checked": True,
+            "detected": False,
+            "confidence": 0.0,
+            "matches": [],
+            "passed": True
+        },
+        "errors": []
+    })
     fingerprinter.check_copyright = AsyncMock(return_value={
         "copyright": {
             "high_confidence_match": False,

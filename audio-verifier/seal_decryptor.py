@@ -60,11 +60,6 @@ class SealTimeoutError(SealDecryptionError):
     def __init__(self, message: str):
         super().__init__(message, error_type="timeout", http_status=504)
 
-# Configuration from environment
-WALRUS_AGGREGATOR_URL = os.getenv("WALRUS_AGGREGATOR_URL")
-WALRUS_AGGREGATOR_TOKEN = os.getenv("WALRUS_AGGREGATOR_TOKEN")
-SEAL_PACKAGE_ID = os.getenv("SEAL_PACKAGE_ID")
-
 
 async def decrypt_encrypted_blob(
     walrus_blob_id: str,
@@ -89,10 +84,12 @@ async def decrypt_encrypted_blob(
         ValueError: If configuration is invalid
         RuntimeError: If decryption fails
     """
-    # Validate basic configuration
-    if not WALRUS_AGGREGATOR_URL:
+    # Validate basic configuration (read fresh to honor test env overrides)
+    aggregator_url = os.getenv("WALRUS_AGGREGATOR_URL")
+    seal_package_id = os.getenv("SEAL_PACKAGE_ID")
+    if not aggregator_url:
         raise ValueError("WALRUS_AGGREGATOR_URL not configured")
-    if not SEAL_PACKAGE_ID:
+    if not seal_package_id:
         raise ValueError("SEAL_PACKAGE_ID not configured")
 
 
@@ -194,13 +191,15 @@ def _decrypt_sync(
 
 def _fetch_walrus_blob(blob_id: str) -> bytes:
     """Fetch encrypted blob from Walrus aggregator with retry logic for propagation delays."""
-    if not WALRUS_AGGREGATOR_URL:
+    aggregator_url = os.getenv("WALRUS_AGGREGATOR_URL")
+    aggregator_token = os.getenv("WALRUS_AGGREGATOR_TOKEN")
+    if not aggregator_url:
         raise RuntimeError("WALRUS_AGGREGATOR_URL environment variable not set")
-    url = f"{WALRUS_AGGREGATOR_URL.rstrip('/')}/v1/blobs/{blob_id}"
+    url = f"{aggregator_url.rstrip('/')}/v1/blobs/{blob_id}"
 
     headers = {}
-    if WALRUS_AGGREGATOR_TOKEN:
-        headers["Authorization"] = f"Bearer {WALRUS_AGGREGATOR_TOKEN}"
+    if aggregator_token:
+        headers["Authorization"] = f"Bearer {aggregator_token}"
 
     # Wait 15 seconds after upload for initial blob propagation
     logger.info(f"Waiting 15 seconds for blob {blob_id[:16]}... to propagate...")

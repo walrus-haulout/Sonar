@@ -9,7 +9,6 @@ import os
 import pytest
 import subprocess
 import time
-import importlib
 from unittest.mock import patch, MagicMock, AsyncMock, call
 import httpx
 
@@ -24,6 +23,7 @@ from seal_decryptor import (
     _is_envelope_format,
     _decrypt_with_seal_service,
     _decrypt_aes,
+    SealDecryptionError,
 )
 
 class TestConfigurationValidation:
@@ -47,7 +47,6 @@ class TestConfigurationValidation:
         """Test that SEAL_PACKAGE_ID is required."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "")
-        importlib.reload(seal_decryptor)
 
         with pytest.raises(ValueError, match="SEAL_PACKAGE_ID"):
             await seal_decryptor.decrypt_encrypted_blob(
@@ -114,7 +113,6 @@ class TestFetchWalrusBlob:
         """Test that fetch waits 15 seconds before first attempt."""
         # Setup
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        importlib.reload(seal_decryptor)
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -138,7 +136,6 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_retries_on_404(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch retries on 404 (blob propagation delay)."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        importlib.reload(seal_decryptor)
 
         mock_client = MagicMock()
         mock_response_404 = MagicMock()
@@ -172,7 +169,6 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_fails_after_max_retries(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch fails after 10 retries."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        importlib.reload(seal_decryptor)
 
         mock_client = MagicMock()
         mock_response_404 = MagicMock()
@@ -200,7 +196,6 @@ class TestFetchWalrusBlob:
     def test_fetch_blob_does_not_retry_on_500(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that fetch does NOT retry on 500 errors."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        importlib.reload(seal_decryptor)
 
         mock_client = MagicMock()
         mock_response_500 = MagicMock()
@@ -228,7 +223,6 @@ class TestFetchWalrusBlob:
         """Test that bearer token is included in request headers."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("WALRUS_AGGREGATOR_TOKEN", "token-123")
-        importlib.reload(seal_decryptor)
 
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -413,7 +407,7 @@ class TestDecryptSync:
         """Test that fetch failures are wrapped properly."""
         mock_fetch.side_effect = Exception("Walrus error")
 
-        with pytest.raises(RuntimeError, match="Failed to decrypt encrypted blob"):
+        with pytest.raises(SealDecryptionError, match="Failed to decrypt encrypted blob"):
             _decrypt_sync("blob-id", "encrypted-object-hex", "identity", "mock-session-key-data")
 
 
@@ -426,7 +420,6 @@ class TestDecryptEncryptedBlob:
         """Test that bytes are converted to hex before passing to sync function."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        importlib.reload(seal_decryptor)
 
         mock_decrypt.return_value = b'plaintext'
 
@@ -449,7 +442,6 @@ class TestDecryptEncryptedBlob:
         """Test that hex strings are passed through unchanged."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        importlib.reload(seal_decryptor)
 
         mock_decrypt.return_value = b'plaintext'
 
@@ -487,7 +479,6 @@ class TestTimeoutScenarios:
         """Test that async wrapper completes quickly."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
         monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123")
-        importlib.reload(seal_decryptor)
 
         mock_decrypt.return_value = b'plaintext'
 
@@ -500,7 +491,6 @@ class TestTimeoutScenarios:
     def test_walrus_fetch_timeout_bounded(self, mock_sleep, mock_client_class, monkeypatch):
         """Test that Walrus fetch timeout is bounded (not 350+ seconds)."""
         monkeypatch.setenv("WALRUS_AGGREGATOR_URL", "https://example.com")
-        importlib.reload(seal_decryptor)
 
         # Track that sleep is called with 30s delays
         sleep_times = []

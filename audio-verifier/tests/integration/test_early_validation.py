@@ -131,7 +131,7 @@ async def test_no_verbose_ffmpeg_output_in_logs(caplog):
 
     logger = logging.getLogger("audio_checker")
     # Capture logs at WARNING level
-    caplog.set_level(logging.WARNING, logger=logger)
+    caplog.set_level(logging.WARNING, logger=logger.name)
 
     # Note: Actual ffmpeg testing would require a corrupted file
     # This is more of a structural test

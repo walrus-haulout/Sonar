@@ -9,7 +9,7 @@ import pytest
 import httpx
 import json
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 import sys
 
 # Add parent directory to path
@@ -60,7 +60,7 @@ class TestDecryptWithSealService:
                 "plaintextHex": "48656c6c6f"  # "Hello" in hex
             }
 
-            mock_client = Mock()
+            mock_client = MagicMock()
             mock_client.post.return_value = mock_response
             mock_client.__enter__.return_value = mock_client
             mock_client.__exit__.return_value = None
@@ -100,7 +100,7 @@ class TestDecryptWithSealService:
                 "errorType": "authentication_failed"
             }
 
-            mock_client = Mock()
+            mock_client = MagicMock()
             mock_client.post.return_value = mock_response
             mock_client.__enter__.return_value = mock_client
             mock_client.__exit__.return_value = None
@@ -120,7 +120,7 @@ class TestDecryptWithSealService:
         with patch("seal_decryptor.httpx.Client") as mock_client_class:
             with patch("seal_decryptor.time.sleep"):  # Mock sleep to avoid delays
                 # Mock network error
-                mock_client = Mock()
+                mock_client = MagicMock()
                 mock_client.post.side_effect = httpx.ConnectError("Connection refused")
                 mock_client.__enter__.return_value = mock_client
                 mock_client.__exit__.return_value = None
@@ -143,7 +143,7 @@ class TestDecryptWithSealService:
         with patch("seal_decryptor.httpx.Client") as mock_client_class:
             with patch("seal_decryptor.time.sleep"):
                 # Mock timeout
-                mock_client = Mock()
+                mock_client = MagicMock()
                 mock_client.post.side_effect = httpx.TimeoutException("Request timeout")
                 mock_client.__enter__.return_value = mock_client
                 mock_client.__exit__.return_value = None
@@ -168,7 +168,7 @@ class TestDecryptWithSealService:
                 "plaintextHex": "INVALID_HEX_XYZ"
             }
 
-            mock_client = Mock()
+            mock_client = MagicMock()
             mock_client.post.return_value = mock_response
             mock_client.__enter__.return_value = mock_client
             mock_client.__exit__.return_value = None

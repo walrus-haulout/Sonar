@@ -315,10 +315,10 @@ class AudioQualityChecker:
             # Determine specific failure reason
             if clipping_detected:
                 result["failure_reason"] = "clipping_detected"
-            elif silence_percent >= self.MAX_SILENCE_PERCENT:
-                result["failure_reason"] = "excessive_silence"
             elif not volume_ok:
                 result["failure_reason"] = "volume_out_of_range"
+            elif silence_percent >= self.MAX_SILENCE_PERCENT:
+                result["failure_reason"] = "excessive_silence"
             elif sample_rate < self.MIN_SAMPLE_RATE:
                 result["failure_reason"] = "sample_rate_too_low"
             elif duration < self.MIN_DURATION or duration > self.MAX_DURATION:
@@ -560,9 +560,7 @@ class AudioQualityChecker:
                     warnings.add(f"MP3 decode warning: {line.strip()}")
 
             # Capture other decoder warnings
-            elif 'warning' in line_lower and any(
-                kw in line_lower for kw in ['header', 'frame', 'stream', 'decode']
-            ):
+            elif 'warning' in line_lower:
                 # Only add if it's not too verbose
                 if len(line) < 150:
                     warnings.add(f"Audio decode warning: {line.strip()}")

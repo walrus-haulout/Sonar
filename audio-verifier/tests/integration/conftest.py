@@ -1,13 +1,20 @@
 """Integration test fixtures for E2E testing."""
 
+import sys
+from pathlib import Path
+
 import pytest
 import numpy as np
 import soundfile as sf
-from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient, ASGITransport
 from contextlib import asynccontextmanager
 import io
+
+# Ensure project root is on import path for app modules (main, verification_pipeline)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from .fake_session_store import FakeSessionStore
 
@@ -150,9 +157,7 @@ async def test_client(
     integration_env,
     fake_session_store,
     mock_decrypt_encrypted_blob,
-    mock_openrouter_client,
-    mock_copyright_detector,
-    mock_audio_quality_checker
+    mock_openrouter_client
 ):
     """
     Create test client with dependency overrides.
@@ -164,11 +169,28 @@ async def test_client(
     - CopyrightDetector with mock
     - AudioQualityChecker with mock
     """
+    # Import modules after env vars are set to avoid stale globals
+    import importlib
+    import main
+    import verification_pipeline
+
+    importlib.reload(main)
+    importlib.reload(verification_pipeline)
+
     # Patch external modules and environment before importing app
     with patch("main.decrypt_encrypted_blob", new=mock_decrypt_encrypted_blob), \
-         patch("verification_pipeline.CopyrightDetector", return_value=mock_copyright_detector), \
-         patch("verification_pipeline.AudioQualityChecker", return_value=mock_audio_quality_checker), \
+         patch("verification_pipeline.CopyrightDetector.check_copyright_from_path", new=AsyncMock(return_value={
+             "copyright": {
+                 "checked": True,
+                 "detected": False,
+                 "confidence": 0.0,
+                 "matches": [],
+                 "passed": True
+             },
+             "errors": []
+         })), \
          patch("verification_pipeline.OpenAI", return_value=mock_openrouter_client), \
+         patch("main.upload_plaintext_to_walrus", new=AsyncMock(return_value="test-blob-id")), \
          patch("main.get_session_store", return_value=fake_session_store):
 
         from main import app
