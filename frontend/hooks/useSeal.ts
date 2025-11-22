@@ -7,8 +7,7 @@ import type { SuiClient } from '@mysten/sui/client';
 import {
   createSonarSealClient,
   createSession,
-  restoreSession,
-  getOrCreateSession,
+  clearSession,
   isSessionValid,
   encryptFile,
   decryptFile,
@@ -60,7 +59,7 @@ export function useSeal() {
   const threshold = useMemo(() => parseThreshold(RAW_SEAL_THRESHOLD), []);
   const hasKeyServersConfigured = keyServers.length > 0;
 
-  // Initialize SealClient once
+  // Initialize SealClient once and clear any cached sessions so each page load requires a new authorization
   useEffect(() => {
     if (!hasKeyServersConfigured) {
       console.warn(
@@ -80,43 +79,26 @@ export function useSeal() {
       setSealClient(client);
       setIsInitialized(true);
       setError(null);
+
+      // Clear any persisted session for this package so we always prompt for a fresh one on load
+      const packageId = CHAIN_CONFIG.packageId;
+      if (!packageId) {
+        console.warn('Cannot clear Seal session cache: CHAIN_CONFIG.packageId is missing');
+      } else {
+        clearSession(packageId).catch((err) => {
+          console.warn('Failed to clear cached Seal session on init:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to initialize Seal client:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize Seal');
     }
   }, [hasKeyServersConfigured, keyServers, threshold]);
 
-  // Try to restore session from cache when account is available
+  // Reset in-memory session when the connected wallet changes to avoid cross-account reuse
   useEffect(() => {
-    if (account?.address && sealClient && !sessionKey) {
-      restoreSessionFromCache();
-    }
-  }, [account?.address, sealClient]);
-
-  /**
-   * Restore session from IndexedDB cache
-   */
-  const restoreSessionFromCache = useCallback(async () => {
-    if (!sealClient || !hasKeyServersConfigured) return;
-
-    const packageId = CHAIN_CONFIG.packageId;
-    if (!packageId) {
-      console.warn('Cannot restore Seal session: CHAIN_CONFIG.packageId is missing');
-      return;
-    }
-
-    try {
-      const cached = await restoreSession(packageId, suiClient as SuiClient);
-      if (cached && isSessionValid(cached)) {
-        console.log('Restored Seal session from cache');
-        setSessionKey(cached);
-        setError(null);
-      }
-    } catch (err) {
-      console.warn('Failed to restore session from cache:', err);
-      // Not an error - just means no cached session
-    }
-  }, [sealClient]);
+    setSessionKey(null);
+  }, [account?.address]);
 
   /**
    * Create new session with wallet signature
@@ -174,6 +156,11 @@ export function useSeal() {
             const result = await options.signMessage(message);
             return { signature: result.signature };
           },
+        });
+
+        // Do not persist sessions between page loads; clear any cached copy immediately
+        clearSession(packageId).catch((err) => {
+          console.warn('Failed to clear cached Seal session after creation:', err);
         });
 
         setSessionKey(session);
@@ -250,9 +237,9 @@ export function useSeal() {
         throw new Error('No active session. Please create a session first.');
       }
 
-    const packageId = CHAIN_CONFIG.packageId;
-    if (!packageId) {
-      throw new Error('Blockchain contracts not configured (missing packageId)');
+      const packageId = CHAIN_CONFIG.packageId;
+      if (!packageId) {
+        throw new Error('Blockchain contracts not configured (missing packageId)');
       }
 
       setError(null);
@@ -324,7 +311,6 @@ export function useSeal() {
     createSession: createNewSession,
     getOrCreateSessionExport,
     isCurrentSessionValid,
-    restoreSession: restoreSessionFromCache,
     encrypt,
     decrypt,
 
