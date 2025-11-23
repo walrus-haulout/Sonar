@@ -31,6 +31,7 @@ class WalletSigner extends Signer {
     private signAndExecuteFn: (params: {
       transaction: Transaction;
     }) => Promise<any>,
+    private suiClient: any,
   ) {
     super();
   }
@@ -53,7 +54,35 @@ class WalletSigner extends Signer {
     transaction: Transaction;
     client: any;
   }): Promise<any> {
-    return this.signAndExecuteFn({ transaction: options.transaction });
+    // Execute transaction via wallet
+    const result = await this.signAndExecuteFn({
+      transaction: options.transaction,
+    });
+
+    // Fetch full transaction response from the chain
+    // The Walrus SDK expects a full TransactionResponse object
+    if (result.digest) {
+      try {
+        const txResponse = await this.suiClient.waitForTransaction({
+          digest: result.digest,
+          options: {
+            showEffects: true,
+            showObjectChanges: true,
+            showEvents: true,
+          },
+        });
+        return txResponse;
+      } catch (error) {
+        console.error(
+          "[WalletSigner] Failed to fetch transaction details:",
+          error,
+        );
+        // Return the basic result if fetching fails
+        return result;
+      }
+    }
+
+    return result;
   }
 
   getPublicKey(): any {
@@ -366,6 +395,7 @@ export function useWalrusParallelUpload() {
       const walletSigner = new WalletSigner(
         currentAccount.address,
         signAndExecute,
+        suiClient,
       );
 
       // Use SDK writeBlob which properly registers on-chain
