@@ -135,7 +135,10 @@ export const MAINNET_KEY_SERVERS = [
  * Environment detection
  */
 export const IS_BROWSER = typeof window !== "undefined";
-export const IS_NODE = typeof process !== "undefined" && process.versions?.node;
+export const IS_NODE =
+  typeof process !== "undefined" &&
+  typeof process.versions !== "undefined" &&
+  typeof process.versions.node !== "undefined";
 
 /**
  * Feature detection

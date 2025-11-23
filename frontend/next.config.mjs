@@ -4,39 +4,24 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '**.walrus.space',
+        protocol: "https",
+        hostname: "**.walrus.space",
       },
     ],
   },
   async redirects() {
     return [
       {
-        source: '/stats',
-        destination: '/tokenomics',
+        source: "/stats",
+        destination: "/tokenomics",
         permanent: true,
       },
     ];
   },
   experimental: {
     externalDir: true,
-    turbopack: {
-      resolveAlias: {
-        fs: false,
-        net: false,
-        tls: false,
-      },
-    },
   },
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      net: false,
-      tls: false,
-    };
-    return config;
-  },
+  turbopack: {},
 };
 
 export default nextConfig;

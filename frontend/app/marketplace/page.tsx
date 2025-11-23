@@ -1,15 +1,18 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Upload } from 'lucide-react';
-import { useDatasets, useFeaturedDatasets } from '@/hooks/useDatasets';
-import { DatasetCard } from '@/components/marketplace/DatasetCard';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { SonarButton } from '@/components/ui/SonarButton';
-import { SonarBackground } from '@/components/animations/SonarBackground';
-import { UploadWizard } from '@/components/upload/UploadWizard';
-import type { DatasetFilter } from '@/types/blockchain';
+import { useState } from "react";
+
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
+import { Upload } from "lucide-react";
+import { useDatasets, useFeaturedDatasets } from "@/hooks/useDatasets";
+import { DatasetCard } from "@/components/marketplace/DatasetCard";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { SonarButton } from "@/components/ui/SonarButton";
+import { SonarBackground } from "@/components/animations/SonarBackground";
+import { UploadWizard } from "@/components/upload/UploadWizard";
+import type { DatasetFilter } from "@/types/blockchain";
 
 /**
  * Marketplace Page
@@ -17,7 +20,7 @@ import type { DatasetFilter } from '@/types/blockchain';
  */
 export default function MarketplacePage() {
   const [filter, setFilter] = useState<DatasetFilter>({});
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [minQuality, setMinQuality] = useState<number>(0);
   const [showUploadWizard, setShowUploadWizard] = useState(false);
@@ -27,7 +30,20 @@ export default function MarketplacePage() {
   const { data: featured } = useFeaturedDatasets(6);
 
   // Available languages (hardcoded for now, could be fetched from API)
-  const availableLanguages = ['en', 'es', 'fr', 'de', 'ja', 'zh', 'ko', 'ar', 'ru', 'hi', 'it', 'pt'];
+  const availableLanguages = [
+    "en",
+    "es",
+    "fr",
+    "de",
+    "ja",
+    "zh",
+    "ko",
+    "ar",
+    "ru",
+    "hi",
+    "it",
+    "pt",
+  ];
 
   // Handle language filter toggle
   const toggleLanguage = (lang: string) => {
@@ -56,7 +72,7 @@ export default function MarketplacePage() {
     (dataset) =>
       !searchQuery ||
       dataset.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dataset.description.toLowerCase().includes(searchQuery.toLowerCase())
+      dataset.description.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -128,7 +144,7 @@ export default function MarketplacePage() {
                 {/* Quality Filter */}
                 <div className="mb-6">
                   <label className="block text-sm text-sonar-highlight-bright/70 mb-2">
-                    Minimum Quality: {minQuality > 0 ? minQuality : 'Any'}
+                    Minimum Quality: {minQuality > 0 ? minQuality : "Any"}
                   </label>
                   <input
                     type="range"
@@ -136,7 +152,9 @@ export default function MarketplacePage() {
                     max="10"
                     step="1"
                     value={minQuality}
-                    onChange={(e) => handleQualityChange(parseInt(e.target.value))}
+                    onChange={(e) =>
+                      handleQualityChange(parseInt(e.target.value))
+                    }
                     className="w-full accent-sonar-signal"
                   />
                   <div className="flex justify-between text-xs text-sonar-highlight-bright/50 mt-1">
@@ -171,13 +189,15 @@ export default function MarketplacePage() {
                 </div>
 
                 {/* Clear Filters */}
-                {(selectedLanguages.length > 0 || minQuality > 0 || searchQuery) && (
+                {(selectedLanguages.length > 0 ||
+                  minQuality > 0 ||
+                  searchQuery) && (
                   <SonarButton
                     variant="secondary"
                     onClick={() => {
                       setSelectedLanguages([]);
                       setMinQuality(0);
-                      setSearchQuery('');
+                      setSearchQuery("");
                       setFilter({});
                     }}
                     className="w-full text-sm"
@@ -194,7 +214,7 @@ export default function MarketplacePage() {
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-mono text-sonar-highlight">
                   {isLoading
-                    ? 'Loading...'
+                    ? "Loading..."
                     : `${filteredDatasets?.length || 0} Datasets`}
                 </h3>
 
@@ -239,13 +259,16 @@ export default function MarketplacePage() {
               )}
 
               {/* Dataset Grid */}
-              {!isLoading && !error && filteredDatasets && filteredDatasets.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filteredDatasets.map((dataset) => (
-                    <DatasetCard key={dataset.id} dataset={dataset} />
-                  ))}
-                </div>
-              )}
+              {!isLoading &&
+                !error &&
+                filteredDatasets &&
+                filteredDatasets.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredDatasets.map((dataset) => (
+                      <DatasetCard key={dataset.id} dataset={dataset} />
+                    ))}
+                  </div>
+                )}
             </div>
           </div>
         </div>

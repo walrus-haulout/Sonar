@@ -1,32 +1,37 @@
-'use client';
+"use client";
 
-import { useCurrentAccount } from '@mysten/dapp-kit';
-import { ConnectButton } from '@mysten/dapp-kit';
-import { useState } from 'react';
-import { UploadWizard } from '@/components/upload/UploadWizard';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { SonarBackground } from '@/components/animations/SonarBackground';
-import { Wallet } from 'lucide-react';
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
+
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { ConnectButton } from "@mysten/dapp-kit";
+import { useState } from "react";
+import { UploadWizard } from "@/components/upload/UploadWizard";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { SonarBackground } from "@/components/animations/SonarBackground";
+import { Wallet } from "lucide-react";
 
 export default function UploadPage() {
   const account = useCurrentAccount();
   const [isOpen, setIsOpen] = useState(true);
 
-  console.log('[UploadPage] 📊 Render:', {
+  console.log("[UploadPage] 📊 Render:", {
     timestamp: new Date().toISOString(),
     hasAccount: !!account,
-    accountAddress: account?.address || 'undefined',
+    accountAddress: account?.address || "undefined",
     isOpen,
   });
 
   const handleClose = () => {
-    console.log('[UploadPage] 🔔 handleClose called');
+    console.log("[UploadPage] 🔔 handleClose called");
     setIsOpen(false);
   };
 
   // If no account, show wallet connection prompt
   if (!account) {
-    console.log('[UploadPage] 📱 No wallet connected - showing connection prompt');
+    console.log(
+      "[UploadPage] 📱 No wallet connected - showing connection prompt",
+    );
     return (
       <main className="relative min-h-screen">
         <SonarBackground opacity={0.2} intensity={0.5} />
@@ -44,7 +49,8 @@ export default function UploadPage() {
                   Connect Your Wallet
                 </h1>
                 <p className="text-sonar-highlight/70">
-                  You need to connect your Sui wallet to upload datasets to SONAR Protocol
+                  You need to connect your Sui wallet to upload datasets to
+                  SONAR Protocol
                 </p>
               </div>
 
@@ -53,7 +59,8 @@ export default function UploadPage() {
               </div>
 
               <p className="text-xs text-sonar-highlight/50 pt-4">
-                Don't have a wallet? Install one of the supported Sui wallets to get started
+                Don't have a wallet? Install one of the supported Sui wallets to
+                get started
               </p>
             </GlassCard>
           </div>
@@ -62,12 +69,8 @@ export default function UploadPage() {
     );
   }
 
-  console.log('[UploadPage] ✨ Rendering UploadWizard fullscreen');
+  console.log("[UploadPage] ✨ Rendering UploadWizard fullscreen");
   return (
-    <UploadWizard
-      open={isOpen}
-      onOpenChange={handleClose}
-      fullscreen={true}
-    />
+    <UploadWizard open={isOpen} onOpenChange={handleClose} fullscreen={true} />
   );
 }
