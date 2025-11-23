@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 OPENROUTER_MODELS = {
     "TRANSCRIPTION": "openai/gpt-4o-audio-preview",  # GPT-4o Audio (best reliability)
     "TRANSCRIPTION_FALLBACK": "mistralai/voxtral-small-24b-2507",  # Voxtral (fallback)
-    "ANALYSIS": "google/gemini-3-pro-preview",  # Gemini 3 Pro (latest model)
+    "ANALYSIS": "google/gemini-2.5-flash",  # Gemini 2.5 Flash (proven stable)
 }
 
 
