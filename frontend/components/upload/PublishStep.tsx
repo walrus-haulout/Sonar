@@ -165,8 +165,8 @@ export function PublishStep({
 
       const marketplaceSharedRef = tx.object(CHAIN_CONFIG.marketplaceId);
 
-      // Check if multi-file dataset
-      const isMultiFile = walrusUpload.files && walrusUpload.files.length > 0;
+      // Check if multi-file dataset (2+ files)
+      const isMultiFile = walrusUpload.files && walrusUpload.files.length > 1;
 
       if (isMultiFile) {
         // Multi-file dataset: Call submit_audio_dataset

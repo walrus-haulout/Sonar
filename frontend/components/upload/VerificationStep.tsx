@@ -29,7 +29,10 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { RadarScanTarget } from "@/components/animations/RadarScanTarget";
 import { DataAccessNotice } from "@/components/upload/DataAccessNotice";
 import { VerificationFeedback } from "@/components/upload/VerificationFeedback";
-import { VerificationActivityFeed, ActivityLogEntry } from "@/components/upload/VerificationActivityFeed";
+import {
+  VerificationActivityFeed,
+  ActivityLogEntry,
+} from "@/components/upload/VerificationActivityFeed";
 
 /**
  * Extract error message from unknown error type
@@ -255,6 +258,7 @@ export function VerificationStep({
   >("idle");
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isConfirmingSession, setIsConfirmingSession] = useState(false);
   const [dataAccessAcknowledged, setDataAccessAcknowledged] = useState(false);
   const [stages, setStages] = useState<StageInfo[]>([
     { name: "quality", status: "pending", progress: 0 },
@@ -270,7 +274,9 @@ export function VerificationStep({
   const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
-  const [stageStartTimes, setStageStartTimes] = useState<Record<string, number>>({});
+  const [stageStartTimes, setStageStartTimes] = useState<
+    Record<string, number>
+  >({});
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
   const isAuthorizingRef = useRef(false); // Guard against duplicate authorization attempts
@@ -278,7 +284,12 @@ export function VerificationStep({
   const logIdCounter = useRef(0);
 
   // Helper to add activity log
-  const addLog = (stage: string, message: string, type: ActivityLogEntry["type"], progress?: number) => {
+  const addLog = (
+    stage: string,
+    message: string,
+    type: ActivityLogEntry["type"],
+    progress?: number,
+  ) => {
     const log: ActivityLogEntry = {
       id: `log-${logIdCounter.current++}`,
       timestamp: Date.now(),
@@ -306,44 +317,72 @@ export function VerificationStep({
       hasExistingVerification: !!existingVerification,
       existingVerificationState: existingVerification?.state,
       hasStartedRefValue: hasStartedRef.current,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     // Prevent duplicate requests in React 18 Strict Mode
     if (hasStartedRef.current) {
-      console.log("[VerificationStep] 🛑 Already started (hasStartedRef=true), skipping mount logic");
-      addLog("DEBUG", "Mount logic skipped - already started (React Strict Mode)", "info");
+      console.log(
+        "[VerificationStep] 🛑 Already started (hasStartedRef=true), skipping mount logic",
+      );
+      addLog(
+        "DEBUG",
+        "Mount logic skipped - already started (React Strict Mode)",
+        "info",
+      );
       return;
     }
 
     hasStartedRef.current = true;
     console.log("[VerificationStep] ✅ Setting hasStartedRef=true");
-    
+
     // Skip if verification already completed (from localStorage restoration)
-    console.log("[VerificationStep] 🔍 DEBUG - Checking if should skip verification:", {
-      existingVerificationExists: !!existingVerification,
-      existingVerificationState: existingVerification?.state,
-      shouldSkip: existingVerification?.state === 'completed',
-      existingVerificationFull: existingVerification ? JSON.stringify(existingVerification, null, 2) : 'null',
-      timestamp: new Date().toISOString()
-    });
-    
-    if (existingVerification?.state === 'completed') {
-      console.log("[VerificationStep] ⏭️ Verification already completed, auto-advancing...");
-      console.log("[VerificationStep] 📊 Existing verification result:", JSON.stringify(existingVerification, null, 2));
-      addLog("RESTORE", "✅ Verification already completed from previous session", "success");
-      addLog("RESTORE", `Safety: ${existingVerification.safetyPassed ? 'PASSED' : 'FAILED'}, Quality: ${existingVerification.qualityScore || 'N/A'}`, "success");
+    console.log(
+      "[VerificationStep] 🔍 DEBUG - Checking if should skip verification:",
+      {
+        existingVerificationExists: !!existingVerification,
+        existingVerificationState: existingVerification?.state,
+        shouldSkip: existingVerification?.state === "completed",
+        existingVerificationFull: existingVerification
+          ? JSON.stringify(existingVerification, null, 2)
+          : "null",
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    if (existingVerification?.state === "completed") {
+      console.log(
+        "[VerificationStep] ⏭️ Verification already completed, auto-advancing...",
+      );
+      console.log(
+        "[VerificationStep] 📊 Existing verification result:",
+        JSON.stringify(existingVerification, null, 2),
+      );
+      addLog(
+        "RESTORE",
+        "✅ Verification already completed from previous session",
+        "success",
+      );
+      addLog(
+        "RESTORE",
+        `Safety: ${existingVerification.safetyPassed ? "PASSED" : "FAILED"}, Quality: ${existingVerification.qualityScore || "N/A"}`,
+        "success",
+      );
       setResult(existingVerification);
       setVerificationState("completed");
       // Auto-advance immediately
       setTimeout(() => {
-        console.log("[VerificationStep] 🚀 Calling onVerificationComplete with existing result");
+        console.log(
+          "[VerificationStep] 🚀 Calling onVerificationComplete with existing result",
+        );
         onVerificationComplete(existingVerification);
       }, 500);
       return;
     }
-    
-    console.log("[VerificationStep] 🆕 No existing verification, starting fresh verification process");
+
+    console.log(
+      "[VerificationStep] 🆕 No existing verification, starting fresh verification process",
+    );
     addLog("INIT", "Initializing verification process...", "info");
     // Move to waiting-auth state - user needs to authorize first
     setVerificationState("waiting-auth");
@@ -368,14 +407,17 @@ export function VerificationStep({
    * Reuses existing valid session if available, creates new one only if needed
    */
   const handleAuthorizeVerification = async () => {
-    console.log("[VerificationStep] 🔍 DEBUG - handleAuthorizeVerification called:", {
-      isAuthorizingRefValue: isAuthorizingRef.current,
-      verificationState,
-      hasExistingVerification: !!existingVerification,
-      existingVerificationState: existingVerification?.state,
-      timestamp: new Date().toISOString()
-    });
-    
+    console.log(
+      "[VerificationStep] 🔍 DEBUG - handleAuthorizeVerification called:",
+      {
+        isAuthorizingRefValue: isAuthorizingRef.current,
+        verificationState,
+        hasExistingVerification: !!existingVerification,
+        existingVerificationState: existingVerification?.state,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     // Guard against duplicate authorization attempts
     if (isAuthorizingRef.current) {
       console.log(
@@ -386,9 +428,15 @@ export function VerificationStep({
     }
 
     // Warn if we're requesting auth when verification already completed
-    if (existingVerification?.state === 'completed') {
-      console.warn("[VerificationStep] ⚠️ WARNING: Requesting authorization when verification already completed!");
-      addLog("WARN", "⚠️ Authorization requested but verification already completed - this should not happen!", "warning");
+    if (existingVerification?.state === "completed") {
+      console.warn(
+        "[VerificationStep] ⚠️ WARNING: Requesting authorization when verification already completed!",
+      );
+      addLog(
+        "WARN",
+        "⚠️ Authorization requested but verification already completed - this should not happen!",
+        "warning",
+      );
     }
 
     isAuthorizingRef.current = true;
@@ -410,6 +458,7 @@ export function VerificationStep({
         setVerificationState("running");
         setIsCreatingSession(false);
         isAuthorizingRef.current = false;
+        addLog("AUTH", "✓ Using cached session", "success");
         startVerification();
         return;
       }
@@ -426,9 +475,22 @@ export function VerificationStep({
 
       console.log("[VerificationStep] Session obtained (cached or new)");
       setSessionKeyExport(exported);
-      setVerificationState("running");
       setIsCreatingSession(false);
+      setIsConfirmingSession(true);
       isAuthorizingRef.current = false;
+      addLog("AUTH", "Session created, confirming on-chain...", "progress");
+
+      // Wait for session to be confirmed on-chain before starting verification
+      // This prevents "session wasn't started" errors due to network delays
+      console.log("[VerificationStep] Waiting 5s for session confirmation...");
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      console.log(
+        "[VerificationStep] Session confirmed, starting verification",
+      );
+
+      setIsConfirmingSession(false);
+      setVerificationState("running");
+      addLog("AUTH", "✓ Session confirmed, starting verification", "success");
 
       // Start verification with session data
       startVerification();
@@ -454,6 +516,7 @@ export function VerificationStep({
 
       setErrorMessage(displayError);
       setIsCreatingSession(false);
+      setIsConfirmingSession(false);
       isAuthorizingRef.current = false;
     }
   };
@@ -465,24 +528,41 @@ export function VerificationStep({
       hasExistingVerification: !!existingVerification,
       existingVerificationState: existingVerification?.state,
       hasSessionKeyExport: !!sessionKeyExport,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     // Guard against duplicate verification attempts
     if (isVerifyingRef.current) {
       console.log(
         "[VerificationStep] Verification already in progress, skipping duplicate",
       );
-      addLog("DEBUG", "Verification already in progress, skipping duplicate", "warning");
+      addLog(
+        "DEBUG",
+        "Verification already in progress, skipping duplicate",
+        "warning",
+      );
       return;
     }
 
     // ERROR if we're starting verification when already completed
-    if (existingVerification?.state === 'completed') {
-      console.error("[VerificationStep] ❌ ERROR: Starting verification when already completed!");
-      console.error("[VerificationStep] Existing verification:", JSON.stringify(existingVerification, null, 2));
-      addLog("ERROR", "❌ Attempting to start verification when already completed - THIS IS A BUG!", "error");
-      addLog("ERROR", `Existing result: Safety ${existingVerification.safetyPassed ? 'PASSED' : 'FAILED'}`, "error");
+    if (existingVerification?.state === "completed") {
+      console.error(
+        "[VerificationStep] ❌ ERROR: Starting verification when already completed!",
+      );
+      console.error(
+        "[VerificationStep] Existing verification:",
+        JSON.stringify(existingVerification, null, 2),
+      );
+      addLog(
+        "ERROR",
+        "❌ Attempting to start verification when already completed - THIS IS A BUG!",
+        "error",
+      );
+      addLog(
+        "ERROR",
+        `Existing result: Safety ${existingVerification.safetyPassed ? "PASSED" : "FAILED"}`,
+        "error",
+      );
       // Don't return - let it continue to surface the bug
     }
 
@@ -575,7 +655,9 @@ export function VerificationStep({
         insights: [`Successfully verified ${files.length} file(s)`],
         updatedAt: Date.now(),
       };
-      console.log("[VerificationStep] ✅ Verification SUCCESS! Calling onVerificationComplete");
+      console.log(
+        "[VerificationStep] ✅ Verification SUCCESS! Calling onVerificationComplete",
+      );
       console.log("[VerificationStep] Result summary:", {
         id: finalResult.id,
         state: finalResult.state,
@@ -648,7 +730,11 @@ export function VerificationStep({
       }
 
       console.log("[VerificationStep] Sending verification request to backend");
-      addLog("DECRYPT", "Preparing encrypted blob for verification...", "progress");
+      addLog(
+        "DECRYPT",
+        "Preparing encrypted blob for verification...",
+        "progress",
+      );
 
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
@@ -712,7 +798,7 @@ export function VerificationStep({
       // Backend will handle blob fetch and decryption
       // We only need to send sessionKeyData for backend to decrypt
       addLog("DECRYPT", "Fetching encrypted blob from Walrus...", "progress");
-      
+
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
@@ -727,8 +813,12 @@ export function VerificationStep({
           sessionKeyData: sessionKeyJson,
         }),
       });
-      
-      addLog("DECRYPT", "Blob fetched, decrypting with SEAL key servers...", "progress");
+
+      addLog(
+        "DECRYPT",
+        "Blob fetched, decrypting with SEAL key servers...",
+        "progress",
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -821,12 +911,14 @@ export function VerificationStep({
   const startPollingEncrypted = (sessionObjectId: string) => {
     // Guard against duplicate polling intervals (can happen in React Strict Mode)
     if (pollingIntervalRef.current) {
-      console.log("[VerificationStep] Polling already in progress, skipping duplicate");
+      console.log(
+        "[VerificationStep] Polling already in progress, skipping duplicate",
+      );
       return;
     }
-    
+
     addLog("VERIFY", "Starting verification pipeline...", "progress");
-    
+
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {
@@ -866,9 +958,17 @@ export function VerificationStep({
 
         // Track stage start times and log transitions
         if (currentStage && !stageStartTimes[currentStage]) {
-          setStageStartTimes((prev) => ({ ...prev, [currentStage]: Date.now() }));
+          setStageStartTimes((prev) => ({
+            ...prev,
+            [currentStage]: Date.now(),
+          }));
           if (stageMessages[currentStage]) {
-            addLog(currentStage.toUpperCase(), stageMessages[currentStage], "progress", progress);
+            addLog(
+              currentStage.toUpperCase(),
+              stageMessages[currentStage],
+              "progress",
+              progress,
+            );
           }
         }
 
@@ -887,7 +987,11 @@ export function VerificationStep({
           // Check if approved
           if (!approved) {
             // Verification failed validation
-            addLog("FAILED", errors[0] || "Verification failed checks", "error");
+            addLog(
+              "FAILED",
+              errors[0] || "Verification failed checks",
+              "error",
+            );
             setVerificationState("failed");
             setErrorMessage(
               errors[0] ||
@@ -899,9 +1003,17 @@ export function VerificationStep({
           }
 
           // Verification passed
-          addLog("COMPLETE", `Verification completed! Quality score: ${qualityScore}%`, "success");
-          addLog("COMPLETE", `Suggested price: ${suggestedPrice.toFixed(2)} SUI`, "success");
-          
+          addLog(
+            "COMPLETE",
+            `Verification completed! Quality score: ${qualityScore}%`,
+            "success",
+          );
+          addLog(
+            "COMPLETE",
+            `Suggested price: ${suggestedPrice.toFixed(2)} SUI`,
+            "success",
+          );
+
           const finalResult: VerificationResult = {
             id: sessionObjectId,
             state: "completed",
@@ -925,7 +1037,9 @@ export function VerificationStep({
             qualityBreakdown: session.qualityBreakdown,
           };
 
-          console.log("[VerificationStep] ✅ Verification SUCCESS (polling)! Calling onVerificationComplete");
+          console.log(
+            "[VerificationStep] ✅ Verification SUCCESS (polling)! Calling onVerificationComplete",
+          );
           console.log("[VerificationStep] Result summary:", {
             id: finalResult.id,
             state: finalResult.state,
@@ -956,10 +1070,12 @@ export function VerificationStep({
   const startPolling = (id: string, files: AudioFile[], fileIndex: number) => {
     // Guard against duplicate polling intervals (can happen in React Strict Mode)
     if (pollingIntervalRef.current) {
-      console.log("[VerificationStep] Polling already in progress, skipping duplicate");
+      console.log(
+        "[VerificationStep] Polling already in progress, skipping duplicate",
+      );
       return;
     }
-    
+
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {
@@ -1122,10 +1238,18 @@ export function VerificationStep({
             </p>
             <SonarButton
               onClick={handleAuthorizeVerification}
-              disabled={isCreatingSession || !dataAccessAcknowledged}
+              disabled={
+                isCreatingSession ||
+                isConfirmingSession ||
+                !dataAccessAcknowledged
+              }
               className="w-full"
             >
-              {isCreatingSession ? "Signing..." : "Sign & Authorize"}
+              {isCreatingSession
+                ? "Signing..."
+                : isConfirmingSession
+                  ? "Confirming session..."
+                  : "Sign & Authorize"}
             </SonarButton>
             {errorMessage && (
               <div className="mt-4 p-3 rounded-sonar bg-sonar-coral/10 border border-sonar-coral/20">
@@ -1275,14 +1399,29 @@ export function VerificationStep({
                 </p>
                 <div className="space-y-3">
                   {[
-                    { label: "Clarity", component: result.analysis.qualityAnalysis.clarity },
-                    { label: "Content Value", component: result.analysis.qualityAnalysis.contentValue },
-                    { label: "Metadata Accuracy", component: result.analysis.qualityAnalysis.metadataAccuracy },
-                    { label: "Completeness", component: result.analysis.qualityAnalysis.completeness },
+                    {
+                      label: "Clarity",
+                      component: result.analysis.qualityAnalysis.clarity,
+                    },
+                    {
+                      label: "Content Value",
+                      component: result.analysis.qualityAnalysis.contentValue,
+                    },
+                    {
+                      label: "Metadata Accuracy",
+                      component:
+                        result.analysis.qualityAnalysis.metadataAccuracy,
+                    },
+                    {
+                      label: "Completeness",
+                      component: result.analysis.qualityAnalysis.completeness,
+                    },
                   ].map(({ label, component }) => (
                     <div key={label} className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-sonar-highlight/70">{label}</span>
+                        <span className="text-xs text-sonar-highlight/70">
+                          {label}
+                        </span>
                         <span className="text-sm font-mono font-semibold text-sonar-signal">
                           {Math.round(component.score * 100)}%
                         </span>
@@ -1311,19 +1450,33 @@ export function VerificationStep({
                 <div className="space-y-2 text-sm text-sonar-highlight/80">
                   <div className="flex justify-between">
                     <span>Base Price:</span>
-                    <span className="font-mono">{result.analysis.priceAnalysis.basePrice.toFixed(2)} SUI</span>
+                    <span className="font-mono">
+                      {result.analysis.priceAnalysis.basePrice.toFixed(2)} SUI
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Quality Multiplier:</span>
-                    <span className="font-mono">{result.analysis.priceAnalysis.qualityMultiplier.toFixed(2)}×</span>
+                    <span className="font-mono">
+                      {result.analysis.priceAnalysis.qualityMultiplier.toFixed(
+                        2,
+                      )}
+                      ×
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Rarity Multiplier:</span>
-                    <span className="font-mono">{result.analysis.priceAnalysis.rarityMultiplier.toFixed(2)}×</span>
+                    <span className="font-mono">
+                      {result.analysis.priceAnalysis.rarityMultiplier.toFixed(
+                        2,
+                      )}
+                      ×
+                    </span>
                   </div>
                   <div className="border-t border-sonar-blue/30 pt-2 mt-2 flex justify-between font-semibold">
                     <span>Final Price:</span>
-                    <span className="font-mono text-sonar-signal">{result.analysis.priceAnalysis.finalPrice.toFixed(2)} SUI</span>
+                    <span className="font-mono text-sonar-signal">
+                      {result.analysis.priceAnalysis.finalPrice.toFixed(2)} SUI
+                    </span>
                   </div>
                   <p className="text-xs text-sonar-highlight/60 italic mt-3">
                     {result.analysis.priceAnalysis.breakdown}
@@ -1333,39 +1486,48 @@ export function VerificationStep({
             )}
 
             {/* Per-File Analysis */}
-            {result.analysis?.fileAnalyses && result.analysis.fileAnalyses.length > 0 && (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
-                  Per-File Analysis
-                </p>
-                {result.analysis.fileAnalyses.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20 space-y-2"
-                  >
-                    <div className="flex items-start justify-between">
-                      <p className="font-mono text-sm font-semibold text-sonar-highlight">
-                        {file.title}
+            {result.analysis?.fileAnalyses &&
+              result.analysis.fileAnalyses.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
+                    Per-File Analysis
+                  </p>
+                  {result.analysis.fileAnalyses.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20 space-y-2"
+                    >
+                      <div className="flex items-start justify-between">
+                        <p className="font-mono text-sm font-semibold text-sonar-highlight">
+                          {file.title}
+                        </p>
+                        <span className="text-sm font-mono font-bold text-sonar-signal">
+                          {Math.round(file.score * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-sonar-highlight/70">
+                        {file.summary}
                       </p>
-                      <span className="text-sm font-mono font-bold text-sonar-signal">
-                        {Math.round(file.score * 100)}%
-                      </span>
+                      {file.strengths && file.strengths.length > 0 && (
+                        <div className="text-xs text-sonar-highlight/70">
+                          <span className="font-semibold text-sonar-signal">
+                            Strengths:
+                          </span>{" "}
+                          {file.strengths.join(", ")}
+                        </div>
+                      )}
+                      {file.concerns && file.concerns.length > 0 && (
+                        <div className="text-xs text-sonar-highlight/70">
+                          <span className="font-semibold text-sonar-coral">
+                            Concerns:
+                          </span>{" "}
+                          {file.concerns.join(", ")}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-sonar-highlight/70">{file.summary}</p>
-                    {file.strengths && file.strengths.length > 0 && (
-                      <div className="text-xs text-sonar-highlight/70">
-                        <span className="font-semibold text-sonar-signal">Strengths:</span> {file.strengths.join(", ")}
-                      </div>
-                    )}
-                    {file.concerns && file.concerns.length > 0 && (
-                      <div className="text-xs text-sonar-highlight/70">
-                        <span className="font-semibold text-sonar-coral">Concerns:</span> {file.concerns.join(", ")}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
 
             {/* Recommendations */}
             {result.analysis?.recommendations && (
@@ -1373,65 +1535,99 @@ export function VerificationStep({
                 <p className="text-sm font-mono font-semibold text-sonar-highlight-bright">
                   Recommendations
                 </p>
-                {typeof result.analysis.recommendations === "object" && !Array.isArray(result.analysis.recommendations) ? (
+                {typeof result.analysis.recommendations === "object" &&
+                !Array.isArray(result.analysis.recommendations) ? (
                   // Categorized recommendations
                   <div className="space-y-3">
-                    {result.analysis.recommendations.critical && result.analysis.recommendations.critical.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-sonar-coral mb-2">🔴 Critical:</p>
-                        <ul className="space-y-1">
-                          {result.analysis.recommendations.critical.map((rec, idx) => (
-                            <li key={idx} className="text-xs text-sonar-highlight/70 flex items-start space-x-2">
-                              <span className="text-sonar-coral">→</span>
-                              <span>{rec}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {result.analysis.recommendations.suggested && result.analysis.recommendations.suggested.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-sonar-highlight-bright mb-2">🟡 Suggested:</p>
-                        <ul className="space-y-1">
-                          {result.analysis.recommendations.suggested.map((rec, idx) => (
-                            <li key={idx} className="text-xs text-sonar-highlight/70 flex items-start space-x-2">
-                              <span className="text-sonar-signal">→</span>
-                              <span>{rec}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {result.analysis.recommendations.optional && result.analysis.recommendations.optional.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-sonar-highlight/70 mb-2">⚪ Optional:</p>
-                        <ul className="space-y-1">
-                          {result.analysis.recommendations.optional.map((rec, idx) => (
-                            <li key={idx} className="text-xs text-sonar-highlight/60 flex items-start space-x-2">
-                              <span className="text-sonar-highlight/50">→</span>
-                              <span>{rec}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {result.analysis.recommendations.critical &&
+                      result.analysis.recommendations.critical.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-sonar-coral mb-2">
+                            🔴 Critical:
+                          </p>
+                          <ul className="space-y-1">
+                            {result.analysis.recommendations.critical.map(
+                              (rec, idx) => (
+                                <li
+                                  key={idx}
+                                  className="text-xs text-sonar-highlight/70 flex items-start space-x-2"
+                                >
+                                  <span className="text-sonar-coral">→</span>
+                                  <span>{rec}</span>
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    {result.analysis.recommendations.suggested &&
+                      result.analysis.recommendations.suggested.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-sonar-highlight-bright mb-2">
+                            🟡 Suggested:
+                          </p>
+                          <ul className="space-y-1">
+                            {result.analysis.recommendations.suggested.map(
+                              (rec, idx) => (
+                                <li
+                                  key={idx}
+                                  className="text-xs text-sonar-highlight/70 flex items-start space-x-2"
+                                >
+                                  <span className="text-sonar-signal">→</span>
+                                  <span>{rec}</span>
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    {result.analysis.recommendations.optional &&
+                      result.analysis.recommendations.optional.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-sonar-highlight/70 mb-2">
+                            ⚪ Optional:
+                          </p>
+                          <ul className="space-y-1">
+                            {result.analysis.recommendations.optional.map(
+                              (rec, idx) => (
+                                <li
+                                  key={idx}
+                                  className="text-xs text-sonar-highlight/60 flex items-start space-x-2"
+                                >
+                                  <span className="text-sonar-highlight/50">
+                                    →
+                                  </span>
+                                  <span>{rec}</span>
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
                   </div>
                 ) : (
                   // Flat recommendations (fallback)
                   <ul className="space-y-2">
-                    {(result.analysis.recommendations as string[]).map((rec, idx) => (
-                      <li key={idx} className="flex items-start space-x-2 text-xs text-sonar-highlight/70">
-                        <span className="text-sonar-signal">•</span>
-                        <span>{rec}</span>
-                      </li>
-                    ))}
+                    {(result.analysis.recommendations as string[]).map(
+                      (rec, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start space-x-2 text-xs text-sonar-highlight/70"
+                        >
+                          <span className="text-sonar-signal">•</span>
+                          <span>{rec}</span>
+                        </li>
+                      ),
+                    )}
                   </ul>
                 )}
               </div>
             )}
 
             {/* Processing Details */}
-            {(result.transcriptionDetails || result.categorizationValidation || result.qualityBreakdown) && (
+            {(result.transcriptionDetails ||
+              result.categorizationValidation ||
+              result.qualityBreakdown) && (
               <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-aqua/20">
                 <p className="text-sm font-mono font-semibold text-sonar-highlight-bright mb-3">
                   Processing Details
@@ -1440,22 +1636,32 @@ export function VerificationStep({
                   {/* Transcription Stats */}
                   {result.transcriptionDetails && (
                     <div className="space-y-2">
-                      <p className="font-mono text-sonar-aqua/80 font-semibold">TRANSCRIPTION</p>
+                      <p className="font-mono text-sonar-aqua/80 font-semibold">
+                        TRANSCRIPTION
+                      </p>
                       <div className="space-y-1 text-sonar-highlight/70">
                         <div className="flex justify-between">
                           <span>Speakers detected:</span>
-                          <span className="text-sonar-highlight">{result.transcriptionDetails.speakerCount}</span>
+                          <span className="text-sonar-highlight">
+                            {result.transcriptionDetails.speakerCount}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Sound annotations:</span>
-                          <span className="text-sonar-highlight">{result.transcriptionDetails.annotationCount}</span>
+                          <span className="text-sonar-highlight">
+                            {result.transcriptionDetails.annotationCount}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span>Transcript length:</span>
-                          <span className="text-sonar-highlight">{result.transcriptionDetails.transcriptLength} chars</span>
+                          <span className="text-sonar-highlight">
+                            {result.transcriptionDetails.transcriptLength} chars
+                          </span>
                         </div>
                         {result.transcriptionDetails.hasUnintelligible && (
-                          <p className="text-sonar-signal italic">Contains unintelligible sections</p>
+                          <p className="text-sonar-signal italic">
+                            Contains unintelligible sections
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1464,50 +1670,75 @@ export function VerificationStep({
                   {/* Quality Breakdown */}
                   {result.qualityBreakdown && (
                     <div className="space-y-2">
-                      <p className="font-mono text-sonar-aqua/80 font-semibold">QUALITY ANALYSIS</p>
+                      <p className="font-mono text-sonar-aqua/80 font-semibold">
+                        QUALITY ANALYSIS
+                      </p>
                       <div className="space-y-1 text-sonar-highlight/70">
-                        {result.qualityBreakdown.clarity !== null && result.qualityBreakdown.clarity !== undefined && (
-                          <div className="flex justify-between">
-                            <span>Clarity:</span>
-                            <span className="text-sonar-highlight">{result.qualityBreakdown.clarity}/10</span>
-                          </div>
-                        )}
-                        {result.qualityBreakdown.contentValue !== null && result.qualityBreakdown.contentValue !== undefined && (
-                          <div className="flex justify-between">
-                            <span>Content Value:</span>
-                            <span className="text-sonar-highlight">{result.qualityBreakdown.contentValue}/10</span>
-                          </div>
-                        )}
-                        {result.qualityBreakdown.metadataAccuracy !== null && result.qualityBreakdown.metadataAccuracy !== undefined && (
-                          <div className="flex justify-between">
-                            <span>Tag Accuracy:</span>
-                            <span className="text-sonar-highlight">{result.qualityBreakdown.metadataAccuracy}/10</span>
-                          </div>
-                        )}
-                        {result.qualityBreakdown.completeness !== null && result.qualityBreakdown.completeness !== undefined && (
-                          <div className="flex justify-between">
-                            <span>Completeness:</span>
-                            <span className="text-sonar-highlight">{result.qualityBreakdown.completeness}/10</span>
-                          </div>
-                        )}
+                        {result.qualityBreakdown.clarity !== null &&
+                          result.qualityBreakdown.clarity !== undefined && (
+                            <div className="flex justify-between">
+                              <span>Clarity:</span>
+                              <span className="text-sonar-highlight">
+                                {result.qualityBreakdown.clarity}/10
+                              </span>
+                            </div>
+                          )}
+                        {result.qualityBreakdown.contentValue !== null &&
+                          result.qualityBreakdown.contentValue !==
+                            undefined && (
+                            <div className="flex justify-between">
+                              <span>Content Value:</span>
+                              <span className="text-sonar-highlight">
+                                {result.qualityBreakdown.contentValue}/10
+                              </span>
+                            </div>
+                          )}
+                        {result.qualityBreakdown.metadataAccuracy !== null &&
+                          result.qualityBreakdown.metadataAccuracy !==
+                            undefined && (
+                            <div className="flex justify-between">
+                              <span>Tag Accuracy:</span>
+                              <span className="text-sonar-highlight">
+                                {result.qualityBreakdown.metadataAccuracy}/10
+                              </span>
+                            </div>
+                          )}
+                        {result.qualityBreakdown.completeness !== null &&
+                          result.qualityBreakdown.completeness !==
+                            undefined && (
+                            <div className="flex justify-between">
+                              <span>Completeness:</span>
+                              <span className="text-sonar-highlight">
+                                {result.qualityBreakdown.completeness}/10
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
 
                   {/* Categorization Validation */}
-                  {result.categorizationValidation && result.categorizationValidation.hasIssues && (
-                    <div className="space-y-2 md:col-span-2">
-                      <p className="font-mono text-sonar-signal/80 font-semibold">CATEGORIZATION ISSUES</p>
-                      <div className="bg-sonar-abyss/50 p-2 rounded space-y-1">
-                        {result.categorizationValidation.concerns.map((concern: string, idx: number) => (
-                          <div key={idx} className="flex items-start space-x-2 text-sonar-highlight/70">
-                            <span className="text-sonar-signal">!</span>
-                            <span>{concern}</span>
-                          </div>
-                        ))}
+                  {result.categorizationValidation &&
+                    result.categorizationValidation.hasIssues && (
+                      <div className="space-y-2 md:col-span-2">
+                        <p className="font-mono text-sonar-signal/80 font-semibold">
+                          CATEGORIZATION ISSUES
+                        </p>
+                        <div className="bg-sonar-abyss/50 p-2 rounded space-y-1">
+                          {result.categorizationValidation.concerns.map(
+                            (concern: string, idx: number) => (
+                              <div
+                                key={idx}
+                                className="flex items-start space-x-2 text-sonar-highlight/70"
+                              >
+                                <span className="text-sonar-signal">!</span>
+                                <span>{concern}</span>
+                              </div>
+                            ),
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </div>
             )}
@@ -1520,32 +1751,43 @@ export function VerificationStep({
                 </p>
                 <div className="max-h-96 overflow-y-auto p-3 bg-sonar-abyss/50 rounded">
                   <div className="space-y-1 text-sm leading-relaxed">
-                    {result.transcript.split('\n').map((line, idx) => {
+                    {result.transcript.split("\n").map((line, idx) => {
                       // Detect speaker labels (e.g., "Speaker 1:", "John:", etc.)
-                      const isSpeaker = /^[A-Z][a-zA-Z0-9\s]*\d*:/.test(line.trim());
-                      
+                      const isSpeaker = /^[A-Z][a-zA-Z0-9\s]*\d*:/.test(
+                        line.trim(),
+                      );
+
                       return (
                         <p key={idx} className="whitespace-pre-wrap">
                           {line.split(/(\([^)]+\))/).map((part, i) => {
                             // Highlight sound effects/annotations in parentheses
-                            if (part.startsWith('(') && part.endsWith(')')) {
+                            if (part.startsWith("(") && part.endsWith(")")) {
                               return (
-                                <span key={i} className="italic text-sonar-blue/80">
+                                <span
+                                  key={i}
+                                  className="italic text-sonar-blue/80"
+                                >
                                   {part}
                                 </span>
                               );
                             }
                             // Highlight speaker labels
                             if (isSpeaker && i === 0) {
-                              const [speaker, ...rest] = part.split(':');
+                              const [speaker, ...rest] = part.split(":");
                               return (
                                 <span key={i}>
-                                  <span className="font-semibold text-sonar-signal">{speaker}:</span>
-                                  {rest.join(':')}
+                                  <span className="font-semibold text-sonar-signal">
+                                    {speaker}:
+                                  </span>
+                                  {rest.join(":")}
                                 </span>
                               );
                             }
-                            return <span key={i} className="text-sonar-highlight/80">{part}</span>;
+                            return (
+                              <span key={i} className="text-sonar-highlight/80">
+                                {part}
+                              </span>
+                            );
                           })}
                         </p>
                       );
@@ -1553,7 +1795,8 @@ export function VerificationStep({
                   </div>
                 </div>
                 <p className="text-xs text-sonar-highlight/50 mt-3 italic">
-                  Transcribed using Voxtral AI with speaker labels and sound annotations
+                  Transcribed using Voxtral AI with speaker labels and sound
+                  annotations
                 </p>
               </div>
             )}
@@ -1584,7 +1827,7 @@ export function VerificationStep({
                   onFeedbackSubmitted={() => {
                     console.log(
                       "Feedback submitted for session:",
-                      verificationId
+                      verificationId,
                     );
                   }}
                 />
@@ -1648,12 +1891,15 @@ export function VerificationStep({
                       Copyright Detected
                     </p>
                     <p className="text-sm text-sonar-highlight/70 mb-3">
-                      This audio matches copyrighted material in our database. You cannot upload content you don't have rights to.
+                      This audio matches copyrighted material in our database.
+                      You cannot upload content you don't have rights to.
                     </p>
-                    
+
                     {/* Best Match */}
                     <div className="space-y-2 mb-3">
-                      <p className="text-xs font-mono text-sonar-highlight/50">PRIMARY MATCH</p>
+                      <p className="text-xs font-mono text-sonar-highlight/50">
+                        PRIMARY MATCH
+                      </p>
                       <div className="bg-sonar-abyss/50 p-2 rounded">
                         <p className="text-sm font-semibold text-sonar-highlight">
                           {errorDetails.copyright.best_match?.title}
@@ -1665,9 +1911,15 @@ export function VerificationStep({
                         )}
                         <div className="flex items-center justify-between mt-2">
                           <p className="text-xs text-sonar-highlight/50">
-                            Confidence: {(errorDetails.copyright.best_match?.confidence * 100).toFixed(1)}%
+                            Confidence:{" "}
+                            {(
+                              errorDetails.copyright.best_match?.confidence *
+                              100
+                            ).toFixed(1)}
+                            %
                           </p>
-                          {errorDetails.copyright.best_match?.musicbrainz_id && (
+                          {errorDetails.copyright.best_match
+                            ?.musicbrainz_id && (
                             <a
                               href={`https://musicbrainz.org/recording/${errorDetails.copyright.best_match.musicbrainz_id}`}
                               target="_blank"
@@ -1682,44 +1934,59 @@ export function VerificationStep({
                     </div>
 
                     {/* Additional Matches */}
-                    {errorDetails.copyright.matches && errorDetails.copyright.matches.length > 1 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-mono text-sonar-highlight/50">
-                          ADDITIONAL MATCHES ({errorDetails.copyright.matches.length - 1})
-                        </p>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {errorDetails.copyright.matches.slice(1).map((match: any, idx: number) => (
-                            <div key={idx} className="bg-sonar-abyss/30 p-2 rounded text-xs">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sonar-highlight/80 truncate">
-                                    {match.title}
-                                    {match.artist && <span className="text-sonar-highlight/60"> - {match.artist}</span>}
-                                  </p>
-                                  <p className="text-sonar-highlight/50">
-                                    {(match.confidence * 100).toFixed(1)}% confidence
-                                  </p>
+                    {errorDetails.copyright.matches &&
+                      errorDetails.copyright.matches.length > 1 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-mono text-sonar-highlight/50">
+                            ADDITIONAL MATCHES (
+                            {errorDetails.copyright.matches.length - 1})
+                          </p>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {errorDetails.copyright.matches
+                              .slice(1)
+                              .map((match: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="bg-sonar-abyss/30 p-2 rounded text-xs"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sonar-highlight/80 truncate">
+                                        {match.title}
+                                        {match.artist && (
+                                          <span className="text-sonar-highlight/60">
+                                            {" "}
+                                            - {match.artist}
+                                          </span>
+                                        )}
+                                      </p>
+                                      <p className="text-sonar-highlight/50">
+                                        {(match.confidence * 100).toFixed(1)}%
+                                        confidence
+                                      </p>
+                                    </div>
+                                    {match.musicbrainz_id && (
+                                      <a
+                                        href={`https://musicbrainz.org/recording/${match.musicbrainz_id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sonar-aqua hover:text-sonar-highlight transition-colors flex-shrink-0"
+                                      >
+                                        →
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
-                                {match.musicbrainz_id && (
-                                  <a
-                                    href={`https://musicbrainz.org/recording/${match.musicbrainz_id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sonar-aqua hover:text-sonar-highlight transition-colors flex-shrink-0"
-                                  >
-                                    →
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          ))}
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     <div className="mt-3 pt-3 border-t border-sonar-highlight/10">
                       <p className="text-xs text-sonar-highlight/50">
-                        <span className="font-semibold">How to fix:</span> Upload original content you created, or content you have explicit rights to use.
+                        <span className="font-semibold">How to fix:</span>{" "}
+                        Upload original content you created, or content you have
+                        explicit rights to use.
                       </p>
                     </div>
                   </div>
@@ -1730,27 +1997,35 @@ export function VerificationStep({
                     <p className="font-mono font-semibold text-sonar-coral mb-2">
                       Content Safety Issue
                     </p>
-                    {errorDetails.analysis.concerns && errorDetails.analysis.concerns.length > 0 ? (
+                    {errorDetails.analysis.concerns &&
+                    errorDetails.analysis.concerns.length > 0 ? (
                       <div className="space-y-2">
                         <p className="text-sm text-sonar-highlight/70">
                           Audio content was flagged for the following reasons:
                         </p>
                         <ul className="text-sm text-sonar-highlight/70 space-y-1 ml-4">
-                          {errorDetails.analysis.concerns.map((concern: string, idx: number) => (
-                            <li key={idx} className="flex items-start space-x-2">
-                              <span>•</span>
-                              <span>{concern}</span>
-                            </li>
-                          ))}
+                          {errorDetails.analysis.concerns.map(
+                            (concern: string, idx: number) => (
+                              <li
+                                key={idx}
+                                className="flex items-start space-x-2"
+                              >
+                                <span>•</span>
+                                <span>{concern}</span>
+                              </li>
+                            ),
+                          )}
                         </ul>
                       </div>
                     ) : errorDetails.copyright?.high_confidence_match ? (
                       <p className="text-sm text-sonar-highlight/70">
-                        Audio content was flagged for containing copyrighted material
+                        Audio content was flagged for containing copyrighted
+                        material
                       </p>
                     ) : (
                       <p className="text-sm text-sonar-highlight/70">
-                        Audio content was flagged for safety reasons (copyrighted content, pornography, or gore)
+                        Audio content was flagged for safety reasons
+                        (copyrighted content, pornography, or gore)
                       </p>
                     )}
                   </div>
