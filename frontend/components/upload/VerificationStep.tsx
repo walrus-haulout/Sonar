@@ -1475,9 +1475,25 @@ export function VerificationStep({
                     <p className="font-mono font-semibold text-sonar-coral mb-2">
                       Content Safety Issue
                     </p>
-                    <p className="text-sm text-sonar-highlight/70">
-                      Audio content was flagged for inappropriate material
-                    </p>
+                    {errorDetails.analysis.concerns && errorDetails.analysis.concerns.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-sonar-highlight/70">
+                          Audio content was flagged for the following reasons:
+                        </p>
+                        <ul className="text-sm text-sonar-highlight/70 space-y-1 ml-4">
+                          {errorDetails.analysis.concerns.map((concern: string, idx: number) => (
+                            <li key={idx} className="flex items-start space-x-2">
+                              <span>•</span>
+                              <span>{concern}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-sonar-highlight/70">
+                        Audio content was flagged for inappropriate material
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
