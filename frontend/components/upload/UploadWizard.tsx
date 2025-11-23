@@ -297,12 +297,32 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
 
     try {
       const serialized = serializeState(state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+      const stateJson = JSON.stringify(serialized);
+      const sizeMB = (stateJson.length / 1024 / 1024).toFixed(2);
+      console.log(`[UploadWizard] 💾 Attempting to save state, size: ${stateJson.length} bytes (${sizeMB} MB)`);
+      
+      // Log individual field sizes if state is large
+      if (stateJson.length > 1000000) {
+        console.warn('[UploadWizard] ⚠️ State is large (>1MB), breakdown by field:');
+        Object.keys(serialized).forEach(key => {
+          const fieldSize = JSON.stringify(serialized[key as keyof typeof serialized]).length;
+          if (fieldSize > 10000) {
+            console.warn(`  ${key}: ${(fieldSize / 1024).toFixed(1)} KB`);
+          }
+        });
+      }
+      
+      localStorage.setItem(STORAGE_KEY, stateJson);
+      console.log('[UploadWizard] ✅ State saved successfully');
     } catch (e) {
-      console.error('Failed to save wizard state:', e);
-      // If still quota exceeded, clear localStorage
+      console.error('[UploadWizard] ❌ Failed to save wizard state:', e);
+      // If quota exceeded, DON'T clear localStorage - just disable future saves
+      // This preserves the in-memory state so user can continue
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        localStorage.removeItem(STORAGE_KEY);
+        console.warn('[UploadWizard] ⚠️ QuotaExceededError - localStorage is too big. Disabling persistence but keeping in-memory state.');
+        console.warn('[UploadWizard] ⚠️ State size:', JSON.stringify(serializeState(state)).length, 'bytes');
+        // DON'T clear localStorage here - it breaks the restoration flow
+        // localStorage.removeItem(STORAGE_KEY); // ← REMOVED THIS!
         setPersistenceDisabled(true);
       }
     }
