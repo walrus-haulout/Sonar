@@ -74,13 +74,17 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
     step: state.step,
   });
 
-  const sanitizeWalrusUpload = (walrusUpload: WalrusUploadResult | null) => {
+  const sanitizeWalrusUpload = (walrusUpload: WalrusUploadResult | null, keepEncryptedHex: boolean = false) => {
     if (!walrusUpload) return null;
     return {
       blobId: walrusUpload.blobId,
       previewBlobId: walrusUpload.previewBlobId,
       seal_policy_id: walrusUpload.seal_policy_id,
-      // EXCLUDE encryptedObjectBcsHex - 4-5MB, only needed during verification step
+      // Keep encryptedObjectBcsHex during verification step (needed for API call)
+      // Remove it for localStorage to save space (4-5MB)
+      ...(keepEncryptedHex && walrusUpload.encryptedObjectBcsHex
+        ? { encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex }
+        : {}),
       bundleDiscountBps: walrusUpload.bundleDiscountBps,
       mimeType: walrusUpload.mimeType,
       previewMimeType: walrusUpload.previewMimeType,
@@ -91,7 +95,10 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
         blobId: f.blobId,
         previewBlobId: f.previewBlobId,
         seal_policy_id: f.seal_policy_id,
-        // EXCLUDE encryptedObjectBcsHex from each file
+        // Keep encryptedObjectBcsHex during verification step
+        ...(keepEncryptedHex && f.encryptedObjectBcsHex
+          ? { encryptedObjectBcsHex: f.encryptedObjectBcsHex }
+          : {}),
         duration: f.duration,
         mimeType: f.mimeType,
         previewMimeType: f.previewMimeType,
@@ -130,6 +137,10 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
 
   // Serialize state for localStorage (exclude large binary data)
   const serializeState = (state: UploadWizardState) => {
+    // Keep encryptedObjectBcsHex in memory during verification step (it's needed for the API call)
+    // Remove it for localStorage to save space (4-5MB)
+    const keepEncryptedHex = state.step === 'verification';
+    
     return {
       ...state,
       // Remove large File objects
@@ -154,7 +165,9 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
           // Skip 'encryptedBlob', 'previewBlob', 'backupKey' - these are large or sensitive
         }
         : null,
-      walrusUpload: sanitizeWalrusUpload(state.walrusUpload),
+      // For localStorage: always strip encryptedObjectBcsHex to save space
+      // For in-memory state during verification: keep it
+      walrusUpload: sanitizeWalrusUpload(state.walrusUpload, false), // Never save to localStorage
       verification: sanitizeVerification(state.verification),
     };
   };
@@ -272,11 +285,15 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             }
           }
 
-          // Validate critical data for encrypted flow
-          if (parsed.walrusUpload && !parsed.walrusUpload.encryptedObjectBcsHex) {
-            console.warn('[UploadWizard] ⚠️ Found stale state with missing encryptedObjectBcsHex. Discarding to force re-upload.');
-            localStorage.removeItem(STORAGE_KEY);
-            return;
+          // Note: encryptedObjectBcsHex is NOT saved to localStorage (too large: 4-5MB)
+          // If user refreshes during verification step, they need to start from encryption
+          if (parsed.step === 'verification' && parsed.walrusUpload && !parsed.walrusUpload.encryptedObjectBcsHex) {
+            console.warn('[UploadWizard] ⚠️ Cannot restore verification step - encryptedObjectBcsHex missing. Starting from encryption.');
+            // Reset to encryption step so user can re-encrypt and verify
+            parsed.step = 'encryption';
+            // Clear walrusUpload since we need to re-encrypt
+            parsed.walrusUpload = null;
+            parsed.verification = null;
           }
 
           // Skip verification step if already completed

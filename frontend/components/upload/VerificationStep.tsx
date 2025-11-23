@@ -712,6 +712,18 @@ export function VerificationStep({
         encryptedObjectHexLength: encryptedObjectHex?.length ?? 0,
       });
 
+      // Validate that we have the encrypted blob hex
+      if (!encryptedObjectHex || encryptedObjectHex.length === 0) {
+        const error = "Missing encrypted blob data. Please go back and re-encrypt your audio file.";
+        console.error("[VerificationStep]", error);
+        setErrorMessage(error);
+        setVerificationState("failed");
+        onError(error);
+        addLog("ERROR", error, "error");
+        isVerifyingRef.current = false;
+        return;
+      }
+
       console.log(
         "[VerificationStep] Validation passed. Starting encrypted blob verification...",
       );
