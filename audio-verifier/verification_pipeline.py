@@ -235,9 +235,17 @@ class VerificationPipeline:
                 }
 
             # Stage 3: Transcription
-            logger.info(f"[{session_object_id}] Stage 3: Transcription")
-            transcript = await self._stage_transcription(
+            transcript, detected_languages = await self._stage_transcription(
                 session_object_id, audio_file_path
+            )
+
+            # Stage 4: AI Analysis
+            analysis_result = await self._stage_analysis(
+                session_object_id,
+                transcript,
+                metadata,
+                quality_info,
+                detected_languages,
             )
 
             # Handle transcription failure
@@ -594,6 +602,9 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
             annotation_count = transcript.count("(")
             has_unintelligible = "(unintelligible)" in transcript
 
+            # Detect languages from transcript
+            detected_languages = self._detect_languages_from_transcript(transcript)
+
             stage_duration = time.time() - stage_start
             logger.info(
                 f"[{session_object_id}] Transcription completed",
@@ -608,12 +619,13 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
                     "speakers_detected": speaker_count,
                     "sound_annotations": annotation_count,
                     "has_unintelligible": has_unintelligible,
+                    "detected_languages": detected_languages,
                 },
             )
 
             await self._update_stage(session_object_id, "transcription", 0.65)
 
-            return transcript
+            return transcript, detected_languages
 
         except Exception as e:
             stage_duration = time.time() - stage_start
@@ -633,11 +645,13 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
         transcript: str,
         metadata: Dict[str, Any],
         quality_info: Dict[str, Any],
+        detected_languages: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Stage 4: AI Analysis
 
-        Uses Gemini Flash via OpenRouter to analyze content quality, safety, and value.
+        Uses Gemini 3 Pro via OpenRouter to analyze content quality, safety, and value.
+        Includes detected languages from transcription.
         """
         await self._update_stage(session_object_id, "analysis", 0.75)
 
@@ -676,7 +690,8 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
             completion = self.openai_client.chat.completions.create(
                 model=OPENROUTER_MODELS["ANALYSIS"],
                 max_tokens=2048,
-                temperature=0.3,  # Lower temperature for consistent analysis
+                temperature=0,  # Deterministic output for JSON parsing
+                response_format={"type": "json_object"},  # Force JSON mode
                 messages=analysis_messages,
             )
 
@@ -1037,13 +1052,30 @@ Respond ONLY with the JSON object, no additional text."""
         """
         try:
             # Extract JSON from markdown code blocks if present
-            json_match = response_text.find("```json")
-            if json_match != -1:
-                start = json_match + 7  # len("```json\n")
+            # Try multiple extraction methods for better compatibility with Gemini 3 Pro
+            if "```json" in response_text:
+                # Method 1: Explicit ```json block
+                start = response_text.find("```json") + 7
                 end = response_text.find("```", start)
                 json_string = response_text[start:end].strip()
+            elif "```" in response_text:
+                # Method 2: Generic code block
+                start = response_text.find("```") + 3
+                end = response_text.find("```", start)
+                json_string = response_text[start:end].strip()
+                # Skip language identifier if present (e.g., "json\n")
+                if json_string.startswith("json\n"):
+                    json_string = json_string[5:]
+                elif json_string.startswith("json "):
+                    json_string = json_string[5:]
             else:
-                json_string = response_text.strip()
+                # Method 3: Try to find JSON object directly
+                first_brace = response_text.find("{")
+                last_brace = response_text.rfind("}")
+                if first_brace != -1 and last_brace != -1:
+                    json_string = response_text[first_brace : last_brace + 1]
+                else:
+                    json_string = response_text.strip()
 
             parsed = json.loads(json_string)
 
@@ -1092,6 +1124,7 @@ Respond ONLY with the JSON object, no additional text."""
                 "concerns": parsed.get("concerns", []),
                 "recommendations": recommendations,
                 "overallSummary": overall_summary,
+                "detectedLanguages": detected_languages or [],
             }
 
             # Add enhanced fields if present
@@ -1103,8 +1136,21 @@ Respond ONLY with the JSON object, no additional text."""
             return result
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.error(f"Failed to parse analysis response: {e}")
-            logger.error(f"Raw response: {response_text}")
+            logger.error(
+                f"Failed to parse Gemini analysis response: {e}",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "raw_response_preview": response_text[:500],
+                    "raw_response_length": len(response_text),
+                    "has_json_marker": "```json" in response_text,
+                    "has_code_block": "```" in response_text,
+                    "has_braces": "{" in response_text and "}" in response_text,
+                    "model": OPENROUTER_MODELS["ANALYSIS"],
+                },
+            )
+            # Also log full response for debugging (may be long)
+            logger.debug(f"Full raw response: {response_text}")
 
             # Return safe defaults if parsing fails
             fallback = {
@@ -1120,6 +1166,55 @@ Respond ONLY with the JSON object, no additional text."""
                 "overallSummary": "",
             }
             return fallback
+
+    def _detect_languages_from_transcript(self, transcript: str) -> list[str]:
+        """
+        Detect languages from transcript text using Unicode character ranges.
+
+        Returns list of ISO 639-1 language codes (e.g., ['ru', 'en'])
+        """
+        import re
+
+        detected = []
+
+        # Cyrillic characters = Russian
+        if re.search(r"[а-яА-ЯёЁ]", transcript):
+            detected.append("ru")
+
+        # Chinese characters
+        if re.search(r"[\u4e00-\u9fff]", transcript):
+            detected.append("zh")
+
+        # Arabic characters
+        if re.search(r"[\u0600-\u06ff]", transcript):
+            detected.append("ar")
+
+        # Japanese (Hiragana/Katakana)
+        if re.search(r"[\u3040-\u309f\u30a0-\u30ff]", transcript):
+            detected.append("ja")
+
+        # Korean (Hangul)
+        if re.search(r"[\uac00-\ud7af]", transcript):
+            detected.append("ko")
+
+        # Hindi (Devanagari)
+        if re.search(r"[\u0900-\u097f]", transcript):
+            detected.append("hi")
+
+        # Greek
+        if re.search(r"[\u0370-\u03ff]", transcript):
+            detected.append("el")
+
+        # Hebrew
+        if re.search(r"[\u0590-\u05ff]", transcript):
+            detected.append("he")
+
+        # Default to English if no special characters or if only Latin alphabet
+        if not detected or re.search(r"[a-zA-Z]{20,}", transcript):
+            if "en" not in detected:
+                detected.append("en")
+
+        return detected if detected else ["en"]
 
     def _calculate_approval(
         self,

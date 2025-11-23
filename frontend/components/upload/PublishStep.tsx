@@ -844,7 +844,14 @@ export function PublishStep({
               <div className="flex justify-between">
                 <span className="text-sonar-highlight/70">Languages:</span>
                 <span className="text-sonar-highlight-bright font-mono">
-                  {(metadata.languages || []).join(", ") || "Not specified"}
+                  {(
+                    verification.detectedLanguages && verification.detectedLanguages.length > 0
+                      ? verification.detectedLanguages
+                      : metadata.languages || []
+                  ).join(", ") || "Not specified"}
+                  {verification.detectedLanguages && verification.detectedLanguages.length > 0 && (
+                    <span className="text-sonar-signal/60 text-xs ml-1">(AI-detected)</span>
+                  )}
                 </span>
               </div>
 

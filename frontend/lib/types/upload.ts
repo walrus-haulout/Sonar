@@ -214,6 +214,7 @@ export interface VerificationResult {
   currentStage: VerificationStage["name"];
   stages: VerificationStage[];
   transcript?: string;
+  detectedLanguages?: string[]; // AI-detected languages from transcript
   qualityScore?: number;
   suggestedPrice?: number; // AI-suggested price in SUI (3-10 range)
   safetyPassed?: boolean;
