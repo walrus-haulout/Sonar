@@ -68,7 +68,10 @@ export function useReencryption() {
         request.onProgress?.('decrypting', 0, 'Fetching current encrypted blob...');
 
         // TODO: Use a proper fetcher that handles Walrus aggregators
-        const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || 'https://aggregator.walrus.space';
+        const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL;
+        if (!walrusAggregator) {
+          throw new Error("Missing NEXT_PUBLIC_WALRUS_AGGREGATOR_URL environment variable");
+        }
         // We need the blob ID. The request has `currentEncryptedBlob` as Uint8Array?
         // The interface says `currentEncryptedBlob: Uint8Array`.
         // If the caller passes the data, we don't need to fetch!
