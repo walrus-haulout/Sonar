@@ -425,6 +425,7 @@ class VerificationPipeline:
         Stage 3: Transcription
 
         Uses Voxtral Small via OpenRouter to transcribe audio to text.
+        Enforces 100MB size limit to prevent API overload and memory issues.
         """
         import time
         import base64
@@ -438,10 +439,22 @@ class VerificationPipeline:
                 f"[{session_object_id}] Transcribing audio via OpenRouter Voxtral"
             )
 
+            # Max 100MB for transcription (OpenRouter API constraint)
+            MAX_TRANSCRIPTION_SIZE_MB = 100
+            max_size_bytes = MAX_TRANSCRIPTION_SIZE_MB * 1024**2
+
             # Read audio file as base64 for chat completions API
             with open(audio_file_path, "rb") as audio_file:
                 audio_bytes = audio_file.read()
-                audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+            # Validate file size before base64 encoding
+            if len(audio_bytes) > max_size_bytes:
+                raise ValueError(
+                    f"Audio file {len(audio_bytes)} bytes exceeds "
+                    f"{MAX_TRANSCRIPTION_SIZE_MB}MB limit for transcription"
+                )
+
+            audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
             logger.debug(
                 f"[{session_object_id}] Audio file loaded",

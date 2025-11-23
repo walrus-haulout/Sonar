@@ -455,9 +455,12 @@ async def verify_bearer_token(authorization: str = Header(None)):
     Verify bearer token for verification endpoints.
     Skips auth check if VERIFIER_AUTH_TOKEN is not set (development mode).
     """
+    if not VERIFIER_AUTH_TOKEN:
+        return  # Skip auth in dev mode
+
     expected = f"Bearer {VERIFIER_AUTH_TOKEN}"
     if authorization != expected:
-        logger.warning(f"Invalid auth token: {authorization}")
+        logger.warning("Invalid or missing authorization token")
         raise HTTPException(
             status_code=401, detail="Invalid or missing authorization token"
         )
@@ -1159,7 +1162,7 @@ class VerificationFeedback(BaseModel):
     wallet_address: Optional[str] = Field(None, description="Wallet address (from header if not provided)")
 
 
-@app.post("/verify/{session_object_id}/feedback")
+@app.post("/verify/{session_object_id}/feedback", dependencies=[Depends(verify_bearer_token)])
 async def submit_verification_feedback(
     session_object_id: str,
     feedback: VerificationFeedback,
@@ -1252,7 +1255,7 @@ async def submit_verification_feedback(
 # ============================================================================
 
 
-@app.get("/feedback/search")
+@app.get("/feedback/search", dependencies=[Depends(verify_bearer_token)])
 async def search_feedback(
     query: str,
     limit: int = 20,
@@ -1301,7 +1304,7 @@ async def search_feedback(
         raise HTTPException(status_code=500, detail="Feedback search failed")
 
 
-@app.get("/feedback/themes")
+@app.get("/feedback/themes", dependencies=[Depends(verify_bearer_token)])
 async def get_feedback_themes(
     top_n: int = 5,
     vote: Optional[str] = None,
@@ -1346,7 +1349,7 @@ async def get_feedback_themes(
         raise HTTPException(status_code=500, detail="Theme clustering failed")
 
 
-@app.post("/feedback/index-batch")
+@app.post("/feedback/index-batch", dependencies=[Depends(verify_bearer_token)])
 async def index_feedback_batch(limit: int = 100):
     """
     Manually trigger batch indexing of feedback.

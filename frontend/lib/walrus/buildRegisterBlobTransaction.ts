@@ -180,7 +180,7 @@ export async function buildRegisterBlobTransactionAsync(
   if (!resolvedWalCoinId) {
     throw new Error(
       "[Walrus] WAL coin ID not provided and unable to fetch. " +
-        "Either provide walCoinId or provide sponsorAddress with suiClient.",
+      "Either provide walCoinId or provide sponsorAddress with suiClient.",
     );
   }
 
@@ -215,7 +215,7 @@ export function buildRegisterBlobTransaction(
   if (!walCoinId) {
     throw new Error(
       "[Walrus] WAL coin ID is required. " +
-        "Either provide walCoinId directly or use buildRegisterBlobTransactionAsync() to fetch it automatically.",
+      "Either provide walCoinId directly or use buildRegisterBlobTransactionAsync() to fetch it automatically.",
     );
   }
 
@@ -355,7 +355,7 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(
   if (!resolvedWalCoinId) {
     throw new Error(
       "[Walrus] WAL coin ID not provided and unable to fetch. " +
-        "Either provide walCoinId or provide sponsorAddress with suiClient.",
+      "Either provide walCoinId or provide sponsorAddress with suiClient.",
     );
   }
 
@@ -438,7 +438,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       mainStorage, // storage: Storage
       tx.pure.u256(mainBlobIdBigInt), // blob_id: u256
       tx.pure.u256(mainBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(mainStorageSize), // size: u64 (encoded size with 5x overhead)
+      tx.pure.u64(mainBlob.size), // size: u64 (unencoded blob size)
       tx.pure.u8(mainEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(mainBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>
@@ -480,7 +480,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       previewStorage, // storage: Storage
       tx.pure.u256(previewBlobIdBigInt), // blob_id: u256
       tx.pure.u256(previewBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(previewStorageSize), // size: u64 (encoded size with 5x overhead)
+      tx.pure.u64(previewBlob.size), // size: u64 (unencoded blob size)
       tx.pure.u8(previewEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(previewBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>

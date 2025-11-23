@@ -189,8 +189,11 @@ def _decrypt_sync(
         ) from e
 
 
-def _fetch_walrus_blob(blob_id: str) -> bytes:
-    """Fetch encrypted blob from Walrus aggregator with retry logic for propagation delays."""
+def _fetch_walrus_blob(blob_id: str, max_size_gb: int = 13) -> bytes:
+    """
+    Fetch encrypted blob from Walrus aggregator with streaming and size validation.
+    Validates Content-Length header and streams to temp file to prevent OOM.
+    """
     aggregator_url = os.getenv("WALRUS_AGGREGATOR_URL")
     aggregator_token = os.getenv("WALRUS_AGGREGATOR_TOKEN")
     if not aggregator_url:
@@ -201,22 +204,58 @@ def _fetch_walrus_blob(blob_id: str) -> bytes:
     if aggregator_token:
         headers["Authorization"] = f"Bearer {aggregator_token}"
 
+    max_size_bytes = max_size_gb * 1024**3
+
     # Wait 15 seconds after upload for initial blob propagation
     logger.info(f"Waiting 15 seconds for blob {blob_id[:16]}... to propagate...")
     time.sleep(15)
 
-    # Retry up to 10 times with 30-second delays
+    # Retry up to 10 times with 30-second delays, but cap total time
     max_retries = 10
     retry_delay = 30
 
-    with httpx.Client(timeout=300.0) as client:
+    with httpx.Client(timeout=60.0) as client:
         for attempt in range(1, max_retries + 1):
             try:
                 logger.debug(f"Fetching blob {blob_id[:16]}... (attempt {attempt}/{max_retries})")
-                response = client.get(url, headers=headers)
+                response = client.head(url, headers=headers, timeout=10.0)
                 response.raise_for_status()
-                logger.info(f"Successfully fetched blob {blob_id[:16]}... on attempt {attempt}")
-                return response.content
+
+                # Validate Content-Length before streaming
+                content_length = response.headers.get("content-length")
+                if content_length:
+                    blob_size = int(content_length)
+                    if blob_size > max_size_bytes:
+                        raise SealValidationError(
+                            f"Blob size {blob_size} bytes exceeds {max_size_gb}GB limit"
+                        )
+                    logger.info(f"Blob content-length: {blob_size} bytes")
+
+                # Stream to temp file instead of loading entire blob into RAM
+                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                    tmp_path = tmp_file.name
+                    bytes_downloaded = 0
+
+                    with client.stream("GET", url, headers=headers, timeout=120.0) as stream:
+                        stream.raise_for_status()
+                        for chunk in stream.iter_bytes(chunk_size=8192):
+                            tmp_file.write(chunk)
+                            bytes_downloaded += len(chunk)
+                            # Additional safety check during streaming
+                            if bytes_downloaded > max_size_bytes:
+                                tmp_file.close()
+                                os.unlink(tmp_path)
+                                raise SealValidationError(
+                                    f"Downloaded {bytes_downloaded} bytes exceeds {max_size_gb}GB limit"
+                                )
+
+                # Read from temp file into memory for decryption
+                with open(tmp_path, "rb") as f:
+                    blob_data = f.read()
+                os.unlink(tmp_path)
+
+                logger.info(f"Successfully fetched blob {blob_id[:16]}... on attempt {attempt} ({bytes_downloaded} bytes)")
+                return blob_data
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
@@ -229,17 +268,16 @@ def _fetch_walrus_blob(blob_id: str) -> bytes:
                         continue
                     else:
                         logger.error(f"Blob {blob_id[:16]}... still not found after {max_retries} attempts")
-                        raise
+                        raise SealValidationError(f"Blob {blob_id} not found after {max_retries} attempts") from e
                 else:
-                    # Don't retry on other HTTP errors
                     logger.error(f"HTTP error {e.response.status_code} fetching blob {blob_id[:16]}...")
-                    raise
-            except Exception as e:
-                # Don't retry on network errors or other exceptions
-                logger.error(f"Error fetching blob {blob_id[:16]}...: {e}")
+                    raise SealValidationError(f"HTTP {e.response.status_code} fetching blob") from e
+            except SealDecryptionError:
                 raise
+            except Exception as e:
+                logger.error(f"Error fetching blob {blob_id[:16]}...: {e}")
+                raise SealValidationError(f"Failed to fetch blob: {str(e)}") from e
 
-        # Should never reach here due to raise in the loop, but just in case
         raise RuntimeError(f"Failed to fetch blob {blob_id} after {max_retries} attempts")
 
 
@@ -505,3 +543,116 @@ def _decrypt_aes(encrypted_data: bytes, aes_key: bytes) -> bytes:
                 "AES decryption requires 'cryptography' or 'pycryptodome' package. "
                 "Install with: pip install cryptography"
             )
+
+
+async def fetch_walrus_blob_async(
+    blob_id: str,
+    max_retries: int = 10,
+    max_size_gb: int = 13
+) -> bytes:
+    """
+    Asynchronously fetch encrypted blob from Walrus aggregator with exponential backoff.
+
+    This function polls for blob availability with backoff instead of blocking sleeps,
+    allowing other tasks to run concurrently. Returns immediately if blob exists,
+    otherwise polls with exponential backoff (5s, 10s, 20s, etc.).
+
+    Args:
+        blob_id: Walrus blob ID to fetch
+        max_retries: Maximum polling attempts
+        max_size_gb: Maximum allowed blob size in GB
+
+    Returns:
+        Raw blob bytes
+
+    Raises:
+        SealValidationError: If blob not found, exceeds size limit, or fetch fails
+    """
+    aggregator_url = os.getenv("WALRUS_AGGREGATOR_URL")
+    aggregator_token = os.getenv("WALRUS_AGGREGATOR_TOKEN")
+    if not aggregator_url:
+        raise RuntimeError("WALRUS_AGGREGATOR_URL environment variable not set")
+
+    url = f"{aggregator_url.rstrip('/')}/v1/blobs/{blob_id}"
+    max_size_bytes = max_size_gb * 1024**3
+
+    headers = {}
+    if aggregator_token:
+        headers["Authorization"] = f"Bearer {aggregator_token}"
+
+    async def _check_blob_exists() -> bool:
+        """Check if blob exists via HEAD request."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.head(url, headers=headers)
+                return response.status_code == 200
+        except Exception:
+            return False
+
+    async def _fetch_blob() -> bytes:
+        """Stream blob to temp file and return bytes."""
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                tmp_path = tmp_file.name
+                bytes_downloaded = 0
+
+                async with client.stream("GET", url, headers=headers) as response:
+                    response.raise_for_status()
+
+                    # Validate Content-Length header
+                    content_length = response.headers.get("content-length")
+                    if content_length:
+                        blob_size = int(content_length)
+                        if blob_size > max_size_bytes:
+                            raise SealValidationError(
+                                f"Blob size {blob_size} bytes exceeds {max_size_gb}GB limit"
+                            )
+
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        tmp_file.write(chunk)
+                        bytes_downloaded += len(chunk)
+                        if bytes_downloaded > max_size_bytes:
+                            tmp_file.close()
+                            os.unlink(tmp_path)
+                            raise SealValidationError(
+                                f"Downloaded {bytes_downloaded} bytes exceeds {max_size_gb}GB limit"
+                            )
+
+            # Read temp file and clean up
+            with open(tmp_path, "rb") as f:
+                blob_data = f.read()
+            os.unlink(tmp_path)
+
+            logger.info(f"Successfully fetched blob {blob_id[:16]}... ({bytes_downloaded} bytes)")
+            return blob_data
+
+    # Wait initial 15 seconds for propagation
+    logger.info(f"Waiting 15 seconds for blob {blob_id[:16]}... to propagate...")
+    await asyncio.sleep(15)
+
+    # Poll with exponential backoff
+    backoff_delay = 5
+    for attempt in range(1, max_retries + 1):
+        try:
+            if await _check_blob_exists():
+                logger.debug(f"Blob {blob_id[:16]}... exists, fetching...")
+                return await _fetch_blob()
+
+            if attempt < max_retries:
+                logger.warning(
+                    f"Blob {blob_id[:16]}... not found (attempt {attempt}/{max_retries}), "
+                    f"retrying in {backoff_delay}s..."
+                )
+                await asyncio.sleep(backoff_delay)
+                backoff_delay = min(backoff_delay * 2, 60)  # Cap at 60s
+            else:
+                raise SealValidationError(
+                    f"Blob {blob_id} not found after {max_retries} attempts"
+                )
+        except SealDecryptionError:
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching blob {blob_id[:16]}...: {e}")
+            raise SealValidationError(f"Failed to fetch blob: {str(e)}") from e
+
+    raise RuntimeError(f"Failed to fetch blob {blob_id} after {max_retries} attempts")
