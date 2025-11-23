@@ -188,6 +188,8 @@ export async function POST(request: NextRequest) {
     // Walrus returns: { newlyCreated: { blobObject: { id, blobId, encodingType, storage: { id, ... }, deletable, ... }, ... } }
     // or { alreadyCertified: { blobId, ... } }
     let blobId: string;
+    let blobObjectId: string | undefined; // On-chain Sui object ID
+    let registeredEpoch: number | undefined;
     let certifiedEpoch: number | undefined;
     let encodingType: string | undefined;
     let storageId: string | undefined;
@@ -196,6 +198,8 @@ export async function POST(request: NextRequest) {
     if (walrusResult.newlyCreated) {
       const blobObject = walrusResult.newlyCreated.blobObject;
       blobId = blobObject.blobId;
+      blobObjectId = blobObject.id; // On-chain object ID
+      registeredEpoch = blobObject.registeredEpoch;
       certifiedEpoch = blobObject.certifiedEpoch;
       encodingType = blobObject.encodingType;
       storageId = blobObject.storage?.id;
@@ -203,6 +207,8 @@ export async function POST(request: NextRequest) {
 
       console.log("[Walrus] Extracted blob metadata:", {
         blobId,
+        blobObjectId,
+        registeredEpoch,
         encodingType,
         storageId,
         deletable,
@@ -210,6 +216,7 @@ export async function POST(request: NextRequest) {
       });
     } else if (walrusResult.alreadyCertified) {
       blobId = walrusResult.alreadyCertified.blobId;
+      blobObjectId = walrusResult.alreadyCertified.blobId; // For already certified, use blobId
       certifiedEpoch = walrusResult.alreadyCertified.certifiedEpoch;
       console.log("[Walrus] Already certified blob, limited metadata");
     } else {
@@ -222,6 +229,8 @@ export async function POST(request: NextRequest) {
     // Return blobId and complete metadata to client for sponsored transactions
     return NextResponse.json({
       blobId,
+      blobObjectId, // On-chain Sui object ID for verification
+      registeredEpoch, // Proof of on-chain registration
       certifiedEpoch,
       size: file.size,
       encodingType,

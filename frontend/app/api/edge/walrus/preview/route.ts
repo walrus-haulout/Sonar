@@ -81,6 +81,8 @@ export async function POST(request: NextRequest) {
 
     // Extract blobId and metadata
     let previewBlobId: string;
+    let blobObjectId: string | undefined; // On-chain Sui object ID
+    let registeredEpoch: number | undefined;
     let storageId: string | undefined;
     let encodingType: string | undefined;
     let deletable: boolean | undefined;
@@ -89,12 +91,15 @@ export async function POST(request: NextRequest) {
     if (walrusResult.newlyCreated) {
       const blobObject = walrusResult.newlyCreated.blobObject;
       previewBlobId = blobObject.blobId;
+      blobObjectId = blobObject.id; // On-chain object ID
+      registeredEpoch = blobObject.registeredEpoch;
       storageId = blobObject.storage?.id;
       encodingType = blobObject.encodingType;
       deletable = blobObject.deletable;
       certifiedEpoch = blobObject.certifiedEpoch;
     } else if (walrusResult.alreadyCertified) {
       previewBlobId = walrusResult.alreadyCertified.blobId;
+      blobObjectId = walrusResult.alreadyCertified.blobId; // For already certified, use blobId
       certifiedEpoch = walrusResult.alreadyCertified.certifiedEpoch;
     } else {
       return NextResponse.json(
@@ -105,6 +110,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       previewBlobId,
+      blobObjectId, // On-chain Sui object ID for verification
+      registeredEpoch, // Proof of on-chain registration
       fileSize: file.size,
       storageId,
       encodingType,
