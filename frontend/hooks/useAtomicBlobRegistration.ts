@@ -362,7 +362,7 @@ export function useAtomicBlobRegistration() {
       existingRegistrationId?: string;
       onPhase1Complete?: (registrationId: string) => void;
     },
-  ): Promise<{ submissionId: string; registrationId: string }> {
+  ): Promise<{ submissionId: string; registrationId: string; digest: string }> {
     try {
       let registrationId = options?.existingRegistrationId;
 
@@ -403,6 +403,7 @@ export function useAtomicBlobRegistration() {
       return {
         submissionId,
         registrationId,
+        digest,
       };
     } catch (error) {
       console.error("[AtomicRegistration] Failed:", error);

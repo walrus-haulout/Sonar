@@ -35,6 +35,36 @@ function _uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * Retry a transaction query with exponential backoff
+ * Handles cases where transaction isn't indexed immediately
+ */
+async function retryTransactionQuery<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 5,
+  baseDelay: number = 1000,
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const isLastRetry = i === maxRetries - 1;
+      const isNotFoundError = error?.message?.includes("Could not find");
+
+      if (isLastRetry || !isNotFoundError) {
+        throw error;
+      }
+
+      const delay = baseDelay * Math.pow(2, i);
+      console.log(
+        `[PublishStep] Transaction not found, retrying in ${delay}ms... (attempt ${i + 1}/${maxRetries})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error("Retry limit exceeded");
+}
+
 interface PublishStepProps {
   walrusUpload: WalrusUploadResult;
   metadata: DatasetMetadata;
@@ -80,7 +110,9 @@ export function PublishStep({
     hasAnalysis: !!verification.analysis,
     hasTranscript: !!verification.transcript,
     transcriptPreview: verification.transcript?.slice(0, 100),
-    analysisKeys: verification.analysis ? Object.keys(verification.analysis) : [],
+    analysisKeys: verification.analysis
+      ? Object.keys(verification.analysis)
+      : [],
     qualityScore: verification.qualityScore,
     hasInsights: !!verification.insights,
     insightsCount: verification.insights?.length,
@@ -271,15 +303,15 @@ export function PublishStep({
           console.log("[PublishStep] Atomic registration successful:", result);
           setPublishState("confirming");
 
-          // Proceed with object change detection
+          // Clear pending upload
+          clearPendingUpload(walrusUpload.blobId);
+
+          // Proceed with successful publication
           onPublished({
-            txDigest: "",
+            txDigest: result.digest,
             datasetId: result.submissionId,
             confirmed: true,
           });
-
-          // Clear pending upload
-          clearPendingUpload(walrusUpload.blobId);
 
           return;
         } catch (error) {
@@ -340,14 +372,16 @@ export function PublishStep({
             let datasetId: string | null = null;
 
             try {
-              const txDetails = await suiClient.getTransactionBlock({
-                digest: result.digest,
-                options: {
-                  showObjectChanges: true,
-                  showEffects: true,
-                  showEvents: true,
-                },
-              });
+              const txDetails = await retryTransactionQuery(() =>
+                suiClient.getTransactionBlock({
+                  digest: result.digest,
+                  options: {
+                    showObjectChanges: true,
+                    showEffects: true,
+                    showEvents: true,
+                  },
+                }),
+              );
 
               // Debug logging
               console.log("[PublishStep] Transaction details:", {
@@ -362,19 +396,25 @@ export function PublishStep({
               });
 
               if (txDetails.objectChanges) {
-                console.log("[PublishStep] Object changes:", txDetails.objectChanges.map(c => ({
-                  type: c.type,
-                  objectId: 'objectId' in c ? c.objectId : 'N/A',
-                  objectType: 'objectType' in c ? c.objectType : 'N/A',
-                })));
+                console.log(
+                  "[PublishStep] Object changes:",
+                  txDetails.objectChanges.map((c) => ({
+                    type: c.type,
+                    objectId: "objectId" in c ? c.objectId : "N/A",
+                    objectType: "objectType" in c ? c.objectType : "N/A",
+                  })),
+                );
               }
 
               if (txDetails.events) {
-                console.log("[PublishStep] Events:", txDetails.events.map(e => ({
-                  type: e.type,
-                  hasSubmissionId: !!(e.parsedJson as any)?.submission_id,
-                  parsedJson: e.parsedJson,
-                })));
+                console.log(
+                  "[PublishStep] Events:",
+                  txDetails.events.map((e) => ({
+                    type: e.type,
+                    hasSubmissionId: !!(e.parsedJson as any)?.submission_id,
+                    parsedJson: e.parsedJson,
+                  })),
+                );
               }
 
               // 1. Check objectChanges
@@ -474,7 +514,9 @@ export function PublishStep({
 
               // 5. FINAL FALLBACK: Check ALL created objects and log their types
               if (!datasetId && txDetails.effects?.created) {
-                console.warn("[PublishStep] Dataset ID not found via standard methods. Checking all created objects...");
+                console.warn(
+                  "[PublishStep] Dataset ID not found via standard methods. Checking all created objects...",
+                );
                 for (const createdRef of txDetails.effects.created) {
                   try {
                     const objectId = extractObjectId(createdRef);
@@ -488,21 +530,51 @@ export function PublishStep({
                       type: obj.data?.type,
                       hasContent: !!obj.data?.content,
                     });
-                    
+
                     // Less strict matching - just check if it's from our package
-                    if (obj.data?.type && obj.data.type.includes(CHAIN_CONFIG.packageId || '')) {
-                      console.log("[PublishStep] Using fallback: object from our package:", objectId);
+                    if (
+                      obj.data?.type &&
+                      obj.data.type.includes(CHAIN_CONFIG.packageId || "")
+                    ) {
+                      console.log(
+                        "[PublishStep] Using fallback: object from our package:",
+                        objectId,
+                      );
                       datasetId = objectId;
                       break;
                     }
                   } catch (e) {
-                    console.warn("[PublishStep] Error checking created object:", e);
+                    console.warn(
+                      "[PublishStep] Error checking created object:",
+                      e,
+                    );
                   }
                 }
               }
 
+              if (!datasetId) {
+                console.error(
+                  "[PublishStep] ❌ Failed to extract dataset ID. Transaction details:",
+                  {
+                    digest: result.digest,
+                    objectChanges: txDetails.objectChanges,
+                    events: txDetails.events,
+                    effectsCreated: txDetails.effects?.created,
+                    effectsMutated: txDetails.effects?.mutated,
+                  },
+                );
+                throw new Error(
+                  "Failed to extract dataset ID from transaction. " +
+                    "The transaction succeeded but no AudioSubmission or DatasetSubmission object was found. " +
+                    `Transaction digest: ${result.digest}`,
+                );
+              }
+
               if (datasetId) {
-                console.log("[PublishStep] ✅ Dataset ID confirmed:", datasetId);
+                console.log(
+                  "[PublishStep] ✅ Dataset ID confirmed:",
+                  datasetId,
+                );
 
                 // Clear pending uploads
                 if (isMultiFile && walrusUpload.files) {
@@ -648,11 +720,13 @@ export function PublishStep({
                 });
                 return;
               }
-
-              throw new Error("Failed to extract dataset ID from transaction");
             } catch (error) {
               console.error("Transaction confirmation failed:", error);
-              onError("Failed to confirm transaction.");
+              const errorMsg =
+                error instanceof Error
+                  ? error.message
+                  : "Failed to confirm transaction";
+              onError(errorMsg);
               setPublishState("idle");
             }
           },
@@ -712,7 +786,9 @@ export function PublishStep({
               <div className="grid grid-cols-2 gap-3">
                 {verification.qualityScore !== undefined && (
                   <div>
-                    <span className="text-sonar-highlight/70 text-xs block mb-1">Quality Score</span>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">
+                      Quality Score
+                    </span>
                     <span className="text-sonar-signal font-mono font-bold text-lg">
                       {Math.round(verification.qualityScore * 100)}%
                     </span>
@@ -720,7 +796,9 @@ export function PublishStep({
                 )}
 
                 <div>
-                  <span className="text-sonar-highlight/70 text-xs block mb-1">Safety Check</span>
+                  <span className="text-sonar-highlight/70 text-xs block mb-1">
+                    Safety Check
+                  </span>
                   <span className="text-sonar-signal font-mono font-bold text-lg">
                     {verification.safetyPassed ? "✓ Passed" : "⚠ Review"}
                   </span>
@@ -728,7 +806,9 @@ export function PublishStep({
 
                 {verification.suggestedPrice && (
                   <div>
-                    <span className="text-sonar-highlight/70 text-xs block mb-1">Suggested Price</span>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">
+                      Suggested Price
+                    </span>
                     <span className="text-sonar-signal font-mono font-bold text-lg">
                       {verification.suggestedPrice.toFixed(2)} SUI
                     </span>
@@ -737,7 +817,9 @@ export function PublishStep({
 
                 {verification.transcriptionDetails && (
                   <div>
-                    <span className="text-sonar-highlight/70 text-xs block mb-1">Speakers</span>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">
+                      Speakers
+                    </span>
                     <span className="text-sonar-signal font-mono font-bold text-lg">
                       {verification.transcriptionDetails.speakerCount}
                     </span>
@@ -748,30 +830,62 @@ export function PublishStep({
               {/* Quality Breakdown */}
               {verification.qualityBreakdown && (
                 <div className="pt-3 border-t border-sonar-signal/20">
-                  <span className="text-sonar-highlight/70 text-xs block mb-2">Quality Breakdown</span>
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">
+                    Quality Breakdown
+                  </span>
                   <div className="grid grid-cols-2 gap-2">
                     {verification.qualityBreakdown.clarity !== null && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-sonar-highlight/60">Clarity:</span>
-                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.clarity * 100)}%</span>
+                        <span className="text-sonar-highlight/60">
+                          Clarity:
+                        </span>
+                        <span className="text-sonar-signal font-mono">
+                          {Math.round(
+                            verification.qualityBreakdown.clarity * 100,
+                          )}
+                          %
+                        </span>
                       </div>
                     )}
                     {verification.qualityBreakdown.contentValue !== null && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-sonar-highlight/60">Content:</span>
-                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.contentValue * 100)}%</span>
+                        <span className="text-sonar-highlight/60">
+                          Content:
+                        </span>
+                        <span className="text-sonar-signal font-mono">
+                          {Math.round(
+                            verification.qualityBreakdown.contentValue * 100,
+                          )}
+                          %
+                        </span>
                       </div>
                     )}
-                    {verification.qualityBreakdown.metadataAccuracy !== null && (
+                    {verification.qualityBreakdown.metadataAccuracy !==
+                      null && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-sonar-highlight/60">Metadata:</span>
-                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.metadataAccuracy * 100)}%</span>
+                        <span className="text-sonar-highlight/60">
+                          Metadata:
+                        </span>
+                        <span className="text-sonar-signal font-mono">
+                          {Math.round(
+                            verification.qualityBreakdown.metadataAccuracy *
+                              100,
+                          )}
+                          %
+                        </span>
                       </div>
                     )}
                     {verification.qualityBreakdown.completeness !== null && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-sonar-highlight/60">Completeness:</span>
-                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.completeness * 100)}%</span>
+                        <span className="text-sonar-highlight/60">
+                          Completeness:
+                        </span>
+                        <span className="text-sonar-signal font-mono">
+                          {Math.round(
+                            verification.qualityBreakdown.completeness * 100,
+                          )}
+                          %
+                        </span>
                       </div>
                     )}
                   </div>
@@ -781,7 +895,9 @@ export function PublishStep({
               {/* Insights */}
               {verification.insights && verification.insights.length > 0 && (
                 <div className="pt-3 border-t border-sonar-signal/20">
-                  <span className="text-sonar-highlight/70 text-xs block mb-2">Key Insights</span>
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">
+                    Key Insights
+                  </span>
                   <ul className="space-y-1.5">
                     {verification.insights.slice(0, 5).map((insight, idx) => (
                       <li key={idx} className="flex items-start space-x-2">
@@ -798,32 +914,37 @@ export function PublishStep({
               {/* Transcript Preview */}
               {verification.transcript && (
                 <div className="pt-3 border-t border-sonar-signal/20">
-                  <span className="text-sonar-highlight/70 text-xs block mb-2">Transcript Preview</span>
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">
+                    Transcript Preview
+                  </span>
                   <div className="bg-sonar-abyss/30 rounded-sonar p-3 max-h-32 overflow-y-auto">
                     <p className="text-sonar-highlight/60 text-xs font-mono leading-relaxed whitespace-pre-wrap">
                       {verification.transcript.slice(0, 300)}
-                      {verification.transcript.length > 300 && '...'}
+                      {verification.transcript.length > 300 && "..."}
                     </p>
                   </div>
                 </div>
               )}
 
               {/* Concerns */}
-              {verification.analysis?.concerns && verification.analysis.concerns.length > 0 && (
-                <div className="pt-3 border-t border-sonar-coral/20">
-                  <span className="text-sonar-coral text-xs block mb-2">⚠ Concerns</span>
-                  <ul className="space-y-1">
-                    {verification.analysis.concerns.map((concern, idx) => (
-                      <li key={idx} className="flex items-start space-x-2">
-                        <span className="text-sonar-coral mt-0.5">!</span>
-                        <span className="text-sonar-coral/70 text-xs leading-relaxed flex-1">
-                          {concern}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {verification.analysis?.concerns &&
+                verification.analysis.concerns.length > 0 && (
+                  <div className="pt-3 border-t border-sonar-coral/20">
+                    <span className="text-sonar-coral text-xs block mb-2">
+                      ⚠ Concerns
+                    </span>
+                    <ul className="space-y-1">
+                      {verification.analysis.concerns.map((concern, idx) => (
+                        <li key={idx} className="flex items-start space-x-2">
+                          <span className="text-sonar-coral mt-0.5">!</span>
+                          <span className="text-sonar-coral/70 text-xs leading-relaxed flex-1">
+                            {concern}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
             </div>
           </GlassCard>
 
@@ -844,14 +965,17 @@ export function PublishStep({
               <div className="flex justify-between">
                 <span className="text-sonar-highlight/70">Languages:</span>
                 <span className="text-sonar-highlight-bright font-mono">
-                  {(
-                    verification.detectedLanguages && verification.detectedLanguages.length > 0
-                      ? verification.detectedLanguages
-                      : metadata.languages || []
+                  {(verification.detectedLanguages &&
+                  verification.detectedLanguages.length > 0
+                    ? verification.detectedLanguages
+                    : metadata.languages || []
                   ).join(", ") || "Not specified"}
-                  {verification.detectedLanguages && verification.detectedLanguages.length > 0 && (
-                    <span className="text-sonar-signal/60 text-xs ml-1">(AI-detected)</span>
-                  )}
+                  {verification.detectedLanguages &&
+                    verification.detectedLanguages.length > 0 && (
+                      <span className="text-sonar-signal/60 text-xs ml-1">
+                        (AI-detected)
+                      </span>
+                    )}
                 </span>
               </div>
 
@@ -924,8 +1048,9 @@ export function PublishStep({
                 Ready to Publish
               </p>
               <p>
-                Your audio has been encrypted, uploaded to Walrus, and verified by AI.
-                Click below to publish to the blockchain and make it available for purchase.
+                Your audio has been encrypted, uploaded to Walrus, and verified
+                by AI. Click below to publish to the blockchain and make it
+                available for purchase.
               </p>
             </div>
           </GlassCard>
@@ -943,8 +1068,9 @@ export function PublishStep({
                   <span className="text-sonar-signal font-mono font-bold">
                     {UPLOAD_FEE_LABEL}
                   </span>{" "}
-                  is required to publish your verified dataset to the blockchain.
-                  This helps prevent spam while tokenomics launch is pending.
+                  is required to publish your verified dataset to the
+                  blockchain. This helps prevent spam while tokenomics launch is
+                  pending.
                 </p>
                 <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
                   <div className="flex justify-between items-center">
@@ -1001,7 +1127,8 @@ export function PublishStep({
               <div className="text-center text-sm text-sonar-highlight/60 space-y-1 mt-2">
                 <p>After publishing:</p>
                 <p className="text-xs">
-                  Buyers can purchase access • Revenue sent to your wallet • Full ownership retained
+                  Buyers can purchase access • Revenue sent to your wallet •
+                  Full ownership retained
                 </p>
               </div>
             )}

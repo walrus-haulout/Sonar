@@ -32,6 +32,10 @@ model Dataset {
   total_duration          Int?     // Sum of all file durations
   bundle_discount_bps     Int?     // Basis points (2000 = 20% discount)
 
+  // Blockchain indexing support
+  blockchain_synced_at    DateTime?  // Last sync from blockchain
+  indexed_at              DateTime?  // Last embedding generation
+
   // Relations
   blobs                   DatasetBlob[]  // Changed from 1:1 to 1:many
   purchases               Purchase[]
@@ -39,6 +43,8 @@ model Dataset {
 
   @@index([creator])
   @@index([created_at])
+  @@index([blockchain_synced_at])
+  @@index([indexed_at])
 }
 
 model DatasetBlob {
