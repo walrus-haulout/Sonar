@@ -29,6 +29,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { RadarScanTarget } from "@/components/animations/RadarScanTarget";
 import { DataAccessNotice } from "@/components/upload/DataAccessNotice";
 import { VerificationFeedback } from "@/components/upload/VerificationFeedback";
+import { VerificationActivityFeed, ActivityLogEntry } from "@/components/upload/VerificationActivityFeed";
 
 /**
  * Extract error message from unknown error type
@@ -266,10 +267,26 @@ export function VerificationStep({
   const [totalFiles, setTotalFiles] = useState(0);
   const [sessionKeyExport, setSessionKeyExport] = useState<any>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
+  const [stageStartTimes, setStageStartTimes] = useState<Record<string, number>>({});
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false); // Guard against React 18 Strict Mode double-mount
   const isAuthorizingRef = useRef(false); // Guard against duplicate authorization attempts
   const isVerifyingRef = useRef(false); // Guard against duplicate verification attempts
+  const logIdCounter = useRef(0);
+
+  // Helper to add activity log
+  const addLog = (stage: string, message: string, type: ActivityLogEntry["type"], progress?: number) => {
+    const log: ActivityLogEntry = {
+      id: `log-${logIdCounter.current++}`,
+      timestamp: Date.now(),
+      stage,
+      message,
+      type,
+      progress,
+    };
+    setActivityLogs((prev) => [...prev, log]);
+  };
 
   // Auto-start verification when component mounts
   useEffect(() => {
@@ -292,6 +309,7 @@ export function VerificationStep({
     }
 
     hasStartedRef.current = true;
+    addLog("INIT", "Initializing verification process...", "info");
     // Move to waiting-auth state - user needs to authorize first
     setVerificationState("waiting-auth");
 
@@ -552,6 +570,7 @@ export function VerificationStep({
       }
 
       console.log("[VerificationStep] Sending verification request to backend");
+      addLog("DECRYPT", "Preparing encrypted blob for verification...", "progress");
 
       // Sanitize metadata to remove any non-serializable properties
       const sanitizedMetadata = sanitizeMetadata(metadata);
@@ -614,6 +633,8 @@ export function VerificationStep({
 
       // Backend will handle blob fetch and decryption
       // We only need to send sessionKeyData for backend to decrypt
+      addLog("DECRYPT", "Fetching encrypted blob from Walrus...", "progress");
+      
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
@@ -628,6 +649,8 @@ export function VerificationStep({
           sessionKeyData: sessionKeyJson,
         }),
       });
+      
+      addLog("DECRYPT", "Blob fetched, decrypting with SEAL key servers...", "progress");
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -718,6 +741,8 @@ export function VerificationStep({
   };
 
   const startPollingEncrypted = (sessionObjectId: string) => {
+    addLog("VERIFY", "Starting verification pipeline...", "progress");
+    
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {
@@ -746,6 +771,23 @@ export function VerificationStep({
           setWarnings(sessionWarnings);
         }
 
+        // Add activity logs for stage changes
+        const stageMessages: Record<string, string> = {
+          quality: "Analyzing audio quality, sample rate, and volume levels...",
+          copyright: "Running fingerprint analysis for copyright detection...",
+          transcription: "Transcribing audio to text using Voxtral AI...",
+          analysis: "Performing AI quality and safety analysis...",
+          finalizing: "Aggregating results and calculating final score...",
+        };
+
+        // Track stage start times and log transitions
+        if (currentStage && !stageStartTimes[currentStage]) {
+          setStageStartTimes((prev) => ({ ...prev, [currentStage]: Date.now() }));
+          if (stageMessages[currentStage]) {
+            addLog(currentStage.toUpperCase(), stageMessages[currentStage], "progress", progress);
+          }
+        }
+
         // Update stages based on current stage
         updateStagesFromSession({
           stage: currentStage,
@@ -760,6 +802,7 @@ export function VerificationStep({
           // Check if approved
           if (!approved) {
             // Verification failed validation
+            addLog("FAILED", errors[0] || "Verification failed checks", "error");
             setVerificationState("failed");
             setErrorMessage(
               errors[0] ||
@@ -771,6 +814,9 @@ export function VerificationStep({
           }
 
           // Verification passed
+          addLog("COMPLETE", `Verification completed! Quality score: ${qualityScore}%`, "success");
+          addLog("COMPLETE", `Suggested price: ${suggestedPrice.toFixed(2)} SUI`, "success");
+          
           const finalResult: VerificationResult = {
             id: sessionObjectId,
             state: "completed",
@@ -1044,7 +1090,7 @@ export function VerificationStep({
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 flex-1">
                         <div
                           className={cn(
                             "p-2 rounded-sonar transition-colors",
@@ -1061,28 +1107,36 @@ export function VerificationStep({
                           )}
                         </div>
 
-                        <div>
-                          <p
-                            className={cn(
-                              "font-mono font-semibold",
-                              isCompleted && "text-sonar-highlight/70",
-                              isActive && "text-sonar-highlight-bright",
-                              isPending && "text-sonar-highlight/50",
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <p
+                              className={cn(
+                                "font-mono font-semibold",
+                                isCompleted && "text-sonar-highlight/70",
+                                isActive && "text-sonar-highlight-bright",
+                                isPending && "text-sonar-highlight/50",
+                              )}
+                            >
+                              {config.label}
+                            </p>
+                            {(isActive || isCompleted) && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sonar-signal font-mono text-sm font-bold">
+                                  {Math.round(stage.progress)}%
+                                </span>
+                                {isCompleted && stageStartTimes[stage.name] && (
+                                  <span className="text-xs text-sonar-highlight/40">
+                                    {((Date.now() - stageStartTimes[stage.name]) / 1000).toFixed(1)}s
+                                  </span>
+                                )}
+                              </div>
                             )}
-                          >
-                            {config.label}
-                          </p>
+                          </div>
                           <p className="text-xs text-sonar-highlight/50">
                             {config.description}
                           </p>
                         </div>
                       </div>
-
-                      {isActive && (
-                        <span className="text-sonar-signal font-mono text-sm">
-                          {Math.round(stage.progress)}%
-                        </span>
-                      )}
                     </div>
 
                     {/* Progress Bar */}
@@ -1101,6 +1155,9 @@ export function VerificationStep({
               );
             })}
           </div>
+
+          {/* Activity Feed */}
+          <VerificationActivityFeed logs={activityLogs} />
 
           {/* Warnings */}
           {warnings.length > 0 && (
@@ -1127,7 +1184,7 @@ export function VerificationStep({
             <div className="flex items-center justify-center space-x-2 text-sonar-highlight/70">
               <Clock className="w-4 h-4 animate-pulse" />
               <p className="text-sm font-mono">
-                This may take 30-60 seconds...
+                Verification typically completes in 30-60 seconds
               </p>
             </div>
           </GlassCard>
