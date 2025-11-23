@@ -706,7 +706,7 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
             response_text = content.strip()
 
             # Parse JSON response
-            analysis = self._parse_analysis_response(response_text)
+            analysis = self._parse_analysis_response(response_text, detected_languages)
 
             # Generate per-file analysis if per-file metadata is present
             per_file_metadata = metadata.get("perFileMetadata", [])
@@ -1048,12 +1048,18 @@ Respond ONLY with the JSON object, no additional text."""
             logger.warning(f"Failed to parse per-file analysis: {e}")
             return None
 
-    def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
+    def _parse_analysis_response(
+        self, response_text: str, detected_languages: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Parse Gemini's enhanced analysis JSON response.
 
         Handles new structured fields (qualityAnalysis, priceAnalysis, overallSummary)
         while maintaining backward compatibility.
+
+        Args:
+            response_text: Raw response from Gemini
+            detected_languages: Languages detected from transcript (e.g., ['ru'])
         """
         try:
             # Extract JSON from markdown code blocks if present
