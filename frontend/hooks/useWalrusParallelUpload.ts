@@ -15,7 +15,6 @@ import {
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
 import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
-import { buildRegisterBlobTransactionAsync } from "@/lib/walrus/buildRegisterBlobTransaction";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
 import type { WalrusUploadResult } from "@/lib/types/upload";
 
@@ -28,11 +27,11 @@ export interface WalrusUploadProgress {
   fileProgress: number; // 0-100
   totalProgress: number; // 0-100
   stage:
-    | "encrypting"
-    | "uploading"
-    | "registering"
-    | "finalizing"
-    | "completed";
+  | "encrypting"
+  | "uploading"
+  | "registering"
+  | "finalizing"
+  | "completed";
   currentRetry?: number; // Current retry attempt (1-10)
   maxRetries?: number; // Max retry attempts
 }
@@ -538,7 +537,7 @@ export function useWalrusParallelUpload() {
       if (!walBalance.hasBalance) {
         throw new Error(
           "Insufficient WAL balance. You need at least 1 WAL token to register blobs on-chain. " +
-            "Please acquire WAL tokens before attempting to upload.",
+          "Please acquire WAL tokens before attempting to upload.",
         );
       }
 

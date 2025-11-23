@@ -1,7 +1,6 @@
 import { Transaction } from "@mysten/sui/transactions";
 import type { SuiClient } from "@mysten/sui/client";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
-import { WalrusClient } from "@mysten/walrus";
 
 // Get env vars lazily to support testing
 function getWalrusConfig(): {
@@ -32,9 +31,9 @@ export interface RegisterBlobParams {
   storageId?: string;
   deletable?: boolean;
   rootHash?: string;
-  walCoinId?: string; // WAL coin for write payment (optional - will fetch if not provided)
-  sponsorAddress?: string; // If walCoinId not provided, fetch from this address
-  suiClient?: SuiClient; // Required if sponsorAddress is provided
+  walCoinId?: string;
+  sponsorAddress?: string;
+  suiClient?: SuiClient;
 }
 
 /**
@@ -124,160 +123,6 @@ function base64UrlToBigInt(base64Url: string): bigint {
 
   // 4. Convert hex to BigInt
   return BigInt(hex);
-}
-
-/**
- * Build a Walrus registerBlob transaction for on-chain blob registration
- *
- * This version handles coin fetching automatically if needed.
- * Use this when you don't have a pre-fetched coin object ID.
- */
-export async function buildRegisterBlobTransactionAsync(
-  params: RegisterBlobParams,
-): Promise<Transaction> {
-  let resolvedWalCoinId = params.walCoinId;
-
-  // If no coin ID provided, fetch one from the sponsor address
-  if (!resolvedWalCoinId && params.sponsorAddress && params.suiClient) {
-    console.log(
-      "[Walrus] Fetching WAL coin for sponsor:",
-      params.sponsorAddress,
-    );
-    const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
-
-    try {
-      const coinsResult = await collectCoinsForAmount(
-        params.suiClient,
-        params.sponsorAddress,
-        walCoinType,
-        1n, // Minimum 1 unit needed
-      );
-
-      if (coinsResult.coins.length === 0) {
-        throw new Error(
-          "No WAL coins found in sponsor wallet. Please ensure you have WAL tokens to pay for blob storage.",
-        );
-      }
-
-      const selectedCoin = coinsResult.coins[0];
-      resolvedWalCoinId = selectedCoin.coinObjectId;
-
-      console.log("[Walrus] WAL coin fetching successful:", {
-        totalBalance: coinsResult.total.toString(),
-        coinCount: coinsResult.coins.length,
-        selectedCoinId: resolvedWalCoinId,
-        selectedCoinBalance: selectedCoin.balance.toString(),
-      });
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "Failed to fetch WAL coins";
-      throw new Error(
-        `[Walrus] Could not obtain WAL payment coin: ${errorMsg}`,
-      );
-    }
-  }
-
-  if (!resolvedWalCoinId) {
-    throw new Error(
-      "[Walrus] WAL coin ID not provided and unable to fetch. " +
-      "Either provide walCoinId or provide sponsorAddress with suiClient.",
-    );
-  }
-
-  return buildRegisterBlobTransaction({
-    ...params,
-    walCoinId: resolvedWalCoinId,
-  });
-}
-
-/**
- * Build a Walrus registerBlob transaction for on-chain blob registration
- * This is the synchronous version - use buildRegisterBlobTransactionAsync if you need coin fetching.
- *
- * Requires a WAL coin to be provided for the write_payment parameter.
- */
-export function buildRegisterBlobTransaction(
-  params: RegisterBlobParams,
-): Transaction {
-  const {
-    blobId,
-    size,
-    encodingType,
-    storageId,
-    deletable = true,
-    rootHash,
-    walCoinId,
-  } = params;
-  const { packageId, systemObject } = getWalrusConfig();
-
-  const tx = new Transaction();
-
-  if (!walCoinId) {
-    throw new Error(
-      "[Walrus] WAL coin ID is required. " +
-      "Either provide walCoinId directly or use buildRegisterBlobTransactionAsync() to fetch it automatically.",
-    );
-  }
-
-  console.log("[Walrus] Building registerBlob transaction:", {
-    packageId,
-    systemObject,
-    blobId,
-    size,
-    encodingType,
-    storageId,
-    deletable,
-    rootHash: rootHash ? "(provided)" : "(missing - using 0x0)",
-  });
-
-  // Convert the base64url blobId to a BigInt for the Move call
-  const blobIdBigInt = base64UrlToBigInt(blobId);
-  console.log("[Walrus] Converted blob ID to BigInt:", blobIdBigInt.toString());
-
-  // Convert encoding type string to u8
-  const encodingTypeU8 = encodingTypeToU8(encodingType);
-  console.log("[Walrus] Encoding type u8:", encodingTypeU8);
-
-  // Convert root hash to BigInt (default to blobId if not provided)
-  let rootHashBigInt = blobIdBigInt;
-  if (rootHash) {
-    try {
-      rootHashBigInt = base64UrlToBigInt(rootHash);
-      console.log(
-        "[Walrus] Converted root hash to BigInt:",
-        rootHashBigInt.toString(),
-      );
-    } catch (err) {
-      console.error("[Walrus] Failed to convert root hash:", err);
-      throw new Error(`Invalid root hash format: ${rootHash}`);
-    }
-  } else {
-    console.log("[Walrus] No root hash provided, using blobId as root hash.");
-  }
-
-  if (!storageId) {
-    console.warn(
-      "[Walrus] No storage ID provided. Storage ID from HTTP response is required.",
-    );
-  }
-
-  // Call walrus::system::register_blob
-  tx.moveCall({
-    target: `${packageId}::system::register_blob`,
-    arguments: [
-      tx.object(systemObject), // self: &mut System
-      storageId ? tx.object(storageId) : tx.object(systemObject), // storage: Storage (fallback to system object - this will likely fail)
-      tx.pure.u256(blobIdBigInt), // blob_id: u256
-      tx.pure.u256(rootHashBigInt), // root_hash: u256
-      tx.pure.u64(size), // size: u64
-      tx.pure.u8(encodingTypeU8), // encoding_type: u8
-      tx.pure.bool(deletable), // deletable: bool
-      tx.object(walCoinId), // write_payment: &mut Coin<WAL>
-    ],
-  });
-
-  console.log("[Walrus] Transaction built successfully");
-  return tx;
 }
 
 export interface BatchRegisterAndSubmitParams {
@@ -425,15 +270,9 @@ export function buildBatchRegisterAndSubmitTransaction(
 
   // Step 2: Register main blob
   console.log(
-    "[Walrus] Registering main blob with encoded size:",
-    mainStorageSize,
+    "[Walrus] Registering main blob with UNENCODED size:",
+    mainBlob.size,
   );
-  console.log("[Walrus] DEBUG - Main blob sizes:", {
-    unencodedSize: mainBlob.size,
-    encodedStorageSize: mainStorageSize,
-    sizePassedToContract: mainBlob.size,
-    ratio: mainStorageSize / mainBlob.size,
-  });
   const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
   const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
 
@@ -444,7 +283,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       mainStorage, // storage: Storage
       tx.pure.u256(mainBlobIdBigInt), // blob_id: u256
       tx.pure.u256(mainBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(mainBlob.size), // size: u64 (unencoded blob size)
+      tx.pure.u64(mainBlob.size), // size: u64 (UNENCODED blob size - contract calculates encoded size)
       tx.pure.u8(mainEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(mainBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>
@@ -473,15 +312,9 @@ export function buildBatchRegisterAndSubmitTransaction(
 
   // Step 4: Register preview blob
   console.log(
-    "[Walrus] Registering preview blob with encoded size:",
-    previewStorageSize,
+    "[Walrus] Registering preview blob with UNENCODED size:",
+    previewBlob.size,
   );
-  console.log("[Walrus] DEBUG - Preview blob sizes:", {
-    unencodedSize: previewBlob.size,
-    encodedStorageSize: previewStorageSize,
-    sizePassedToContract: previewBlob.size,
-    ratio: previewStorageSize / previewBlob.size,
-  });
   const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
   const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
 
@@ -492,7 +325,7 @@ export function buildBatchRegisterAndSubmitTransaction(
       previewStorage, // storage: Storage
       tx.pure.u256(previewBlobIdBigInt), // blob_id: u256
       tx.pure.u256(previewBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(previewBlob.size), // size: u64 (unencoded blob size)
+      tx.pure.u64(previewBlob.size), // size: u64 (UNENCODED blob size - contract calculates encoded size)
       tx.pure.u8(previewEncodingTypeU8), // encoding_type: u8
       tx.pure.bool(previewBlob.deletable ?? true), // deletable: bool
       walCoinRef, // write_payment: &mut Coin<WAL>
