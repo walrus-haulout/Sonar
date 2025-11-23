@@ -522,6 +522,11 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
 
             transcript = completion.choices[0].message.content.strip()
 
+            # Count closed caption features
+            speaker_count = transcript.count("Speaker")
+            annotation_count = transcript.count("(")
+            has_unintelligible = "(unintelligible)" in transcript
+
             stage_duration = time.time() - stage_start
             logger.info(
                 f"[{session_object_id}] Transcription completed",
@@ -530,6 +535,12 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
                     "duration_seconds": round(stage_duration, 2),
                     "api_duration_seconds": round(api_duration, 2),
                     "transcript_length_chars": len(transcript),
+                    "transcript_preview": transcript[:200] + "..."
+                    if len(transcript) > 200
+                    else transcript,
+                    "speakers_detected": speaker_count,
+                    "sound_annotations": annotation_count,
+                    "has_unintelligible": has_unintelligible,
                 },
             )
 
@@ -565,6 +576,24 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
 
         # Build analysis prompt (ported from frontend/lib/ai/analysis.ts)
         prompt = self._build_analysis_prompt(transcript, metadata, quality_info)
+
+        # Log categorization for validation tracking
+        categorization = metadata.get("categorization", {})
+        use_case = categorization.get("useCase", "Not specified")
+        content_type = categorization.get("contentType", "Not specified")
+        domain = categorization.get("domain", "Not specified")
+
+        logger.info(
+            f"[{session_object_id}] Categorization validation starting",
+            extra={
+                "session_id": session_object_id,
+                "user_provided_use_case": use_case,
+                "user_provided_content_type": content_type,
+                "user_provided_domain": domain,
+                "title": metadata.get("title", "Unknown"),
+                "description_preview": metadata.get("description", "")[:100],
+            },
+        )
 
         try:
             # Call Gemini 2.5 Flash via OpenRouter
@@ -630,6 +659,54 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
                     logger.warning(f"Per-file analysis failed: {e}")
 
             await self._update_stage(session_object_id, "analysis", 0.85)
+
+            # Extract quality component scores for logging
+            quality_analysis = analysis.get("qualityAnalysis", {})
+            clarity_score = quality_analysis.get("clarity", {}).get("score")
+            content_value_score = quality_analysis.get("contentValue", {}).get("score")
+            metadata_accuracy_score = quality_analysis.get("metadataAccuracy", {}).get(
+                "score"
+            )
+            completeness_score = quality_analysis.get("completeness", {}).get("score")
+
+            # Extract categorization-related concerns for validation logging
+            all_concerns = analysis.get("concerns", [])
+            categorization_concerns = [
+                c
+                for c in all_concerns
+                if any(
+                    keyword in c.lower()
+                    for keyword in [
+                        "labeled",
+                        "domain",
+                        "use case",
+                        "content type",
+                        "categorization",
+                    ]
+                )
+            ]
+
+            logger.info(
+                f"[{session_object_id}] AI Analysis completed",
+                extra={
+                    "session_id": session_object_id,
+                    "quality_score": analysis.get("qualityScore"),
+                    "clarity_score": clarity_score,
+                    "content_value_score": content_value_score,
+                    "metadata_accuracy_score": metadata_accuracy_score,
+                    "metadata_accuracy_reasoning": quality_analysis.get(
+                        "metadataAccuracy", {}
+                    ).get("reasoning", "")[:150],
+                    "completeness_score": completeness_score,
+                    "suggested_price": analysis.get("suggestedPrice"),
+                    "safety_passed": analysis.get("safetyPassed"),
+                    "insights_count": len(analysis.get("insights", [])),
+                    "concerns_count": len(all_concerns),
+                    "concerns": all_concerns[:3],  # First 3 concerns
+                    "categorization_concerns": categorization_concerns,  # Specific tag validation issues
+                    "overall_summary_preview": analysis.get("overallSummary", "")[:100],
+                },
+            )
 
             return analysis
 
@@ -1008,7 +1085,17 @@ Respond ONLY with the JSON object, no additional text."""
         logger.info(
             f"Approval calculation: quality={quality_passed}, "
             f"copyright_ok={not high_confidence_copyright}, "
-            f"safety={safety_passed} => {approved}"
+            f"safety={safety_passed} => {approved}",
+            extra={
+                "quality_score": analysis_result.get("qualityScore"),
+                "suggested_price": analysis_result.get("suggestedPrice"),
+                "concerns": analysis_result.get("concerns", []),
+                "copyright_detected": copyright_detected,
+                "copyright_confidence": copyright_confidence,
+                "copyright_matches": copyright_info.get("matched_songs", []),
+                "safety_passed": safety_passed,
+                "final_approved": approved,
+            },
         )
 
         return approved
