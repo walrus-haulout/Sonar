@@ -50,10 +50,12 @@ Required environment variables (production):
 - `SUI_PACKAGE_ID` – Published SONAR Move package ID
 - `SUI_SESSION_REGISTRY_ID` – SessionRegistry object ID
 - `SUI_VALIDATOR_CAP_ID` – ValidatorCap object ID
-- `WALRUS_UPLOAD_URL` – Plaintext upload endpoint
+- `WALRUS_UPLOAD_URL` – Walrus publisher base URL (e.g., `https://publisher.walrus-mainnet.walrus.space`)
+  - The upload function automatically appends `/v1/blobs?epochs={N}` to this URL
+  - Uses official Walrus HTTP API: `PUT /v1/blobs?epochs={N}` with raw binary data
 
 Recommended/optional:
-- `WALRUS_UPLOAD_TOKEN` – Bearer token for Walrus uploads
+- `WALRUS_UPLOAD_TOKEN` – Bearer token for Walrus uploads (optional authentication)
 - `MAX_FILE_SIZE_GB` – Override streaming upload limit (default 13)
 
 ### 3. Run Locally

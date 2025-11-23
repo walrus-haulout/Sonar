@@ -390,7 +390,7 @@ export function useAtomicBlobRegistration() {
         previewBlobId,
         sealPolicyId,
         durationSeconds,
-        250_000_000, // 0.25 SUI
+        500_000_000, // 0.5 SUI (contract minimum)
         previewBlobHash,
       );
       console.log(

@@ -31,7 +31,9 @@ def integration_env(monkeypatch):
     monkeypatch.setenv("SEAL_PACKAGE_ID", "0x123456")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setenv("ENABLE_LEGACY_UPLOAD", "true")
-    monkeypatch.setenv("WALRUS_UPLOAD_URL", "http://localhost:8080/upload")
+    # WALRUS_UPLOAD_URL should be the Walrus publisher base URL (e.g., https://publisher.walrus-mainnet.walrus.space)
+    # The upload function will append /v1/blobs?epochs={N} automatically
+    monkeypatch.setenv("WALRUS_UPLOAD_URL", "http://localhost:8080")
     monkeypatch.setenv("WALRUS_UPLOAD_TOKEN", "test-upload-token")
     return monkeypatch
 

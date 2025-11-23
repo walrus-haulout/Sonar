@@ -33,11 +33,51 @@ Dataset bundles (`DatasetSubmission`) mirror the same fields for multiple files.
 
 ## Upload Pipeline (Client → Edge → Walrus)
 1. **Encrypt**: The upload wizard uses Mysten Seal (`packages/seal`, `useWalrusUpload`) to encrypt audio in-browser and capture the `seal_policy_id`.
-2. **Walrus upload**: `/api/edge/walrus/upload` streams the encrypted blob to the Walrus publisher (`PUT /v1/blobs`).
+2. **Walrus upload**: `/api/edge/walrus/upload` streams the encrypted blob to the Walrus publisher using the official Walrus HTTP API (`PUT /v1/blobs?epochs={N}`).
 3. **Preview upload**: `/api/edge/walrus/preview` handles short public clips (≤10 MB) via the same publisher endpoint.
 4. **Metadata capture**: The wizard surfaces both blob IDs so the user can embed them when calling `marketplace::submit_audio` or finalising verification sessions.
 
 **MVP Limitation**: Files are limited to 1GB. Blockberry HTTP API handles publisher registration automatically; the browser only needs to call `marketplace::submit_blobs` for fee collection and event emission.
+
+## Walrus HTTP API Specification
+
+All uploads use the official Walrus HTTP API format:
+
+- **Endpoint**: `PUT /v1/blobs?epochs={N}`
+- **Method**: `PUT`
+- **Headers**:
+  - `Content-Type: application/octet-stream` (required)
+  - `X-API-Key: {key}` (optional, for Blockberry authentication)
+  - `Authorization: Bearer {token}` (optional, for custom authentication)
+- **Body**: Raw binary data (the file content)
+- **Response Format**: JSON with one of two structures:
+  ```json
+  {
+    "newlyCreated": {
+      "blobObject": {
+        "blobId": "base64url-encoded-blob-id",
+        "certifiedEpoch": 100,
+        "encodingType": "...",
+        "storage": { "id": "..." },
+        "deletable": true
+      }
+    }
+  }
+  ```
+  OR
+  ```json
+  {
+    "alreadyCertified": {
+      "blobId": "base64url-encoded-blob-id",
+      "certifiedEpoch": 100
+    }
+  }
+  ```
+
+**Implementation Notes**:
+- The `epochs` parameter specifies storage duration (default: 26 epochs ≈ 1 year)
+- All upload implementations (frontend edge route, walrus-publisher service, audio-verifier) use this same API format
+- Response parsing handles both `newlyCreated` and `alreadyCertified` formats for compatibility
 
 ## Purchase & Access Flow
 1. **Purchase**: `usePurchase` calls `marketplace::purchase_dataset`. The contract burns/allocates tokens and mints a receipt via `purchase_policy::mint_receipt` for Seal policy checks.

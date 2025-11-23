@@ -342,6 +342,9 @@ def get_verification_pipeline() -> VerificationPipeline:
 async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -> str:
     """
     Upload plaintext audio to Walrus and return the resulting blob ID.
+    
+    Uses the official Walrus HTTP API: PUT /v1/blobs?epochs={N}
+    with raw binary data in the request body.
 
     Raises HTTP 503 if Walrus configuration is missing, or HTTP 502 if the upload fails.
     """
@@ -351,41 +354,54 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
             detail="Walrus upload not configured (set WALRUS_UPLOAD_URL and optional WALRUS_UPLOAD_TOKEN)",
         )
 
-    headers = {}
+    # Default to 26 epochs (1 year) if not specified in metadata
+    epochs = metadata.get("epochs", 26)
+    
+    # Build Walrus URL - WALRUS_UPLOAD_URL should be the publisher base URL
+    # Append /v1/blobs if not already present
+    base_url = WALRUS_UPLOAD_URL.rstrip("/")
+    if "/v1/blobs" not in base_url:
+        walrus_url = f"{base_url}/v1/blobs?epochs={epochs}"
+    else:
+        # If URL already contains /v1/blobs, just append epochs parameter
+        separator = "&" if "?" in base_url else "?"
+        walrus_url = f"{base_url}{separator}epochs={epochs}"
+
+    headers = {
+        "Content-Type": "application/octet-stream",
+    }
     if WALRUS_UPLOAD_TOKEN:
         headers["Authorization"] = f"Bearer {WALRUS_UPLOAD_TOKEN}"
-
-    # Keep payload minimal while still providing context for downstream services
-    metadata_payload = metadata.get("metadata") if isinstance(metadata, dict) else None
-    if metadata_payload is None:
-        metadata_payload = metadata
-
-    form_payload = {
-        "filename": os.path.basename(file_path),
-        "metadata": json.dumps(metadata_payload or {}),
-    }
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             with open(file_path, "rb") as file_handle:
-                files = {
-                    "file": (
-                        os.path.basename(file_path),
-                        file_handle,
-                        "application/octet-stream",
-                    )
-                }
-                response = await client.post(
-                    WALRUS_UPLOAD_URL,
-                    data=form_payload,
-                    files=files,
+                file_data = file_handle.read()
+                response = await client.put(
+                    walrus_url,
+                    content=file_data,
                     headers=headers,
                 )
         response.raise_for_status()
         payload = response.json()
-        blob_id = payload.get("blob_id") or payload.get("blobId") or payload.get("id")
+        
+        # Handle Walrus HTTP API response format
+        # Response can be either:
+        # { "newlyCreated": { "blobObject": { "blobId": "...", ... } } }
+        # or { "alreadyCertified": { "blobId": "...", ... } }
+        blob_id = None
+        if "newlyCreated" in payload:
+            blob_object = payload["newlyCreated"].get("blobObject", {})
+            blob_id = blob_object.get("blobId") or blob_object.get("blob_id")
+        elif "alreadyCertified" in payload:
+            blob_id = payload["alreadyCertified"].get("blobId") or payload["alreadyCertified"].get("blob_id")
+        
+        # Fallback to legacy format for backwards compatibility
         if not blob_id:
-            raise ValueError("Walrus response missing blob identifier")
+            blob_id = payload.get("blob_id") or payload.get("blobId") or payload.get("id")
+        
+        if not blob_id:
+            raise ValueError(f"Walrus response missing blob identifier. Response: {payload}")
         return str(blob_id)
     except HTTPException:
         raise

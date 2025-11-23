@@ -73,7 +73,7 @@ interface PublishStepProps {
   onError: (error: string) => void;
 }
 
-const FIXED_PRICE_PER_FILE_MIST = 250_000_000; // Fixed 0.25 SUI per file
+const FIXED_PRICE_PER_FILE_MIST = 500_000_000; // Fixed 0.5 SUI per file (contract minimum)
 const MIST_PER_SUI = 1_000_000_000;
 
 function formatMistToSui(mist: number) {
@@ -169,27 +169,33 @@ export function PublishStep({
 
         onError(
           `Blockchain configuration incomplete. Missing: ${missingIds.join(", ")}. ` +
-          `Please check your .env file and ensure all contract addresses are deployed.`
+            `Please check your .env file and ensure all contract addresses are deployed.`,
         );
         setPublishState("idle");
         return;
       }
 
       // Validate package ID format (should be a valid Sui object ID)
-      if (!CHAIN_CONFIG.packageId.startsWith("0x") || CHAIN_CONFIG.packageId.length < 10) {
+      if (
+        !CHAIN_CONFIG.packageId.startsWith("0x") ||
+        CHAIN_CONFIG.packageId.length < 10
+      ) {
         onError(
           `Invalid PACKAGE_ID format: "${CHAIN_CONFIG.packageId}". ` +
-          `Expected a valid Sui object ID starting with "0x".`
+            `Expected a valid Sui object ID starting with "0x".`,
         );
         setPublishState("idle");
         return;
       }
 
       // Validate marketplace ID format
-      if (!CHAIN_CONFIG.marketplaceId.startsWith("0x") || CHAIN_CONFIG.marketplaceId.length < 10) {
+      if (
+        !CHAIN_CONFIG.marketplaceId.startsWith("0x") ||
+        CHAIN_CONFIG.marketplaceId.length < 10
+      ) {
         onError(
           `Invalid MARKETPLACE_ID format: "${CHAIN_CONFIG.marketplaceId}". ` +
-          `Expected a valid Sui object ID starting with "0x".`
+            `Expected a valid Sui object ID starting with "0x".`,
         );
         setPublishState("idle");
         return;
@@ -218,7 +224,7 @@ export function PublishStep({
         const sealPolicyIds = files.map((f) => f.seal_policy_id);
         const durations = files.map((f) => Math.max(1, Math.floor(f.duration))); // Convert to u64
 
-        // Calculate total upload fee with 10% bundle discount (fixed 0.25 SUI per file)
+        // Calculate total upload fee with 10% bundle discount (fixed 0.5 SUI per file)
         const totalUploadFeeMist = calculateDatasetPriceMist(files.length);
 
         const uploadFeeCoin = tx.splitCoins(tx.gas, [totalUploadFeeMist])[0];
@@ -262,7 +268,7 @@ export function PublishStep({
           if (!walrusUpload.blobId || walrusUpload.blobId.length < 16) {
             onError(
               `Invalid Walrus blob ID: "${walrusUpload.blobId}". ` +
-              `Upload may have failed. Please try re-uploading.`,
+                `Upload may have failed. Please try re-uploading.`,
             );
             setPublishState("idle");
             return;
@@ -275,7 +281,7 @@ export function PublishStep({
           ) {
             onError(
               `Invalid Seal policy ID: "${walrusUpload.seal_policy_id}". ` +
-              `Encryption may have failed. Please try re-encrypting.`,
+                `Encryption may have failed. Please try re-encrypting.`,
             );
             setPublishState("idle");
             return;
@@ -604,8 +610,8 @@ export function PublishStep({
                 );
                 throw new Error(
                   "Failed to extract dataset ID from transaction. " +
-                  "The transaction succeeded but no AudioSubmission or DatasetSubmission object was found. " +
-                  `Transaction digest: ${result.digest}`,
+                    "The transaction succeeded but no AudioSubmission or DatasetSubmission object was found. " +
+                    `Transaction digest: ${result.digest}`,
                 );
               }
 
@@ -646,49 +652,50 @@ export function PublishStep({
                   const files =
                     walrusUpload.files && walrusUpload.files.length > 0
                       ? walrusUpload.files.map((file) => ({
-                        file_index: file.file_index || 0,
-                        seal_policy_id: file.seal_policy_id,
-                        blob_id: file.blobId,
-                        preview_blob_id: file.previewBlobId ?? null,
-                        duration_seconds: Math.max(
-                          1,
-                          Math.floor(file.duration),
-                        ),
-                        mime_type:
-                          file.mimeType ||
-                          walrusUpload.mimeType ||
-                          "audio/mpeg",
-                        preview_mime_type:
-                          file.previewMimeType ??
-                          walrusUpload.previewMimeType ??
-                          null,
-                      }))
+                          file_index: file.file_index || 0,
+                          seal_policy_id: file.seal_policy_id,
+                          blob_id: file.blobId,
+                          preview_blob_id: file.previewBlobId ?? null,
+                          duration_seconds: Math.max(
+                            1,
+                            Math.floor(file.duration),
+                          ),
+                          mime_type:
+                            file.mimeType ||
+                            walrusUpload.mimeType ||
+                            "audio/mpeg",
+                          preview_mime_type:
+                            file.previewMimeType ??
+                            walrusUpload.previewMimeType ??
+                            null,
+                        }))
                       : [
-                        {
-                          file_index: 0,
-                          seal_policy_id: walrusUpload.seal_policy_id,
-                          blob_id: walrusUpload.blobId,
-                          preview_blob_id: fallbackPreviewId,
-                          duration_seconds: fallbackDuration,
-                          mime_type: fallbackMime,
-                          preview_mime_type: fallbackPreviewMime,
-                        },
-                      ];
+                          {
+                            file_index: 0,
+                            seal_policy_id: walrusUpload.seal_policy_id,
+                            blob_id: walrusUpload.blobId,
+                            preview_blob_id: fallbackPreviewId,
+                            duration_seconds: fallbackDuration,
+                            mime_type: fallbackMime,
+                            preview_mime_type: fallbackPreviewMime,
+                          },
+                        ];
 
                   const verificationMetadata = verification
                     ? {
-                      verification_id: verification.id,
-                      quality_score: verification.qualityScore,
-                      safety_passed: verification.safetyPassed,
-                      verified_at: new Date().toISOString(),
-                      // Full transcript for pgvector storage and semantic search
-                      transcript: verification.transcript,
-                      detected_languages: verification.detectedLanguages,
-                      // Full analysis for insights and quality breakdown
-                      analysis: verification.analysis,
-                      transcription_details: verification.transcriptionDetails,
-                      quality_breakdown: verification.qualityBreakdown,
-                    }
+                        verification_id: verification.id,
+                        quality_score: verification.qualityScore,
+                        safety_passed: verification.safetyPassed,
+                        verified_at: new Date().toISOString(),
+                        // Full transcript for pgvector storage and semantic search
+                        transcript: verification.transcript,
+                        detected_languages: verification.detectedLanguages,
+                        // Full analysis for insights and quality breakdown
+                        analysis: verification.analysis,
+                        transcription_details:
+                          verification.transcriptionDetails,
+                        quality_breakdown: verification.qualityBreakdown,
+                      }
                     : null;
 
                   const datasetMetadata = {
@@ -908,19 +915,19 @@ export function PublishStep({
                     )}
                     {verification.qualityBreakdown.metadataAccuracy !==
                       null && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-sonar-highlight/60">
-                            Metadata:
-                          </span>
-                          <span className="text-sonar-signal font-mono">
-                            {Math.round(
-                              verification.qualityBreakdown.metadataAccuracy *
+                      <div className="flex justify-between text-xs">
+                        <span className="text-sonar-highlight/60">
+                          Metadata:
+                        </span>
+                        <span className="text-sonar-signal font-mono">
+                          {Math.round(
+                            verification.qualityBreakdown.metadataAccuracy *
                               100,
-                            )}
-                            %
-                          </span>
-                        </div>
-                      )}
+                          )}
+                          %
+                        </span>
+                      </div>
+                    )}
                     {verification.qualityBreakdown.completeness !== null && (
                       <div className="flex justify-between text-xs">
                         <span className="text-sonar-highlight/60">
@@ -1012,7 +1019,7 @@ export function PublishStep({
                 <span className="text-sonar-highlight/70">Languages:</span>
                 <span className="text-sonar-highlight-bright font-mono">
                   {(verification.detectedLanguages &&
-                    verification.detectedLanguages.length > 0
+                  verification.detectedLanguages.length > 0
                     ? verification.detectedLanguages
                     : metadata.languages || []
                   ).join(", ") || "Not specified"}
@@ -1109,9 +1116,9 @@ export function PublishStep({
                 <h4 className="font-mono font-semibold text-sonar-blue mb-2">
                   Final Step: Upload Fee
                 </h4>
-                <                p className="text-sm text-sonar-highlight/80 mb-3">
-                  Fixed upload fee of 0.25 SUI per file. This helps prevent
-                  spam while keeping the platform accessible to all creators.
+                <p className="text-sm text-sonar-highlight/80 mb-3">
+                  Fixed upload fee of 0.5 SUI per file. This helps prevent spam
+                  while keeping the platform accessible to all creators.
                 </p>
 
                 {(() => {
@@ -1176,7 +1183,7 @@ export function PublishStep({
                         </div>
                       </div>
                       <p className="text-xs text-sonar-highlight/60 italic">
-                        Fixed fee: 0.25 SUI per file
+                        Fixed fee: 0.5 SUI per file
                         {fileCount > 1 && " • Bundle: 10% discount applied"}
                       </p>
                     </div>
@@ -1209,25 +1216,25 @@ export function PublishStep({
             {(publishState === "signing" ||
               publishState === "broadcasting" ||
               publishState === "confirming") && (
-                <GlassCard className="w-full bg-sonar-signal/10 border border-sonar-signal">
-                  <div className="flex items-center space-x-4">
-                    <Loader2 className="w-6 h-6 text-sonar-signal animate-spin" />
-                    <div className="flex-1">
-                      <p className="font-mono font-semibold text-sonar-highlight-bright">
-                        {publishState === "signing" &&
-                          "Waiting for wallet signature..."}
-                        {publishState === "broadcasting" &&
-                          "Broadcasting transaction..."}
-                        {publishState === "confirming" &&
-                          "Confirming on blockchain..."}
-                      </p>
-                      <p className="text-xs text-sonar-highlight/70 mt-1">
-                        Please do not close this window
-                      </p>
-                    </div>
+              <GlassCard className="w-full bg-sonar-signal/10 border border-sonar-signal">
+                <div className="flex items-center space-x-4">
+                  <Loader2 className="w-6 h-6 text-sonar-signal animate-spin" />
+                  <div className="flex-1">
+                    <p className="font-mono font-semibold text-sonar-highlight-bright">
+                      {publishState === "signing" &&
+                        "Waiting for wallet signature..."}
+                      {publishState === "broadcasting" &&
+                        "Broadcasting transaction..."}
+                      {publishState === "confirming" &&
+                        "Confirming on blockchain..."}
+                    </p>
+                    <p className="text-xs text-sonar-highlight/70 mt-1">
+                      Please do not close this window
+                    </p>
                   </div>
-                </GlassCard>
-              )}
+                </div>
+              </GlassCard>
+            )}
 
             {/* What happens after publishing */}
             {publishState === "idle" && (

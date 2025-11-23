@@ -3,15 +3,18 @@
  * Helper functions for data conversion and validation
  */
 
-import type { HexString, Base64String } from './types';
+import type { HexString, Base64String } from "./types";
 
 /**
- * Convert Uint8Array to hex string
+ * Convert Uint8Array to hex string with 0x prefix (Sui-compatible format)
  */
 export function bytesToHex(bytes: Uint8Array): HexString {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  return (
+    "0x" +
+    Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
 }
 
 /**
@@ -19,10 +22,10 @@ export function bytesToHex(bytes: Uint8Array): HexString {
  */
 export function hexToBytes(hex: HexString): Uint8Array {
   // Remove 0x prefix if present
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
 
   if (cleanHex.length % 2 !== 0) {
-    throw new Error('Invalid hex string: odd length');
+    throw new Error("Invalid hex string: odd length");
   }
 
   const bytes = new Uint8Array(cleanHex.length / 2);
@@ -37,9 +40,9 @@ export function hexToBytes(hex: HexString): Uint8Array {
  * Convert Uint8Array to base64 string
  */
 export function bytesToBase64(bytes: Uint8Array): Base64String {
-  if (typeof Buffer !== 'undefined') {
+  if (typeof Buffer !== "undefined") {
     // Node.js environment
-    return Buffer.from(bytes).toString('base64');
+    return Buffer.from(bytes).toString("base64");
   } else {
     // Browser environment
     const binary = String.fromCharCode(...bytes);
@@ -51,9 +54,9 @@ export function bytesToBase64(bytes: Uint8Array): Base64String {
  * Convert base64 string to Uint8Array
  */
 export function base64ToBytes(base64: Base64String): Uint8Array {
-  if (typeof Buffer !== 'undefined') {
+  if (typeof Buffer !== "undefined") {
     // Node.js environment
-    return new Uint8Array(Buffer.from(base64, 'base64'));
+    return new Uint8Array(Buffer.from(base64, "base64"));
   } else {
     // Browser environment
     const binary = atob(base64);
@@ -69,7 +72,7 @@ export function base64ToBytes(base64: Base64String): Uint8Array {
  * Validate hex string format
  */
 export function isValidHex(hex: string): boolean {
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
   return /^[0-9a-fA-F]*$/.test(cleanHex) && cleanHex.length % 2 === 0;
 }
 
@@ -85,14 +88,14 @@ export function isValidSuiAddress(address: string): boolean {
  * Generate random identity bytes
  */
 export function generateRandomIdentity(length: number = 16): Uint8Array {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     return crypto.getRandomValues(new Uint8Array(length));
-  } else if (typeof require !== 'undefined') {
+  } else if (typeof require !== "undefined") {
     // Node.js fallback
-    const crypto = require('crypto');
+    const crypto = require("crypto");
     return new Uint8Array(crypto.randomBytes(length));
   } else {
-    throw new Error('No secure random generator available');
+    throw new Error("No secure random generator available");
   }
 }
 
@@ -107,14 +110,16 @@ export function getCacheKey(packageId: string, identity: string): string {
  * Check if running in browser environment
  */
 export function isBrowser(): boolean {
-  return typeof window !== 'undefined' && typeof window.document !== 'undefined';
+  return (
+    typeof window !== "undefined" && typeof window.document !== "undefined"
+  );
 }
 
 /**
  * Check if IndexedDB is available
  */
 export function hasIndexedDB(): boolean {
-  return isBrowser() && typeof indexedDB !== 'undefined';
+  return isBrowser() && typeof indexedDB !== "undefined";
 }
 
 /**
@@ -134,7 +139,7 @@ export async function retry<T>(
     initialDelay?: number;
     maxDelay?: number;
     backoffFactor?: number;
-  } = {}
+  } = {},
 ): Promise<T> {
   const {
     maxAttempts = 3,
@@ -150,7 +155,7 @@ export async function retry<T>(
     try {
       return await fn();
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown error');
+      lastError = error instanceof Error ? error : new Error("Unknown error");
 
       if (attempt < maxAttempts) {
         await sleep(Math.min(delay, maxDelay));
@@ -166,7 +171,7 @@ export async function retry<T>(
  * Format file size in human-readable format
  */
 export function formatFileSize(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB'];
+  const units = ["B", "KB", "MB", "GB"];
   let size = bytes;
   let unitIndex = 0;
 
@@ -208,11 +213,12 @@ export function validateSessionTTL(ttlMin: number): boolean {
  * Validate threshold value
  * Must be positive integer and <= number of key servers
  */
-export function validateThreshold(threshold: number, numServers: number): boolean {
+export function validateThreshold(
+  threshold: number,
+  numServers: number,
+): boolean {
   return (
-    Number.isInteger(threshold) &&
-    threshold > 0 &&
-    threshold <= numServers
+    Number.isInteger(threshold) && threshold > 0 && threshold <= numServers
   );
 }
 
@@ -234,7 +240,7 @@ export function createIdentityFromString(input: string): Uint8Array {
   const data = encoder.encode(input);
 
   // Use Web Crypto API for hashing
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
+  if (typeof crypto !== "undefined" && crypto.subtle) {
     // Note: This is async, but we'll make the function sync by using a different approach
     // For deterministic identity, we can use a simple hash
   }

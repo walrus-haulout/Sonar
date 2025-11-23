@@ -37,9 +37,22 @@ class WalrusUploader:
             )
             response.raise_for_status()
 
-            # Walrus publisher returns blob_id in JSON
+            # Walrus HTTP API returns blob_id in JSON
+            # Response can be either:
+            # { "newlyCreated": { "blobObject": { "blobId": "...", ... } } }
+            # or { "alreadyCertified": { "blobId": "...", ... } }
             result: Any = response.json()
-            blob_id: Optional[str] = result.get("blobId") or result.get("blob_id")
+            blob_id: Optional[str] = None
+            
+            if "newlyCreated" in result:
+                blob_object = result["newlyCreated"].get("blobObject", {})
+                blob_id = blob_object.get("blobId") or blob_object.get("blob_id")
+            elif "alreadyCertified" in result:
+                blob_id = result["alreadyCertified"].get("blobId") or result["alreadyCertified"].get("blob_id")
+            
+            # Fallback to legacy format for backwards compatibility
+            if not blob_id:
+                blob_id = result.get("blobId") or result.get("blob_id")
 
             if not blob_id:
                 raise ValueError(f"No blob_id in response: {result}")

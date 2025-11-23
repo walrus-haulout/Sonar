@@ -181,6 +181,98 @@ def test_upload_plaintext_to_walrus_missing_url():
 
 
 @pytest.mark.asyncio
+async def test_upload_plaintext_to_walrus_put_api():
+    """Test upload_plaintext_to_walrus uses PUT with raw binary (Walrus HTTP API format)."""
+    from main import upload_plaintext_to_walrus
+    import tempfile
+    import os
+
+    # Create a temporary test file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+        tmp_file.write(b"fake audio data")
+        tmp_file_path = tmp_file.name
+
+    try:
+        # Mock the HTTP response with Walrus API format
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "newlyCreated": {
+                "blobObject": {
+                    "blobId": "test-blob-id-123",
+                    "certifiedEpoch": 100,
+                }
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("main.WALRUS_UPLOAD_URL", "https://publisher.walrus-mainnet.walrus.space"), \
+             patch("main.WALRUS_UPLOAD_TOKEN", None), \
+             patch("httpx.AsyncClient") as mock_client_class:
+            
+            mock_client = AsyncMock()
+            mock_client.put = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            blob_id = await upload_plaintext_to_walrus(tmp_file_path, {"epochs": 26})
+
+            assert blob_id == "test-blob-id-123"
+            
+            # Verify PUT was called with correct URL and headers
+            mock_client.put.assert_called_once()
+            call_args = mock_client.put.call_args
+            assert "/v1/blobs?epochs=26" in call_args[0][0]
+            assert call_args[1]["headers"]["Content-Type"] == "application/octet-stream"
+            assert call_args[1]["content"] == b"fake audio data"
+
+    finally:
+        # Clean up temp file
+        if os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
+
+
+@pytest.mark.asyncio
+async def test_upload_plaintext_to_walrus_already_certified():
+    """Test upload_plaintext_to_walrus handles alreadyCertified response format."""
+    from main import upload_plaintext_to_walrus
+    import tempfile
+    import os
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+        tmp_file.write(b"fake audio data")
+        tmp_file_path = tmp_file.name
+
+    try:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "alreadyCertified": {
+                "blobId": "existing-blob-id-456",
+                "certifiedEpoch": 50,
+            }
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("main.WALRUS_UPLOAD_URL", "https://publisher.walrus-mainnet.walrus.space"), \
+             patch("main.WALRUS_UPLOAD_TOKEN", None), \
+             patch("httpx.AsyncClient") as mock_client_class:
+            
+            mock_client = AsyncMock()
+            mock_client.put = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            blob_id = await upload_plaintext_to_walrus(tmp_file_path, {})
+
+            assert blob_id == "existing-blob-id-456"
+
+    finally:
+        if os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
+
+
+@pytest.mark.asyncio
 async def test_health_endpoint_config_status():
     """Test /health endpoint reports configuration status."""
     from main import app
