@@ -75,35 +75,156 @@ function encodingTypeToU8(encodingType: string | undefined): number {
 }
 
 /**
- * Calculate storage size for Walrus blob reservation
- * Walrus erasure coding increases blob size by 4-5x depending on network configuration
- * Using 6x as a safe multiplier to ensure sufficient storage and account for network overhead
- *
- * @param unencodedSize - Original blob size in bytes
- * @returns Storage size to reserve (6x original with safety margin)
+ * Query n_shards from the Walrus system object
+ * This is needed for accurate storage size calculation
  */
-function calculateWalrusStorageSize(unencodedSize: number): number {
-  // Walrus erasure coding overhead: 4-5x depending on sharding configuration (n_shards)
-  // The actual formula is complex and depends on:
-  // - encoding_type (RS2 = 1)
-  // - n_shards (network configuration)
-  // - symbol_size calculations
-  // 
-  // Using 6x multiplier with additional padding to avoid EResourceSize errors
-  // This ensures we always have enough storage regardless of network configuration
-  const WALRUS_ERASURE_OVERHEAD = 6;
-  const SAFETY_PADDING = 1.1; // 10% additional padding
+async function getNShardsFromSystem(
+  suiClient: SuiClient,
+  systemObjectId: string,
+): Promise<number> {
+  try {
+    const systemObject = await suiClient.getObject({
+      id: systemObjectId,
+      options: { showContent: true },
+    });
 
-  const storageSize = Math.ceil(
-    unencodedSize * WALRUS_ERASURE_OVERHEAD * SAFETY_PADDING,
-  );
+    if (!systemObject.data?.content || systemObject.data.content.dataType !== "moveObject") {
+      throw new Error("Invalid system object structure");
+    }
 
-  console.log("[Walrus] Storage size calculation:", {
+    const fields = systemObject.data.content.fields as any;
+    
+    // The n_shards value is in the system state inner object
+    // Navigate: System -> inner (VersionedInner) -> contents (SystemStateInnerV1)
+    let nShards: number | undefined;
+    
+    if (fields.inner?.fields?.contents?.fields?.epoch_params?.fields?.n_shards) {
+      nShards = Number(fields.inner.fields.contents.fields.epoch_params.fields.n_shards);
+    }
+    
+    if (!nShards || nShards === 0) {
+      console.warn("[Walrus] Could not query n_shards from system object, using default 1000");
+      return 1000; // Mainnet default
+    }
+
+    console.log(`[Walrus] Queried n_shards from system: ${nShards}`);
+    return nShards;
+  } catch (error) {
+    console.warn("[Walrus] Failed to query n_shards, using default 1000:", error);
+    return 1000; // Fallback to mainnet default
+  }
+}
+
+/**
+ * Calculate exact encoded blob length using Walrus redstuff formula
+ * This matches the Move contract logic in walrus::redstuff::encoded_blob_length
+ * 
+ * Formula from contracts/dependencies/walrus/sources/system/redstuff.move
+ */
+function calculateExactEncodedSize(
+  unencodedLength: number,
+  nShards: number,
+  encodingType: number, // 0 = RED_STUFF_RAPTOR, 1 = RS2
+): number {
+  const DIGEST_LEN = 32;
+  const BLOB_ID_LEN = 32;
+  
+  // Helper: max_byzantine
+  const maxByzantine = Math.floor((nShards - 1) / 3);
+  
+  // Helper: decoding_safety_limit
+  const decodingSafetyLimit = encodingType === 0 
+    ? Math.min(Math.floor(maxByzantine / 5), 5) // RED_STUFF_RAPTOR
+    : 0; // RS2
+  
+  // source_symbols_primary and source_symbols_secondary
+  const primary = nShards - 2 * maxByzantine - decodingSafetyLimit;
+  const secondary = nShards - maxByzantine - decodingSafetyLimit;
+  
+  // n_source_symbols
+  const nSourceSymbols = primary * secondary;
+  
+  // symbol_size
+  const unencodedLengthAdjusted = unencodedLength === 0 ? 1 : unencodedLength;
+  let symbolSize = Math.ceil(unencodedLengthAdjusted / nSourceSymbols);
+  
+  // For RS2, symbol size must be even (multiple of 2)
+  if (encodingType === 1 && symbolSize % 2 === 1) {
+    symbolSize += 1;
+  }
+  
+  // slivers_size
+  const sliversSize = (primary + secondary) * symbolSize;
+  
+  // metadata_size
+  const metadataSize = nShards * DIGEST_LEN * 2 + BLOB_ID_LEN;
+  
+  // encoded_blob_length
+  const encodedSize = nShards * (sliversSize + metadataSize);
+  
+  console.log("[Walrus] Exact encoding calculation:", {
+    unencodedLength,
+    nShards,
+    encodingType: encodingType === 0 ? "RED_STUFF_RAPTOR" : "RS2",
+    maxByzantine,
+    decodingSafetyLimit,
+    primary,
+    secondary,
+    nSourceSymbols,
+    symbolSize,
+    sliversSize,
+    metadataSize,
+    encodedSize,
+    multiplier: `${(encodedSize / unencodedLength).toFixed(2)}x`,
+  });
+  
+  return encodedSize;
+}
+
+/**
+ * Calculate storage size for Walrus blob reservation with exact calculation
+ * 
+ * @param unencodedSize - Original blob size in bytes
+ * @param nShards - Number of shards (optional, will use fallback multiplier if not provided)
+ * @param encodingType - Encoding type (0 = RED_STUFF_RAPTOR, 1 = RS2)
+ * @returns Storage size to reserve
+ */
+function calculateWalrusStorageSize(
+  unencodedSize: number,
+  nShards?: number,
+  encodingType: number = 1, // Default to RS2
+): number {
+  // If n_shards is provided, calculate exact size
+  if (nShards !== undefined && nShards > 0) {
+    const exactSize = calculateExactEncodedSize(unencodedSize, nShards, encodingType);
+    // Add 5% safety padding for any rounding differences
+    const storageSize = Math.ceil(exactSize * 1.05);
+    
+    console.log("[Walrus] Storage size calculation (exact):", {
+      unencodedSize,
+      nShards,
+      exactEncodedSize: exactSize,
+      storageSize,
+      overhead: `${(storageSize / unencodedSize).toFixed(2)}x with 5% padding`,
+    });
+    
+    return storageSize;
+  }
+  
+  // Fallback: Use conservative multiplier for safety
+  // For small files with 1000 shards, we need ~160x multiplier
+  // Use 200x to be safe for all file sizes
+  const CONSERVATIVE_MULTIPLIER = 200;
+  
+  const storageSize = Math.ceil(unencodedSize * CONSERVATIVE_MULTIPLIER);
+  
+  console.warn("[Walrus] Storage size calculation (fallback):", {
     unencodedSize,
     storageSize,
-    overhead: `${WALRUS_ERASURE_OVERHEAD}x + ${((SAFETY_PADDING - 1) * 100).toFixed(0)}% padding`,
+    overhead: `${CONSERVATIVE_MULTIPLIER}x (conservative - n_shards not available)`,
+    warning: "Using conservative multiplier - consider querying n_shards for efficiency",
   });
-
+  
   return storageSize;
 }
 
@@ -156,6 +277,8 @@ export interface BatchRegisterAndSubmitParams {
     systemObject: string;
     epochsAhead: number;
   };
+  // Optional: if already queried, avoids re-querying
+  nShards?: number;
 }
 
 /**
@@ -165,6 +288,15 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(
   params: BatchRegisterAndSubmitParams,
 ): Promise<Transaction> {
   let resolvedWalCoinId = params.walCoinId;
+  
+  // Use provided walrusConfig or fetch from env vars
+  const walrusConfig = params.walrusConfig || getWalrusConfig();
+
+  // Query n_shards from the Walrus system object if suiClient is available
+  let nShards: number | undefined = params.nShards;
+  if (!nShards && params.suiClient) {
+    nShards = await getNShardsFromSystem(params.suiClient, walrusConfig.systemObject);
+  }
 
   // If no coin ID provided, fetch one from the sponsor address
   if (!resolvedWalCoinId && params.sponsorAddress && params.suiClient) {
@@ -213,13 +345,11 @@ export async function buildBatchRegisterAndSubmitTransactionAsync(
     );
   }
 
-  // Use provided walrusConfig or fetch from env vars
-  const walrusConfig = params.walrusConfig || getWalrusConfig();
-
   return buildBatchRegisterAndSubmitTransaction({
     ...params,
     walCoinId: resolvedWalCoinId,
     walrusConfig,
+    nShards,
   });
 }
 
@@ -258,8 +388,13 @@ export function buildBatchRegisterAndSubmitTransaction(
   const walCoinRef = tx.object(walCoinId);
 
   // Step 1: Reserve space for main blob
-  // Calculate storage size with 5x erasure coding overhead
-  const mainStorageSize = calculateWalrusStorageSize(mainBlob.size);
+  // Calculate storage size using exact encoding formula or fallback multiplier
+  const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
+  const mainStorageSize = calculateWalrusStorageSize(
+    mainBlob.size,
+    params.nShards,
+    mainEncodingTypeU8,
+  );
   console.log(
     "[Walrus] Reserving space for main blob:",
     mainBlob.size,
@@ -271,7 +406,7 @@ export function buildBatchRegisterAndSubmitTransaction(
     target: `${walrusPackageId}::system::reserve_space`,
     arguments: [
       tx.object(systemObject), // self: &mut System
-      tx.pure.u64(mainStorageSize), // storage_amount: u64 (5x for erasure coding)
+      tx.pure.u64(mainStorageSize), // storage_amount: u64
       tx.pure.u32(epochsAhead), // epochs_ahead: u32
       walCoinRef, // payment: &mut Coin<WAL>
     ],
@@ -283,7 +418,6 @@ export function buildBatchRegisterAndSubmitTransaction(
     mainBlob.size,
   );
   const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
-  const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
 
   tx.moveCall({
     target: `${walrusPackageId}::system::register_blob`,
@@ -300,8 +434,13 @@ export function buildBatchRegisterAndSubmitTransaction(
   });
 
   // Step 3: Reserve space for preview blob
-  // Calculate storage size with 5x erasure coding overhead
-  const previewStorageSize = calculateWalrusStorageSize(previewBlob.size);
+  // Calculate storage size using exact encoding formula or fallback multiplier
+  const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
+  const previewStorageSize = calculateWalrusStorageSize(
+    previewBlob.size,
+    params.nShards,
+    previewEncodingTypeU8,
+  );
   console.log(
     "[Walrus] Reserving space for preview blob:",
     previewBlob.size,
@@ -313,7 +452,7 @@ export function buildBatchRegisterAndSubmitTransaction(
     target: `${walrusPackageId}::system::reserve_space`,
     arguments: [
       tx.object(systemObject), // self: &mut System
-      tx.pure.u64(previewStorageSize), // storage_amount: u64 (5x for erasure coding)
+      tx.pure.u64(previewStorageSize), // storage_amount: u64
       tx.pure.u32(epochsAhead), // epochs_ahead: u32
       walCoinRef, // payment: &mut Coin<WAL>
     ],
@@ -325,7 +464,6 @@ export function buildBatchRegisterAndSubmitTransaction(
     previewBlob.size,
   );
   const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
-  const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
 
   tx.moveCall({
     target: `${walrusPackageId}::system::register_blob`,
