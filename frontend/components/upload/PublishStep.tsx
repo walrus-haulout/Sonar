@@ -682,32 +682,133 @@ export function PublishStep({
           {/* Verification Results Summary */}
           <GlassCard className="bg-sonar-signal/5">
             <h3 className="text-lg font-mono font-bold text-sonar-signal mb-4">
-              ✓ Verification Complete
+              ✓ AI Verification Complete
             </h3>
 
-            <div className="space-y-3 text-sm">
-              {verification.qualityScore && (
-                <div className="flex justify-between">
-                  <span className="text-sonar-highlight/70">Quality Score:</span>
-                  <span className="text-sonar-signal font-mono font-bold">
-                    {Math.round(verification.qualityScore * 100)}%
-                  </span>
+            <div className="space-y-4 text-sm">
+              {/* Overall Summary */}
+              {verification.analysis?.overallSummary && (
+                <div className="pb-3 border-b border-sonar-signal/20">
+                  <p className="text-sonar-highlight/80 leading-relaxed">
+                    {verification.analysis.overallSummary}
+                  </p>
                 </div>
               )}
 
-              <div className="flex justify-between">
-                <span className="text-sonar-highlight/70">Safety Check:</span>
-                <span className="text-sonar-signal font-mono">
-                  {verification.safetyPassed ? "✓ Passed" : "⚠ Review Required"}
-                </span>
+              {/* Key Metrics */}
+              <div className="grid grid-cols-2 gap-3">
+                {verification.qualityScore !== undefined && (
+                  <div>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">Quality Score</span>
+                    <span className="text-sonar-signal font-mono font-bold text-lg">
+                      {Math.round(verification.qualityScore * 100)}%
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <span className="text-sonar-highlight/70 text-xs block mb-1">Safety Check</span>
+                  <span className="text-sonar-signal font-mono font-bold text-lg">
+                    {verification.safetyPassed ? "✓ Passed" : "⚠ Review"}
+                  </span>
+                </div>
+
+                {verification.suggestedPrice && (
+                  <div>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">Suggested Price</span>
+                    <span className="text-sonar-signal font-mono font-bold text-lg">
+                      {verification.suggestedPrice.toFixed(2)} SUI
+                    </span>
+                  </div>
+                )}
+
+                {verification.transcriptionDetails && (
+                  <div>
+                    <span className="text-sonar-highlight/70 text-xs block mb-1">Speakers</span>
+                    <span className="text-sonar-signal font-mono font-bold text-lg">
+                      {verification.transcriptionDetails.speakerCount}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {verification.suggestedPrice && (
-                <div className="flex justify-between">
-                  <span className="text-sonar-highlight/70">Suggested Price:</span>
-                  <span className="text-sonar-signal font-mono">
-                    {verification.suggestedPrice} SUI
-                  </span>
+              {/* Quality Breakdown */}
+              {verification.qualityBreakdown && (
+                <div className="pt-3 border-t border-sonar-signal/20">
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">Quality Breakdown</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {verification.qualityBreakdown.clarity !== null && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-sonar-highlight/60">Clarity:</span>
+                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.clarity * 100)}%</span>
+                      </div>
+                    )}
+                    {verification.qualityBreakdown.contentValue !== null && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-sonar-highlight/60">Content:</span>
+                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.contentValue * 100)}%</span>
+                      </div>
+                    )}
+                    {verification.qualityBreakdown.metadataAccuracy !== null && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-sonar-highlight/60">Metadata:</span>
+                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.metadataAccuracy * 100)}%</span>
+                      </div>
+                    )}
+                    {verification.qualityBreakdown.completeness !== null && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-sonar-highlight/60">Completeness:</span>
+                        <span className="text-sonar-signal font-mono">{Math.round(verification.qualityBreakdown.completeness * 100)}%</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Insights */}
+              {verification.insights && verification.insights.length > 0 && (
+                <div className="pt-3 border-t border-sonar-signal/20">
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">Key Insights</span>
+                  <ul className="space-y-1.5">
+                    {verification.insights.slice(0, 5).map((insight, idx) => (
+                      <li key={idx} className="flex items-start space-x-2">
+                        <span className="text-sonar-signal mt-0.5">•</span>
+                        <span className="text-sonar-highlight/70 text-xs leading-relaxed flex-1">
+                          {insight}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Transcript Preview */}
+              {verification.transcript && (
+                <div className="pt-3 border-t border-sonar-signal/20">
+                  <span className="text-sonar-highlight/70 text-xs block mb-2">Transcript Preview</span>
+                  <div className="bg-sonar-abyss/30 rounded-sonar p-3 max-h-32 overflow-y-auto">
+                    <p className="text-sonar-highlight/60 text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                      {verification.transcript.slice(0, 300)}
+                      {verification.transcript.length > 300 && '...'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Concerns */}
+              {verification.analysis?.concerns && verification.analysis.concerns.length > 0 && (
+                <div className="pt-3 border-t border-sonar-coral/20">
+                  <span className="text-sonar-coral text-xs block mb-2">⚠ Concerns</span>
+                  <ul className="space-y-1">
+                    {verification.analysis.concerns.map((concern, idx) => (
+                      <li key={idx} className="flex items-start space-x-2">
+                        <span className="text-sonar-coral mt-0.5">!</span>
+                        <span className="text-sonar-coral/70 text-xs leading-relaxed flex-1">
+                          {concern}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
