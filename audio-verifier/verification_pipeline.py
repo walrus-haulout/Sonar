@@ -691,7 +691,6 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
                 model=OPENROUTER_MODELS["ANALYSIS"],
                 max_tokens=2048,
                 temperature=0,  # Deterministic output for JSON parsing
-                response_format={"type": "json_object"},  # Force JSON mode
                 messages=analysis_messages,
             )
 
