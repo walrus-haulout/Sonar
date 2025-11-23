@@ -23,6 +23,7 @@ import {
   VerificationStage,
   AudioFile,
   WalrusUploadResult,
+  AISuggestions,
 } from "@/lib/types/upload";
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -43,6 +44,67 @@ function getErrorMessage(error: unknown): string {
     return String((error as { message: unknown }).message);
   }
   return String(error || "Unknown error");
+}
+
+/**
+ * Generate AI suggestions for title and description from verification results
+ */
+function generateAISuggestions(
+  transcript?: string,
+  overallSummary?: string,
+  insights?: string[],
+): AISuggestions {
+  // Generate title from transcript or insights
+  let title = "Audio Dataset";
+  
+  if (transcript) {
+    // Extract first meaningful content line (not speaker label)
+    const lines = transcript.split('\n').filter(line => line.trim().length > 0);
+    for (const line of lines) {
+      // Skip speaker labels like "Speaker 1:", "John:", etc.
+      if (/^[A-Z][a-zA-Z0-9\s]*\d*:\s*/.test(line)) {
+        // Extract the content after the speaker label
+        const content = line.replace(/^[A-Z][a-zA-Z0-9\s]*\d*:\s*/, '').trim();
+        if (content.length >= 20) {
+          // Use first substantial content as title (max 80 chars)
+          title = content.slice(0, 80).trim();
+          if (content.length > 80) title += '...';
+          break;
+        }
+      } else if (line.length >= 20) {
+        // Use first substantial line as title
+        title = line.slice(0, 80).trim();
+        if (line.length > 80) title += '...';
+        break;
+      }
+    }
+  } else if (insights && insights.length > 0) {
+    // Fallback: use first insight as title
+    title = insights[0].slice(0, 80);
+    if (insights[0].length > 80) title += '...';
+  }
+  
+  // Generate description from overallSummary or insights
+  let description = "An audio dataset verified by AI.";
+  
+  if (overallSummary) {
+    description = overallSummary;
+  } else if (insights && insights.length > 0) {
+    description = insights.slice(0, 3).join('. ') + '.';
+  }
+  
+  // Extract keywords from insights
+  const keywords = insights?.slice(0, 5).map(insight => {
+    // Take first 2-3 words from each insight as a keyword
+    const words = insight.split(' ').filter(w => w.length > 3);
+    return words.slice(0, 2).join(' ');
+  }) || [];
+  
+  return {
+    title,
+    description,
+    keywords,
+  };
 }
 
 /**
@@ -986,11 +1048,26 @@ export function VerificationStep({
 
     addLog("VERIFY", "Starting verification pipeline...", "progress");
 
+    // Track when polling started to handle initial 404s gracefully
+    const pollingStartTime = Date.now();
+
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {
         // Call server-side API (proxies to audio-verifier with secure token)
         const response = await fetch(`/api/verify/${sessionObjectId}`);
+
+        // Handle 404 gracefully during initial polling (session may not be created yet)
+        if (!response.ok && response.status === 404) {
+          const elapsedTime = Date.now() - pollingStartTime;
+          if (elapsedTime < 15000) {
+            // Ignore 404s for first 15 seconds
+            console.log(
+              `[VerificationStep] 404 during initial polling (${Math.round(elapsedTime / 1000)}s elapsed), will retry...`,
+            );
+            return; // Continue polling
+          }
+        }
 
         if (!response.ok) {
           throw new Error(`Failed to poll verification: ${response.status}`);
@@ -1126,6 +1203,13 @@ export function VerificationStep({
             "success",
           );
 
+          // Generate AI suggestions for title and description
+          const aiSuggestions = generateAISuggestions(
+            session.transcript,
+            session.analysis?.overallSummary,
+            analysis.insights || [],
+          );
+
           const finalResult: VerificationResult = {
             id: sessionObjectId,
             state: "completed",
@@ -1143,6 +1227,7 @@ export function VerificationStep({
             safetyPassed,
             insights: analysis.insights || [],
             analysis: session.analysis,
+            aiSuggestions,
             updatedAt: Date.now(),
             transcriptionDetails: session.transcriptionDetails,
             categorizationValidation: session.categorizationValidation,

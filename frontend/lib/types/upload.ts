@@ -208,6 +208,12 @@ export interface VerificationSession {
   errors?: string[];
 }
 
+export interface AISuggestions {
+  title: string;
+  description: string;
+  keywords?: string[];
+}
+
 export interface VerificationResult {
   id: string;
   state: "pending" | "processing" | "completed" | "failed";
@@ -220,6 +226,7 @@ export interface VerificationResult {
   safetyPassed?: boolean;
   insights?: string[];
   analysis?: AnalysisOutput; // Full enhanced AI analysis output
+  aiSuggestions?: AISuggestions; // AI-generated title and description
   error?: string;
   updatedAt: number;
   transcriptionDetails?: {

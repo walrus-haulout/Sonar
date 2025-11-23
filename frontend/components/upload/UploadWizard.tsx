@@ -476,6 +476,7 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             <MetadataStep
               metadata={state.metadata}
               audioFiles={state.audioFiles}
+              verification={state.verification}
               onSubmit={(metadata) => {
                 setState((prev) => ({ ...prev, metadata }));
                 goToNextStep();

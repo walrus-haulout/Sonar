@@ -4,17 +4,18 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { Info, Tag, Globe, ChevronDown } from 'lucide-react';
+import { Info, Tag, Globe, ChevronDown, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import type { DatasetMetadata, AudioFile } from '@/lib/types/upload';
+import type { DatasetMetadata, AudioFile, VerificationResult } from '@/lib/types/upload';
 import { SonarButton } from '@/components/ui/SonarButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface MetadataStepProps {
   metadata: DatasetMetadata | null;
   audioFiles?: AudioFile[];
+  verification?: VerificationResult | null;
   onSubmit: (metadata: DatasetMetadata) => void;
   onBack: () => void;
   error: string | null;
@@ -192,6 +193,7 @@ type MetadataFormData = z.infer<typeof metadataSchema>;
 export function MetadataStep({
   metadata,
   audioFiles = [],
+  verification,
   onSubmit,
   onBack,
   error,
@@ -322,8 +324,58 @@ export function MetadataStep({
     onSubmit(data);
   };
 
+  // Handler to apply AI suggestions
+  const applyAISuggestions = () => {
+    if (verification?.aiSuggestions) {
+      setValue('title', verification.aiSuggestions.title, { shouldValidate: true });
+      setValue('description', verification.aiSuggestions.description, { shouldValidate: true });
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+      {/* AI SUGGESTIONS NOTICE */}
+      {verification?.aiSuggestions && (
+        <GlassCard className="bg-sonar-signal/5 border border-sonar-signal/30">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start space-x-3 flex-1">
+              <Sparkles className="w-5 h-5 text-sonar-signal mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-mono font-semibold text-sonar-signal mb-2">
+                  AI-Generated Suggestions Available
+                </h3>
+                <p className="text-sm text-sonar-highlight/80 mb-3">
+                  Our AI has analyzed your audio and generated title and description suggestions based on the content.
+                </p>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <p className="text-sonar-highlight/60 mb-1">Suggested Title:</p>
+                    <p className="text-sonar-highlight font-mono bg-sonar-abyss/30 p-2 rounded">
+                      {verification.aiSuggestions.title}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sonar-highlight/60 mb-1">Suggested Description:</p>
+                    <p className="text-sonar-highlight font-mono bg-sonar-abyss/30 p-2 rounded">
+                      {verification.aiSuggestions.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <SonarButton
+              type="button"
+              variant="secondary"
+              onClick={applyAISuggestions}
+              className="flex-shrink-0"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Use AI Suggestions
+            </SonarButton>
+          </div>
+        </GlassCard>
+      )}
+
       {/* BASIC SECTION */}
       <SectionCollapsible
         title="Basic Information"

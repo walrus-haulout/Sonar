@@ -73,8 +73,7 @@ interface PublishStepProps {
   onError: (error: string) => void;
 }
 
-const MIN_PRICE_PER_FILE_MIST = 500_000_000; // 0.5 SUI per file
-const MAX_PRICE_PER_FILE_MIST = 10_000_000_000; // 10 SUI per file
+const FIXED_PRICE_PER_FILE_MIST = 250_000_000; // Fixed 0.25 SUI per file
 const MIST_PER_SUI = 1_000_000_000;
 
 function formatMistToSui(mist: number) {
@@ -82,30 +81,9 @@ function formatMistToSui(mist: number) {
   return Number(value.toFixed(9)).toString();
 }
 
-// Calculate price per file based on quality score (0-100)
-// Quality 0-50: 0.5 SUI, 50-75: 0.5-5 SUI, 75-100: 5-10 SUI
-function calculateFilePriceMist(qualityScore: number): number {
-  const normalizedScore = Math.max(0, Math.min(100, qualityScore));
-
-  if (normalizedScore <= 50) {
-    return MIN_PRICE_PER_FILE_MIST;
-  } else if (normalizedScore <= 75) {
-    // Linear interpolation from 0.5 to 5 SUI
-    const progress = (normalizedScore - 50) / 25;
-    return MIN_PRICE_PER_FILE_MIST + 4_500_000_000 * progress;
-  } else {
-    // Linear interpolation from 5 to 10 SUI
-    const progress = (normalizedScore - 75) / 25;
-    return 5_000_000_000 + 5_000_000_000 * progress;
-  }
-}
-
 // Calculate total dataset price with 10% bundle discount for multi-file datasets
-function calculateDatasetPriceMist(
-  pricePerFileMist: number,
-  fileCount: number,
-): number {
-  const totalPrice = pricePerFileMist * fileCount;
+function calculateDatasetPriceMist(fileCount: number): number {
+  const totalPrice = FIXED_PRICE_PER_FILE_MIST * fileCount;
 
   // Apply 10% bundle discount for 2+ files
   if (fileCount >= 2) {
@@ -240,15 +218,8 @@ export function PublishStep({
         const sealPolicyIds = files.map((f) => f.seal_policy_id);
         const durations = files.map((f) => Math.max(1, Math.floor(f.duration))); // Convert to u64
 
-        // Calculate total upload fee with 10% bundle discount
-        const qualityScore = verification.qualityScore
-          ? verification.qualityScore * 100
-          : 50;
-        const pricePerFileMist = calculateFilePriceMist(qualityScore);
-        const totalUploadFeeMist = calculateDatasetPriceMist(
-          pricePerFileMist,
-          files.length,
-        );
+        // Calculate total upload fee with 10% bundle discount (fixed 0.25 SUI per file)
+        const totalUploadFeeMist = calculateDatasetPriceMist(files.length);
 
         const uploadFeeCoin = tx.splitCoins(tx.gas, [totalUploadFeeMist])[0];
 
@@ -1138,23 +1109,16 @@ export function PublishStep({
                 <h4 className="font-mono font-semibold text-sonar-blue mb-2">
                   Final Step: Upload Fee
                 </h4>
-                <p className="text-sm text-sonar-highlight/80 mb-3">
-                  Upload fee is calculated based on quality score (0.5-10 SUI
-                  per file). Higher quality = higher fee. This helps prevent
-                  spam and rewards quality data.
+                <                p className="text-sm text-sonar-highlight/80 mb-3">
+                  Fixed upload fee of 0.25 SUI per file. This helps prevent
+                  spam while keeping the platform accessible to all creators.
                 </p>
 
                 {(() => {
-                  const qualityScore = verification.qualityScore
-                    ? verification.qualityScore * 100
-                    : 50;
-                  const pricePerFileMist = calculateFilePriceMist(qualityScore);
                   const fileCount = walrusUpload.files?.length || 1;
+                  const pricePerFileMist = FIXED_PRICE_PER_FILE_MIST;
                   const subtotalMist = pricePerFileMist * fileCount;
-                  const totalFeeMist = calculateDatasetPriceMist(
-                    pricePerFileMist,
-                    fileCount,
-                  );
+                  const totalFeeMist = calculateDatasetPriceMist(fileCount);
                   const discountMist = subtotalMist - totalFeeMist;
 
                   const pricePerFileLabel = formatMistToSui(pricePerFileMist);
@@ -1167,8 +1131,7 @@ export function PublishStep({
                       <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-xs text-sonar-highlight/70">
-                            Price per file (Quality: {Math.round(qualityScore)}
-                            ):
+                            Price per file:
                           </span>
                           <span className="font-mono font-bold text-sonar-signal">
                             {pricePerFileLabel} SUI
@@ -1213,8 +1176,7 @@ export function PublishStep({
                         </div>
                       </div>
                       <p className="text-xs text-sonar-highlight/60 italic">
-                        Quality range: 0.5 SUI (basic) → 10 SUI (exceptional)
-                        per file
+                        Fixed fee: 0.25 SUI per file
                         {fileCount > 1 && " • Bundle: 10% discount applied"}
                       </p>
                     </div>
@@ -1228,12 +1190,8 @@ export function PublishStep({
           <div className="flex flex-col items-center space-y-4">
             {publishState === "idle" &&
               (() => {
-                const qualityScore = verification.qualityScore
-                  ? verification.qualityScore * 100
-                  : 50;
-                const pricePerFileMist = calculateFilePriceMist(qualityScore);
                 const fileCount = walrusUpload.files?.length || 1;
-                const totalFeeMist = pricePerFileMist * fileCount;
+                const totalFeeMist = calculateDatasetPriceMist(fileCount);
                 const totalFeeLabel = formatMistToSui(totalFeeMist);
 
                 return (
