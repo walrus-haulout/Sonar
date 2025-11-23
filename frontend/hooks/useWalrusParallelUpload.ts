@@ -485,6 +485,9 @@ export function useWalrusParallelUpload() {
 
   /**
    * Main upload function
+   * NOTE: This ONLY uploads to Walrus HTTP API - it does NOT submit to blockchain
+   * Blockchain submission happens separately in PublishStep for single files
+   * or in EncryptionStep for multi-file batches
    */
   const uploadBlob = useCallback(
     async (
@@ -517,66 +520,11 @@ export function useWalrusParallelUpload() {
         options,
       );
 
-      // 2. Preflight check for WAL balance
-      if (!currentAccount) {
-        throw new Error("Wallet not connected");
-      }
-
-      const walBalance = await checkWalBalance(
-        suiClient,
-        currentAccount.address,
-      );
-      if (!walBalance.hasBalance) {
-        throw new Error(
-          "Insufficient WAL balance. You need at least 1 WAL token to register blobs on-chain. " +
-          "Please acquire WAL tokens before attempting to upload.",
-        );
-      }
-
+      // NOTE: Walrus HTTP API automatically registers blobs on-chain
+      // No need for separate blockchain submission here
+      // The Walrus Publisher handles blob registration automatically
       console.log(
-        "[Walrus] WAL balance verified, proceeding with registration",
-      );
-
-      // 3. Batch Register & Submit
-      // We need to ensure we have preview metadata if a preview was uploaded
-      if (publisherResult.previewBlobId && !publisherResult.previewStorageId) {
-        console.warn(
-          "Preview uploaded but missing storage ID. Registration might fail.",
-        );
-      }
-
-      // Fallback to client-side preview size if HTTP upload didn't return it
-      const effectivePreviewSize =
-        publisherResult.previewSize || options.previewBlob?.size || 0;
-
-      console.log("[Walrus] Blob sizes for registration:", {
-        mainBlobSize: publisherResult.size,
-        previewBlobSize: effectivePreviewSize,
-        previewBlobFromHttp: publisherResult.previewSize,
-        previewBlobFromClient: options.previewBlob?.size,
-        hasPreviewBlob: !!options.previewBlob,
-      });
-
-      const txDigest = await batchRegisterAndSubmit(
-        {
-          blobId: publisherResult.blobId,
-          size: publisherResult.size,
-          encodingType: publisherResult.encodingType,
-          storageId: publisherResult.storageId,
-          deletable: publisherResult.deletable,
-        },
-        {
-          blobId: publisherResult.previewBlobId || "", // Handle missing preview gracefully?
-          size: effectivePreviewSize,
-          encodingType: publisherResult.previewEncodingType,
-          storageId: publisherResult.previewStorageId,
-          deletable: publisherResult.previewDeletable,
-        },
-        {
-          sealPolicyId: seal_policy_id,
-          durationSeconds: 0, // TODO: Get actual duration from metadata or file
-          previewBlobHash: undefined, // Optional
-        },
+        "[Walrus] HTTP upload complete - blobs registered by Walrus Publisher",
       );
 
       setProgress((prev) => ({
@@ -598,10 +546,10 @@ export function useWalrusParallelUpload() {
         strategy: "blockberry",
         mimeType: publisherResult.mimeType,
         previewMimeType: publisherResult.previewMimeType,
-        txDigest,
+        // No txDigest - blockchain submission happens in PublishStep
       };
     },
-    [uploadToPublisher, batchRegisterAndSubmit],
+    [uploadToPublisher],
   );
 
   /**
