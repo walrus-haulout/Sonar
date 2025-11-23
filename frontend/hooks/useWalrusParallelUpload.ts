@@ -454,24 +454,16 @@ export function useWalrusParallelUpload() {
             mainBlob: {
               blobId: mainBlob.blobId,
               size: mainBlob.size,
-              encodingType: mainBlob.encodingType,
-              storageId: mainBlob.storageId,
-              deletable: mainBlob.deletable,
             },
             previewBlob: {
               blobId: previewBlob.blobId,
               size: previewBlob.size,
-              encodingType: previewBlob.encodingType,
-              storageId: previewBlob.storageId,
-              deletable: previewBlob.deletable,
             },
             submission: {
               sealPolicyId: submission.sealPolicyId,
               durationSeconds: submission.durationSeconds,
               previewBlobHash: submission.previewBlobHash,
             },
-            sponsorAddress: currentAccount.address,
-            suiClient,
           }),
       );
 

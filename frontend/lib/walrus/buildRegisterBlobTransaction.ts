@@ -256,231 +256,66 @@ function base64UrlToBigInt(base64Url: string): bigint {
 }
 
 export interface BatchRegisterAndSubmitParams {
-  // Main Blob
-  mainBlob: RegisterBlobParams;
-  // Preview Blob
-  previewBlob: RegisterBlobParams;
-  // Submission
+  // Main Blob (already registered by Walrus HTTP API)
+  mainBlob: {
+    blobId: string;
+    size: number;
+  };
+  // Preview Blob (already registered by Walrus HTTP API)
+  previewBlob: {
+    blobId: string;
+    size: number;
+  };
+  // Submission metadata for Sonar marketplace
   submission: {
     sealPolicyId: string;
     previewBlobHash?: string; // hex string
     durationSeconds: number;
     suiPaymentCoinId?: string; // Optional: if not provided, will split from gas
   };
-  // Payment
-  walCoinId?: string;
-  sponsorAddress?: string;
-  suiClient?: SuiClient;
-  // Walrus configuration (optional, uses env vars if not provided)
-  walrusConfig?: {
-    packageId: string;
-    systemObject: string;
-    epochsAhead: number;
-  };
-  // Optional: if already queried, avoids re-querying
-  nShards?: number;
 }
 
 /**
- * Build a batch transaction to register both blobs and submit to marketplace
+ * Build a transaction to submit already-registered blobs to the Sonar marketplace
+ * 
+ * NOTE: The Walrus HTTP API already registers blobs on-chain automatically.
+ * This function only builds a transaction to submit the blob metadata to the Sonar marketplace
+ * for tracking and points calculation.
  */
 export async function buildBatchRegisterAndSubmitTransactionAsync(
   params: BatchRegisterAndSubmitParams,
 ): Promise<Transaction> {
-  let resolvedWalCoinId = params.walCoinId;
+  console.log("[Sonar] Building marketplace submission (blobs already registered by Walrus HTTP API)");
   
-  // Use provided walrusConfig or fetch from env vars
-  const walrusConfig = params.walrusConfig || getWalrusConfig();
-
-  // Query n_shards from the Walrus system object if suiClient is available
-  let nShards: number | undefined = params.nShards;
-  if (!nShards && params.suiClient) {
-    nShards = await getNShardsFromSystem(params.suiClient, walrusConfig.systemObject);
-  }
-
-  // If no coin ID provided, fetch one from the sponsor address
-  if (!resolvedWalCoinId && params.sponsorAddress && params.suiClient) {
-    console.log(
-      "[Walrus] Fetching WAL coin for sponsor:",
-      params.sponsorAddress,
-    );
-    const walCoinType = `${process.env.NEXT_PUBLIC_WAL_TOKEN_PACKAGE}::wal::WAL`;
-
-    try {
-      const coinsResult = await collectCoinsForAmount(
-        params.suiClient,
-        params.sponsorAddress,
-        walCoinType,
-        1n, // Minimum 1 unit needed
-      );
-
-      if (coinsResult.coins.length === 0) {
-        throw new Error(
-          "No WAL coins found in sponsor wallet. Please ensure you have WAL tokens to pay for blob storage.",
-        );
-      }
-
-      const selectedCoin = coinsResult.coins[0];
-      resolvedWalCoinId = selectedCoin.coinObjectId;
-
-      console.log("[Walrus] WAL coin fetching successful:", {
-        totalBalance: coinsResult.total.toString(),
-        coinCount: coinsResult.coins.length,
-        selectedCoinId: resolvedWalCoinId,
-        selectedCoinBalance: selectedCoin.balance.toString(),
-      });
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "Failed to fetch WAL coins";
-      throw new Error(
-        `[Walrus] Could not obtain WAL payment coin: ${errorMsg}`,
-      );
-    }
-  }
-
-  if (!resolvedWalCoinId) {
-    throw new Error(
-      "[Walrus] WAL coin ID not provided and unable to fetch. " +
-      "Either provide walCoinId or provide sponsorAddress with suiClient.",
-    );
-  }
-
-  return buildBatchRegisterAndSubmitTransaction({
-    ...params,
-    walCoinId: resolvedWalCoinId,
-    walrusConfig,
-    nShards,
-  });
+  // No need to fetch WAL coins or query n_shards since we're not registering blobs
+  // The Walrus HTTP API already handled blob registration with automatic payment
+  return buildBatchRegisterAndSubmitTransaction(params);
 }
 
 export function buildBatchRegisterAndSubmitTransaction(
   params: BatchRegisterAndSubmitParams,
 ): Transaction {
-  const { mainBlob, previewBlob, submission, walCoinId } = params;
+  const { mainBlob, previewBlob, submission } = params;
   const sonarPackageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
-  const walrusConfig = params.walrusConfig || getWalrusConfig();
 
   if (!sonarPackageId) {
     throw new Error("NEXT_PUBLIC_PACKAGE_ID is not defined");
   }
 
-  if (!walCoinId) {
-    throw new Error("[Walrus] WAL coin ID is required for batch registration");
-  }
-
   const tx = new Transaction();
-  const {
-    packageId: walrusPackageId,
-    systemObject,
-    epochsAhead,
-  } = walrusConfig;
 
-  console.log("[Walrus] Building batch registration transaction:", {
+  console.log("[Sonar] Building marketplace submission transaction:", {
     mainBlobId: mainBlob.blobId,
-    mainBlobSize: mainBlob.size,
     previewBlobId: previewBlob.blobId,
-    previewBlobSize: previewBlob.size,
-    epochsAhead,
-    walCoinId,
+    sealPolicyId: submission.sealPolicyId,
+    durationSeconds: submission.durationSeconds,
   });
 
-  // Reference to the WAL coin - will be reused for all calls
-  const walCoinRef = tx.object(walCoinId);
+  // NOTE: Blobs are already registered on-chain by the Walrus HTTP API
+  // We only need to submit them to the Sonar marketplace
 
-  // Step 1: Reserve space for main blob
-  // Calculate storage size using exact encoding formula or fallback multiplier
-  const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
-  const mainStorageSize = calculateWalrusStorageSize(
-    mainBlob.size,
-    params.nShards,
-    mainEncodingTypeU8,
-  );
-  console.log(
-    "[Walrus] Reserving space for main blob:",
-    mainBlob.size,
-    "bytes (unencoded) →",
-    mainStorageSize,
-    "bytes (encoded storage)",
-  );
-  const [mainStorage] = tx.moveCall({
-    target: `${walrusPackageId}::system::reserve_space`,
-    arguments: [
-      tx.object(systemObject), // self: &mut System
-      tx.pure.u64(mainStorageSize), // storage_amount: u64
-      tx.pure.u32(epochsAhead), // epochs_ahead: u32
-      walCoinRef, // payment: &mut Coin<WAL>
-    ],
-  });
-
-  // Step 2: Register main blob
-  console.log(
-    "[Walrus] Registering main blob with UNENCODED size:",
-    mainBlob.size,
-  );
-  const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
-
-  tx.moveCall({
-    target: `${walrusPackageId}::system::register_blob`,
-    arguments: [
-      tx.object(systemObject), // self: &mut System
-      mainStorage, // storage: Storage
-      tx.pure.u256(mainBlobIdBigInt), // blob_id: u256
-      tx.pure.u256(mainBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(mainBlob.size), // size: u64 (UNENCODED blob size - contract calculates encoded size)
-      tx.pure.u8(mainEncodingTypeU8), // encoding_type: u8
-      tx.pure.bool(mainBlob.deletable ?? true), // deletable: bool
-      walCoinRef, // write_payment: &mut Coin<WAL>
-    ],
-  });
-
-  // Step 3: Reserve space for preview blob
-  // Calculate storage size using exact encoding formula or fallback multiplier
-  const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
-  const previewStorageSize = calculateWalrusStorageSize(
-    previewBlob.size,
-    params.nShards,
-    previewEncodingTypeU8,
-  );
-  console.log(
-    "[Walrus] Reserving space for preview blob:",
-    previewBlob.size,
-    "bytes (unencoded) →",
-    previewStorageSize,
-    "bytes (encoded storage)",
-  );
-  const [previewStorage] = tx.moveCall({
-    target: `${walrusPackageId}::system::reserve_space`,
-    arguments: [
-      tx.object(systemObject), // self: &mut System
-      tx.pure.u64(previewStorageSize), // storage_amount: u64
-      tx.pure.u32(epochsAhead), // epochs_ahead: u32
-      walCoinRef, // payment: &mut Coin<WAL>
-    ],
-  });
-
-  // Step 4: Register preview blob
-  console.log(
-    "[Walrus] Registering preview blob with UNENCODED size:",
-    previewBlob.size,
-  );
-  const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
-
-  tx.moveCall({
-    target: `${walrusPackageId}::system::register_blob`,
-    arguments: [
-      tx.object(systemObject), // self: &mut System
-      previewStorage, // storage: Storage
-      tx.pure.u256(previewBlobIdBigInt), // blob_id: u256
-      tx.pure.u256(previewBlobIdBigInt), // root_hash: u256 (use blob_id as default)
-      tx.pure.u64(previewBlob.size), // size: u64 (UNENCODED blob size - contract calculates encoded size)
-      tx.pure.u8(previewEncodingTypeU8), // encoding_type: u8
-      tx.pure.bool(previewBlob.deletable ?? true), // deletable: bool
-      walCoinRef, // write_payment: &mut Coin<WAL>
-    ],
-  });
-
-  // Step 5: Submit to marketplace (collect 0.25 SUI fee)
-  console.log("[Walrus] Submitting blobs to marketplace");
+  // Submit to marketplace (collect 0.25 SUI fee)
+  console.log("[Sonar] Submitting blobs to marketplace");
   let suiPaymentCoin;
   if (
     submission.suiPaymentCoinId &&
@@ -504,6 +339,6 @@ export function buildBatchRegisterAndSubmitTransaction(
     ],
   });
 
-  console.log("[Walrus] Batch registration transaction built successfully");
+  console.log("[Sonar] Marketplace submission transaction built successfully");
   return tx;
 }
