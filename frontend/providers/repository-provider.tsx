@@ -2,24 +2,18 @@
 
 import { createContext, useContext, useMemo } from 'react';
 import type { DataRepository } from '@/lib/data/repository';
-import { SeedDataRepository } from '@/lib/data/seed-repository';
 import { SuiRepository } from '@/lib/data/sui-repository';
-import { USE_BLOCKCHAIN } from '@/lib/sui/client';
 
 const RepositoryContext = createContext<DataRepository | null>(null);
 
 /**
  * Repository Provider
  * Provides data repository to the entire app
- * Switches between seed data and blockchain based on environment variables
+ * Uses blockchain (Sui) for all data
  */
 export function RepositoryProvider({ children }: { children: React.ReactNode }) {
   const repository = useMemo(() => {
-    if (USE_BLOCKCHAIN) {
-      return new SuiRepository();
-    } else {
-      return new SeedDataRepository();
-    }
+    return new SuiRepository();
   }, []);
 
   return (
