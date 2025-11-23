@@ -17,6 +17,7 @@ import {
 import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
 import type { WalrusUploadResult } from "@/lib/types/upload";
+import { getWalrusClient } from "@/lib/walrus/client";
 
 const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
 
@@ -256,8 +257,8 @@ export function useWalrusParallelUpload() {
   );
 
   /**
-   * Upload encrypted blob to Walrus Publisher (Direct)
-   * Returns metadata needed for on-chain registration
+   * Upload encrypted blob using Walrus SDK with proper on-chain registration
+   * This creates a Sui blockchain transaction that registers the blob
    */
   const uploadToPublisher = useCallback(
     async (
@@ -278,72 +279,79 @@ export function useWalrusParallelUpload() {
       previewDeletable?: boolean;
       mimeType?: string;
       previewMimeType?: string;
+      blobObjectId?: string;
+      previewBlobObjectId?: string;
     }> => {
-      const formData = new FormData();
-      formData.append(
-        "file",
-        encryptedBlob,
-        options.fileName ?? "encrypted-audio.bin",
-      );
-      formData.append("seal_policy_id", seal_policy_id);
-      formData.append("epochs", "26"); // Explicitly set to 1 year (26 epochs)
-      if (metadata) {
-        formData.append("metadata", JSON.stringify(metadata));
+      if (!currentAccount) {
+        throw new Error(
+          "Wallet not connected - required for on-chain blob registration",
+        );
       }
-
       const fileSizeMB = (encryptedBlob.size / (1024 * 1024)).toFixed(2);
       console.log(
-        `[Upload] Uploading main blob: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
+        `[Upload] Uploading main blob with SDK: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
         {
           sealed_policy_id: seal_policy_id.substring(0, 20) + "...",
           epochs: "26",
           hasMetadata: !!metadata,
+          owner: currentAccount.address,
         },
       );
 
-      // Upload via Edge Function
-      const { response, attempt } = await fetchUploadWithRetry(formData, 10);
+      // Convert Blob to Uint8Array for SDK
+      const arrayBuffer = await encryptedBlob.arrayBuffer();
+      const blobData = new Uint8Array(arrayBuffer);
 
-      if (!response.ok) {
-        let errorMessage = `Publisher upload failed on attempt ${attempt}: ${response.statusText}`;
-        try {
-          const errorBody = await response.json();
-          errorMessage = errorBody.error || errorBody.details || errorMessage;
-        } catch {
-          // Fallback to statusText if JSON parsing fails
-        }
-        throw new Error(errorMessage);
-      }
+      // Get Walrus client with SDK
+      const walrusClient = getWalrusClient();
 
-      const result = await response.json();
+      console.log("[Upload] Writing blob with on-chain registration...");
 
-      // Edge Function returns parsed response directly
+      setProgress((prev) => ({
+        ...prev,
+        stage: "registering",
+      }));
+
+      // Use SDK writeBlob which properly registers on-chain
+      // The SDK will prompt user to sign the transaction via wallet
+      const result = await walrusClient.walrus.writeBlob({
+        blob: blobData,
+        epochs: 26,
+        deletable: true,
+        signer: {
+          signTransaction: async (tx: any) => {
+            const signed = await signAndExecute({
+              transaction: tx,
+            });
+            return signed;
+          },
+        } as any,
+      });
+
       const blobId = result.blobId;
-      const storageId = result.storageId;
-      const encodingType = result.encodingType;
-      const deletable = result.deletable;
-      const certifiedEpoch = result.certifiedEpoch;
+      const blobObjectId = result.blobObject.id.id;
+      const encodingType = result.blobObject.encoding_type;
+      const deletable = result.blobObject.deletable;
+      const storageId = result.blobObject.storage.id.id;
 
       // Validate blob ID format
       if (!isValidBlobId(blobId)) {
-        console.error("[Upload] Invalid blob ID received from Walrus:", {
+        console.error("[Upload] Invalid blob ID received from Walrus SDK:", {
           blobId,
           blobIdType: typeof blobId,
           blobIdLength: blobId?.length,
           fullResult: result,
         });
         throw new Error(
-          `Invalid blob ID received from Walrus: "${blobId}". ` +
+          `Invalid blob ID received from Walrus SDK: "${blobId}". ` +
             `Expected base64url encoded string. Upload may have failed.`,
         );
       }
 
-      console.log("[Upload] Main blob uploaded:", {
+      console.log("[Upload] Main blob uploaded and registered on-chain:", {
         blobId,
-        storageId,
-        encodingType,
-        deletable,
-        certifiedEpoch,
+        blobObjectId,
+        size: encryptedBlob.size,
       });
 
       // Upload preview blob if provided
@@ -352,6 +360,7 @@ export function useWalrusParallelUpload() {
       let previewSize: number | undefined;
       let previewEncodingType: string | undefined;
       let previewDeletable: boolean | undefined;
+      let previewBlobObjectId: string | undefined;
       let effectivePreviewMimeType =
         normalizeAudioMimeType(options.previewMimeType) ??
         normalizeAudioMimeType(options.previewBlob?.type);
@@ -367,59 +376,48 @@ export function useWalrusParallelUpload() {
           effectivePreviewMimeType,
         );
 
-        // Create FormData for preview
-        const previewFormData = new FormData();
-        previewFormData.append("file", previewBlob, previewFileName);
-        previewFormData.append("seal_policy_id", seal_policy_id);
-        previewFormData.append("epochs", "26");
-
-        // Log preview upload for debugging
         const previewSizeMB = (previewBlob.size / (1024 * 1024)).toFixed(2);
         console.log(
-          `[Upload] Uploading preview blob: ${previewFileName} (${previewSizeMB}MB)`,
+          `[Upload] Uploading preview blob with SDK: ${previewFileName} (${previewSizeMB}MB)`,
         );
 
         try {
-          const { response: previewResponse, attempt: previewAttempt } =
-            await fetchUploadWithRetry(previewFormData, 10);
+          // Convert preview Blob to Uint8Array
+          const previewArrayBuffer = await previewBlob.arrayBuffer();
+          const previewBlobData = new Uint8Array(previewArrayBuffer);
 
-          if (!previewResponse.ok) {
-            let previewErrorMessage = `Preview upload failed on attempt ${previewAttempt}: ${previewResponse.statusText}`;
-            try {
-              const errorBody = await previewResponse.json();
-              previewErrorMessage =
-                errorBody.error || errorBody.details || previewErrorMessage;
-            } catch {
-              // Fallback to statusText if JSON parsing fails
-            }
-
-            // Log warning but don't fail the entire upload
-            console.warn(
-              `[Upload] Preview upload failed (non-fatal): ${previewErrorMessage}`,
-              {
-                fileName: previewFileName,
-                size: previewSizeMB,
-                attempt: previewAttempt,
-                status: previewResponse.status,
+          // Upload preview with SDK
+          const previewResult = await walrusClient.walrus.writeBlob({
+            blob: previewBlobData,
+            epochs: 26,
+            deletable: true,
+            signer: {
+              signTransaction: async (tx: any) => {
+                const signed = await signAndExecute({
+                  transaction: tx,
+                });
+                return signed;
               },
-            );
-            // Continue without preview
-          } else {
-            const previewResult = await previewResponse.json();
+            } as any,
+          });
 
-            // Edge Function returns parsed response directly
-            finalPreviewBlobId = previewResult.blobId;
-            previewStorageId = previewResult.storageId;
-            previewEncodingType = previewResult.encodingType;
-            previewDeletable = previewResult.deletable;
-            previewSize = previewResult.size || previewBlob.size;
+          finalPreviewBlobId = previewResult.blobId;
+          previewBlobObjectId = previewResult.blobObject.id.id;
+          previewStorageId = previewResult.blobObject.storage.id.id;
+          previewEncodingType =
+            previewResult.blobObject.encoding_type?.toString();
+          previewDeletable = previewResult.blobObject.deletable;
+          previewSize = previewBlob.size;
 
-            console.log("[Upload] Preview blob uploaded:", finalPreviewBlobId, {
+          console.log(
+            "[Upload] Preview blob uploaded and registered on-chain:",
+            {
+              blobId: finalPreviewBlobId,
+              blobObjectId: previewBlobObjectId,
               storageId: previewStorageId,
-              encodingType: previewEncodingType,
               size: previewSize,
-            });
-          }
+            },
+          );
         } catch (previewError) {
           // Log error but don't fail the entire upload
           console.warn(
@@ -434,31 +432,35 @@ export function useWalrusParallelUpload() {
         }
       }
 
-      console.log("[Upload] HTTP upload complete:");
+      console.log("[Upload] SDK upload complete with on-chain registration:");
       console.log(
         "  Main blob:",
         blobId,
-        `(${encryptedBlob.size} bytes, ${encodingType})`,
+        "| Object ID:",
+        blobObjectId,
+        `(${encryptedBlob.size} bytes)`,
       );
       console.log(
         "  Preview blob:",
         finalPreviewBlobId || "none",
         finalPreviewBlobId
-          ? `(${previewSize} bytes, ${previewEncodingType})`
+          ? `| Object ID: ${previewBlobObjectId} (${previewSize} bytes)`
           : "",
       );
 
       return {
         blobId,
         size: encryptedBlob.size,
-        encodingType,
+        encodingType: encodingType?.toString(),
         storageId,
         deletable,
+        blobObjectId,
         previewBlobId: finalPreviewBlobId,
         previewStorageId,
         previewSize,
         previewEncodingType,
         previewDeletable,
+        previewBlobObjectId,
         mimeType: normalizeAudioMimeType(options.mimeType) ?? undefined,
         previewMimeType: effectivePreviewMimeType,
       };
@@ -565,10 +567,9 @@ export function useWalrusParallelUpload() {
   );
 
   /**
-   * Main upload function
-   * NOTE: This ONLY uploads to Walrus HTTP API - it does NOT submit to blockchain
-   * Blockchain submission happens separately in PublishStep for single files
-   * or in EncryptionStep for multi-file batches
+   * Main upload function using Walrus SDK
+   * This properly registers blobs on-chain via user wallet signatures
+   * Creates Sui blockchain objects for each blob uploaded
    */
   const uploadBlob = useCallback(
     async (
@@ -593,7 +594,7 @@ export function useWalrusParallelUpload() {
         totalProgress: 0,
       }));
 
-      // 1. Upload to Publisher (Main + Preview)
+      // 1. Upload with SDK (registers blobs on-chain via wallet signature)
       const publisherResult = await uploadToPublisher(
         encryptedBlob,
         seal_policy_id,
@@ -601,11 +602,14 @@ export function useWalrusParallelUpload() {
         options,
       );
 
-      // NOTE: Walrus HTTP API automatically registers blobs on-chain
-      // No need for separate blockchain submission here
-      // The Walrus Publisher handles blob registration automatically
       console.log(
-        "[Walrus] HTTP upload complete - blobs registered by Walrus Publisher",
+        "[Walrus] SDK upload complete - blobs registered on Sui blockchain",
+        {
+          blobId: publisherResult.blobId,
+          blobObjectId: publisherResult.blobObjectId,
+          previewBlobId: publisherResult.previewBlobId,
+          previewBlobObjectId: publisherResult.previewBlobObjectId,
+        },
       );
 
       setProgress((prev) => ({

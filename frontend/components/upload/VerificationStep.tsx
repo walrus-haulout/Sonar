@@ -850,9 +850,10 @@ export function VerificationStep({
       console.log("[VerificationStep] Request params:", {
         walrusBlobId,
         sealIdentity: sealIdentity?.slice(0, 20) + "...",
-        hasEncryptedHex: !!encryptedObjectBcsHex,
+        hasWalrusUploadHex: !!walrusUpload?.encryptedObjectBcsHex,
+        hasPropHex: !!encryptedObjectBcsHex,
         hasMetadata: !!metadata,
-        hasSessionKey: !!sessionKeyExport,
+        hasSessionKey: !!exportToUse,
       });
       addLog(
         "DECRYPT",
@@ -926,6 +927,22 @@ export function VerificationStep({
       console.log("[VerificationStep] 🌐 Fetching /api/verify endpoint...");
       addLog("API", "Sending request to verification service", "progress");
       
+      // Extract and validate encryptedObjectBcsHex before sending
+      const encryptedHexToSend = walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
+      console.log("[VerificationStep] 🔍 Pre-fetch validation:", {
+        walrusUploadHasHex: !!walrusUpload?.encryptedObjectBcsHex,
+        propHasHex: !!encryptedObjectBcsHex,
+        finalHexPresent: !!encryptedHexToSend,
+        finalHexLength: encryptedHexToSend?.length ?? 0,
+        finalHexPreview: encryptedHexToSend ? encryptedHexToSend.slice(0, 20) + "..." : "MISSING",
+      });
+
+      if (!encryptedHexToSend || encryptedHexToSend.length === 0) {
+        const error = "encryptedObjectBcsHex is missing or empty before API call!";
+        console.error("[VerificationStep]", error);
+        throw new Error(error);
+      }
+      
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
@@ -934,8 +951,7 @@ export function VerificationStep({
         body: JSON.stringify({
           walrusBlobId,
           sealIdentity,
-          encryptedObjectBcsHex:
-            walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex,
+          encryptedObjectBcsHex: encryptedHexToSend,
           metadata: sanitizedMetadata,
           sessionKeyData: sessionKeyJson,
         }),

@@ -143,51 +143,69 @@ export function EncryptionStep({
         if (allFilesUploaded) {
           addLog("Found previously uploaded files. Resuming recovery flow...");
 
-          const results = filesToProcess.map((f, index) => {
-            const p = pending[f.id!];
-            return {
-              file_index: index,
-              fileId: f.id!,
-              blobId: p.walrusBlobId,
-              previewBlobId: p.previewBlobId,
-              seal_policy_id: p.sealPolicyId,
-              encryptedObjectBcsHex: p.encryptedObjectBcsHex || "",
-              duration: p.duration,
-              metadata: p.metadata,
-              encryptedData: new Uint8Array(0), // Data not needed for verification (fetches from Walrus)
-              mimeType: p.metadata.originalMimeType,
-              previewMimeType: p.metadata.originalMimeType,
+          // Validate that all pending files have encryptedObjectBcsHex
+          // If missing, this is from an old session - force re-encryption
+          const allHaveEncryptedHex = filesToProcess.every(
+            (f) => pending[f.id!]?.encryptedObjectBcsHex
+          );
+          
+          if (!allHaveEncryptedHex) {
+            console.warn(
+              "[EncryptionStep] Pending uploads missing encryptedObjectBcsHex - forcing re-encryption"
+            );
+            addLog(
+              "Pending uploads are incomplete (missing encryption data). Re-encrypting..."
+            );
+            // Clear stale pending uploads
+            localStorage.removeItem("pending_uploads");
+            // Don't return - continue with fresh encryption below
+          } else {
+            const results = filesToProcess.map((f, index) => {
+              const p = pending[f.id!];
+              return {
+                file_index: index,
+                fileId: f.id!,
+                blobId: p.walrusBlobId,
+                previewBlobId: p.previewBlobId,
+                seal_policy_id: p.sealPolicyId,
+                encryptedObjectBcsHex: p.encryptedObjectBcsHex,
+                duration: p.duration,
+                metadata: p.metadata,
+                encryptedData: new Uint8Array(0), // Data not needed for verification (fetches from Walrus)
+                mimeType: p.metadata.originalMimeType,
+                previewMimeType: p.metadata.originalMimeType,
+              };
+            });
+
+            setCompletedFiles(results);
+            setStage("finalizing");
+            setProgress(100);
+
+            // Prepare final result immediately
+            const result = results[0];
+            const bundleDiscountBps =
+              totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
+
+            const finalResult = {
+              encryptedBlob: new Blob([]), // Empty blob as we don't have data
+              seal_policy_id: result.seal_policy_id,
+              encryptedObjectBcsHex: result.encryptedObjectBcsHex,
+              metadata: result.metadata,
+              previewBlob: new Blob([]), // Empty preview
+              walrusBlobId: result.blobId,
+              previewBlobId: result.previewBlobId,
+              files: isMultiFile ? results : undefined,
+              bundleDiscountBps: isMultiFile ? bundleDiscountBps : undefined,
+              mimeType: result.mimeType,
+              previewMimeType: result.previewMimeType,
             };
-          });
 
-          setCompletedFiles(results);
-          setStage("finalizing");
-          setProgress(100);
-
-          // Prepare final result immediately
-          const result = results[0];
-          const bundleDiscountBps =
-            totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
-
-          const finalResult = {
-            encryptedBlob: new Blob([]), // Empty blob as we don't have data
-            seal_policy_id: result.seal_policy_id,
-            encryptedObjectBcsHex: result.encryptedObjectBcsHex,
-            metadata: result.metadata,
-            previewBlob: new Blob([]), // Empty preview
-            walrusBlobId: result.blobId,
-            previewBlobId: result.previewBlobId,
-            files: isMultiFile ? results : undefined,
-            bundleDiscountBps: isMultiFile ? bundleDiscountBps : undefined,
-            mimeType: result.mimeType,
-            previewMimeType: result.previewMimeType,
-          };
-
-          addLog("Resumed successfully from local storage");
-          setTimeout(() => {
-            onEncrypted(finalResult);
-          }, 500);
-          return;
+            addLog("Resumed successfully from local storage");
+            setTimeout(() => {
+              onEncrypted(finalResult);
+            }, 500);
+            return;
+          }
         }
       } catch (e) {
         console.warn("Failed to check pending uploads:", e);
