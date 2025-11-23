@@ -282,6 +282,7 @@ export function VerificationStep({
   const isAuthorizingRef = useRef(false); // Guard against duplicate authorization attempts
   const isVerifyingRef = useRef(false); // Guard against duplicate verification attempts
   const logIdCounter = useRef(0);
+  const completedStagesRef = useRef<Set<string>>(new Set());
 
   // Helper to add activity log
   const addLog = (
@@ -980,6 +981,9 @@ export function VerificationStep({
       return;
     }
 
+    // Reset completed stages tracking
+    completedStagesRef.current.clear();
+
     addLog("VERIFY", "Starting verification pipeline...", "progress");
 
     // Poll every 2 seconds
@@ -1019,8 +1023,31 @@ export function VerificationStep({
           finalizing: "Aggregating results and calculating final score...",
         };
 
+        const stageCompletionMessages: Record<string, string> = {
+          quality: "✓ Audio quality check passed",
+          copyright: "✓ Copyright detection completed",
+          transcription: "✓ Transcription completed",
+          analysis: "✓ AI analysis completed",
+          finalizing: "✓ Results finalized",
+        };
+
         // Track stage start times and log transitions
         if (currentStage && !stageStartTimes[currentStage]) {
+          // Mark previous stage as completed
+          const stageOrder = ["quality", "copyright", "transcription", "analysis", "finalizing"];
+          const currentIndex = stageOrder.indexOf(currentStage);
+          if (currentIndex > 0) {
+            const previousStage = stageOrder[currentIndex - 1];
+            if (!completedStagesRef.current.has(previousStage)) {
+              completedStagesRef.current.add(previousStage);
+              addLog(
+                previousStage.toUpperCase(),
+                stageCompletionMessages[previousStage],
+                "success"
+              );
+            }
+          }
+
           setStageStartTimes((prev) => ({
             ...prev,
             [currentStage]: Date.now(),
@@ -1065,7 +1092,29 @@ export function VerificationStep({
             return;
           }
 
-          // Verification passed
+          // Verification passed - mark all remaining stages as completed
+          const allStages = ["quality", "copyright", "transcription", "analysis", "finalizing"];
+          const stageCompletionMessages: Record<string, string> = {
+            quality: "✓ Audio quality check passed",
+            copyright: "✓ Copyright detection completed",
+            transcription: "✓ Transcription completed",
+            analysis: "✓ AI analysis completed",
+            finalizing: "✓ Results finalized",
+          };
+          
+          allStages.forEach(stage => {
+            if (!completedStagesRef.current.has(stage)) {
+              completedStagesRef.current.add(stage);
+              const completionMessage = stageCompletionMessages[stage] || `✓ ${stage} completed`;
+              addLog(stage.toUpperCase(), completionMessage, "success");
+            }
+          });
+
+          addLog(
+            "COMPLETE",
+            "✓ All verification checks passed successfully",
+            "success",
+          );
           addLog(
             "COMPLETE",
             `Verification completed! Quality score: ${qualityScore}%`,
@@ -1138,6 +1187,9 @@ export function VerificationStep({
       );
       return;
     }
+
+    // Reset completed stages tracking
+    completedStagesRef.current.clear();
 
     // Poll every 2 seconds
     const interval = setInterval(async () => {
