@@ -158,12 +158,12 @@ export async function POST(request: NextRequest) {
       apiKeyLength: headers["X-API-Key"]?.length,
     });
 
-    // Single upload attempt with 20s timeout (Edge function has 25s limit on some plans)
+    // Single upload attempt with 240s timeout (4 minutes)
     // Client handles retries if this fails
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s
+    const timeoutId = setTimeout(() => controller.abort(), 240000); // 240s = 4 minutes
 
-    console.log("[Walrus Upload] Starting upload with 20s timeout...", {
+    console.log("[Walrus Upload] Starting upload with 240s timeout...", {
       url: walrusUrl,
       size: file.size,
       epochs,
