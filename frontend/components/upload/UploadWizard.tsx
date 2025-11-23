@@ -94,9 +94,14 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
       id: verification.id,
       state: verification.state,
       currentStage: verification.currentStage,
+      stages: verification.stages,  // Keep stages for progress tracking
+      transcript: verification.transcript,  // Keep transcript for display
       qualityScore: verification.qualityScore,
+      suggestedPrice: verification.suggestedPrice,
       safetyPassed: verification.safetyPassed,
       insights: verification.insights ? verification.insights.slice(0, 5) : undefined,
+      analysis: verification.analysis,  // Keep full analysis for display
+      error: verification.error,
       updatedAt: verification.updatedAt,
     };
   };
@@ -432,8 +437,33 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
               walrusUpload={state.walrusUpload!}
               existingVerification={state.verification}
               onVerificationComplete={(verification) => {
-                setState((prev) => ({ ...prev, verification }));
-                goToNextStep();
+                console.log('[UploadWizard] ✅ Verification complete, saving and advancing...');
+                console.log('[UploadWizard] Verification result:', { 
+                  id: verification.id, 
+                  state: verification.state,
+                  safetyPassed: verification.safetyPassed 
+                });
+                
+                // CRITICAL: Update verification AND advance step in single setState
+                // This ensures localStorage saves the complete state before React re-renders
+                setState((prev) => {
+                  const newState = { 
+                    ...prev, 
+                    verification,
+                    step: STEPS[STEPS.indexOf(prev.step) + 1] as UploadStep
+                  };
+                  
+                  // Immediately save to localStorage to prevent race condition
+                  try {
+                    const serialized = serializeState(newState);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+                    console.log('[UploadWizard] 💾 Saved verification result to localStorage');
+                  } catch (e) {
+                    console.error('[UploadWizard] ❌ Failed to save verification to localStorage:', e);
+                  }
+                  
+                  return newState;
+                });
               }}
               onError={(error) => setState((prev) => ({ ...prev, error }))}
             />
