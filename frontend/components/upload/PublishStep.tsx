@@ -75,6 +75,19 @@ export function PublishStep({
   const publishDisabled =
     isPending || isAtomicSubmitting || publishState !== "idle";
 
+  // Debug: Log verification data structure
+  console.log("[PublishStep] Verification data received:", {
+    hasAnalysis: !!verification.analysis,
+    hasTranscript: !!verification.transcript,
+    transcriptPreview: verification.transcript?.slice(0, 100),
+    analysisKeys: verification.analysis ? Object.keys(verification.analysis) : [],
+    qualityScore: verification.qualityScore,
+    hasInsights: !!verification.insights,
+    insightsCount: verification.insights?.length,
+    hasQualityBreakdown: !!verification.qualityBreakdown,
+    fullVerificationKeys: Object.keys(verification),
+  });
+
   // Helper to clear pending upload from local storage
   const clearPendingUpload = (walrusBlobId: string) => {
     try {
