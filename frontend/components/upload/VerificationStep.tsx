@@ -481,16 +481,19 @@ export function VerificationStep({
       addLog("AUTH", "Session created, confirming on-chain...", "progress");
 
       // Wait for session to be confirmed on-chain before starting verification
-      // This prevents "session wasn't started" errors due to network delays
-      console.log("[VerificationStep] Waiting 5s for session confirmation...");
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Extended timeout to handle slow blockchain confirmations
+      console.log("[VerificationStep] Waiting 15s for session confirmation...");
+      addLog("AUTH", "Waiting for blockchain confirmation (15s)...", "progress");
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+      
       console.log(
-        "[VerificationStep] Session confirmed, starting verification",
+        "[VerificationStep] ✅ Session confirmed on blockchain, starting verification",
       );
+      addLog("AUTH", "✅ Session confirmed on blockchain", "success");
 
       setIsConfirmingSession(false);
       setVerificationState("running");
-      addLog("AUTH", "✓ Session confirmed, starting verification", "success");
+      addLog("VERIFY", "Starting AI verification pipeline", "progress");
 
       // Start verification with session data
       startVerification();
@@ -568,18 +571,23 @@ export function VerificationStep({
 
     isVerifyingRef.current = true;
 
-    console.log("[VerificationStep] Starting verification...");
+    console.log("[VerificationStep] 🚀 Starting verification...");
     addLog("VERIFY", "Starting verification pipeline...", "progress");
     setErrorMessage(null);
     setErrorDetails(null);
     setWarnings([]);
 
     if (!sessionKeyExport) {
+      console.error("[VerificationStep] ❌ No session key export available");
+      addLog("ERROR", "Session expired - re-authorization needed", "error");
       setErrorMessage("Session expired. Please authorize again.");
       setVerificationState("waiting-auth");
       isVerifyingRef.current = false;
       return;
     }
+    
+    console.log("[VerificationStep] ✅ Session key export validated, proceeding with verification");
+    addLog("VERIFY", "Session validated, preparing verification request", "progress");
 
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(
@@ -729,7 +737,14 @@ export function VerificationStep({
         );
       }
 
-      console.log("[VerificationStep] Sending verification request to backend");
+      console.log("[VerificationStep] 📤 Sending verification request to backend");
+      console.log("[VerificationStep] Request params:", {
+        walrusBlobId,
+        sealIdentity: sealIdentity?.slice(0, 20) + "...",
+        hasEncryptedHex: !!encryptedObjectBcsHex,
+        hasMetadata: !!metadata,
+        hasSessionKey: !!sessionKeyExport,
+      });
       addLog(
         "DECRYPT",
         "Preparing encrypted blob for verification...",
@@ -799,6 +814,9 @@ export function VerificationStep({
       // We only need to send sessionKeyData for backend to decrypt
       addLog("DECRYPT", "Fetching encrypted blob from Walrus...", "progress");
 
+      console.log("[VerificationStep] 🌐 Fetching /api/verify endpoint...");
+      addLog("API", "Sending request to verification service", "progress");
+      
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
@@ -813,6 +831,17 @@ export function VerificationStep({
           sessionKeyData: sessionKeyJson,
         }),
       });
+
+      console.log("[VerificationStep] 📥 API response received:", {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+      });
+      addLog(
+        "DECRYPT",
+        `API response: ${response.status} ${response.statusText}`,
+        response.ok ? "progress" : "error",
+      );
 
       addLog(
         "DECRYPT",
