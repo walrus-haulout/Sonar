@@ -80,11 +80,22 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
       blobId: walrusUpload.blobId,
       previewBlobId: walrusUpload.previewBlobId,
       seal_policy_id: walrusUpload.seal_policy_id,
-      encryptedObjectBcsHex: walrusUpload.encryptedObjectBcsHex,
+      // EXCLUDE encryptedObjectBcsHex - 4-5MB, only needed during verification step
       bundleDiscountBps: walrusUpload.bundleDiscountBps,
       mimeType: walrusUpload.mimeType,
       previewMimeType: walrusUpload.previewMimeType,
-      files: walrusUpload.files,
+      // Sanitize files array - exclude encryptedObjectBcsHex from each file too
+      files: walrusUpload.files?.map(f => ({
+        file_index: f.file_index,
+        fileId: f.fileId,
+        blobId: f.blobId,
+        previewBlobId: f.previewBlobId,
+        seal_policy_id: f.seal_policy_id,
+        // EXCLUDE encryptedObjectBcsHex from each file
+        duration: f.duration,
+        mimeType: f.mimeType,
+        previewMimeType: f.previewMimeType,
+      })),
     };
   };
 
@@ -95,14 +106,25 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
       state: verification.state,
       currentStage: verification.currentStage,
       stages: verification.stages,  // Keep stages for progress tracking
-      transcript: verification.transcript,  // Keep transcript for display
+      transcript: verification.transcript?.slice(0, 500),  // Truncate to 500 chars - full version sent to backend
+      detectedLanguages: verification.detectedLanguages,
       qualityScore: verification.qualityScore,
       suggestedPrice: verification.suggestedPrice,
       safetyPassed: verification.safetyPassed,
-      insights: verification.insights ? verification.insights.slice(0, 5) : undefined,
-      analysis: verification.analysis,  // Keep full analysis for display
+      insights: verification.insights?.slice(0, 5),
+      // Simplify analysis - keep only essential fields for UI display
+      analysis: verification.analysis ? {
+        qualityScore: verification.analysis.qualityScore,
+        suggestedPrice: verification.analysis.suggestedPrice,
+        safetyPassed: verification.analysis.safetyPassed,
+        overallSummary: verification.analysis.overallSummary,
+        insights: verification.analysis.insights?.slice(0, 5),
+        concerns: verification.analysis.concerns?.slice(0, 3),
+      } : undefined,
       error: verification.error,
       updatedAt: verification.updatedAt,
+      qualityBreakdown: verification.qualityBreakdown,
+      transcriptionDetails: verification.transcriptionDetails,
     };
   };
 
@@ -221,7 +243,16 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
     const savedState = localStorage.getItem(STORAGE_KEY);
     if (savedState) {
       try {
-        console.log('[UploadWizard] 📦 Raw localStorage data length:', savedState.length);
+        // Size check before parsing to detect corrupted/oversized state
+        const sizeKB = savedState.length / 1024;
+        console.log('[UploadWizard] 📦 Raw localStorage data length:', savedState.length, `(${sizeKB.toFixed(1)}KB)`);
+        
+        if (sizeKB > 100) {
+          console.warn(`[UploadWizard] ⚠️ Saved state too large (${sizeKB.toFixed(1)}KB > 100KB), clearing corrupted state`);
+          localStorage.removeItem(STORAGE_KEY);
+          return;
+        }
+        
         const parsed = JSON.parse(savedState);
         console.log('[UploadWizard] ✅ Restored state from localStorage, step:', parsed.step);
         console.log('[UploadWizard] 🔍 Keys in parsed state:', Object.keys(parsed));

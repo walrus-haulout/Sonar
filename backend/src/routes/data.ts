@@ -19,6 +19,27 @@ import { isHttpError, toErrorResponse } from '../lib/errors';
 
 interface SealMetadataBody {
   files: FileSealMetadata[];
+  verification?: {
+    verification_id: string;
+    quality_score?: number;
+    safety_passed?: boolean;
+    verified_at: string;
+    transcript?: string;
+    detected_languages?: string[];
+    analysis?: any;
+    transcription_details?: any;
+    quality_breakdown?: any;
+  };
+  metadata?: {
+    title: string;
+    description: string;
+    languages?: string[];
+    tags?: string[];
+    per_file_metadata?: any[];
+    audio_quality?: any;
+    speakers?: any;
+    categorization?: any;
+  };
 }
 
 /**
@@ -119,7 +140,7 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
     ) => {
       try {
         const datasetId = assertDatasetId(request.params.id);
-        const { files } = request.body;
+        const { files, verification, metadata } = request.body;
 
         // Validate files array
         if (!files || files.length === 0) {
@@ -132,6 +153,8 @@ export async function registerDataRoutes(fastify: FastifyInstance): Promise<void
         await storeSealMetadata({
           datasetId,
           files,
+          verification,
+          metadata,
           logger: request.log,
         });
 

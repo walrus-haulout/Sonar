@@ -316,6 +316,22 @@ class VerificationPipeline:
             # Build quality analysis breakdown
             quality_analysis = analysis_result.get("qualityAnalysis", {})
 
+            # Extract metadata corrections from AI analysis
+            metadata_corrections = analysis_result.get("metadataCorrections", {})
+
+            # Log metadata corrections if any were provided
+            if metadata_corrections:
+                logger.info(
+                    f"[{session_object_id}] AI suggested metadata corrections",
+                    extra={
+                        "session_id": session_object_id,
+                        "corrections": metadata_corrections,
+                        "has_language_corrections": "languages" in metadata_corrections,
+                        "has_tag_corrections": "tags" in metadata_corrections,
+                        "has_domain_corrections": "domain" in metadata_corrections,
+                    },
+                )
+
             completion_payload = {
                 "approved": approved,
                 "quality": quality_result.get("quality"),
@@ -346,6 +362,7 @@ class VerificationPipeline:
                         "score"
                     ),
                 },
+                "metadataCorrections": metadata_corrections,
             }
             completed = await self.session_store.mark_completed(
                 session_object_id, completion_payload
@@ -902,6 +919,11 @@ Provide your analysis in the following JSON format with detailed reasoning:
     "critical": ["High-priority improvements needed"],
     "suggested": ["Recommended improvements"],
     "optional": ["Nice-to-have enhancements"]
+  }},
+  "metadataCorrections": {{
+    "languages": ["ru"],
+    "tags": ["corrected-tag1", "corrected-tag2"],
+    "domain": "corrected-domain"
   }}
 }}
 ```
@@ -913,7 +935,8 @@ Provide your analysis in the following JSON format with detailed reasoning:
   - Does the actual content match the claimed **Use Case**? (e.g., if labeled "podcast", is it actually podcast-style dialogue? If labeled "music", does it contain music?)
   - Does the **Content Type** align with what you hear? (e.g., if labeled "speech/dialogue", is it really dialogue vs. monologue or music?)
   - Does the **Domain** make sense? (e.g., if labeled "healthcare", does it discuss medical topics? If labeled "education", is it educational content?)
-  - Flag significant mismatches in the "concerns" array with specific details (e.g., "Audio labeled as 'podcast' but contains only instrumental music", "Claimed domain 'healthcare' but discusses unrelated entertainment topics")
+  - **If metadata is incorrect**, provide corrected values in the "metadataCorrections" field. Include ONLY fields that need correction (languages, tags, domain). Use ISO 639-1 language codes (e.g., "ru" for Russian, "en" for English, "zh" for Chinese, "ar" for Arabic).
+  - Flag significant mismatches in the "concerns" array with specific details (e.g., "Audio labeled as 'podcast' but contains only instrumental music", "The listed languages 'de, ar' are incorrect; the audio content is clearly in Russian")
 - **Completeness** (0.2): Is the content complete without obvious truncation? Are complete thoughts/sentences included?
 
 **Default Quality Score**: If the audio is average/unremarkable with no notable quality issues or standout features, use 0.5 (50%) as the default baseline score.
@@ -952,6 +975,14 @@ Provide 3-5 specific, actionable insights about:
 
 ### Concerns:
 List specific quality or content issues found. **If there are no concerns**, use an empty array: "concerns": []
+
+When flagging metadata errors, be specific (e.g., "The listed languages 'de, ar' are incorrect; the audio content is clearly in Russian").
+
+### Metadata Corrections:
+**If and only if** the user-provided metadata is incorrect, provide corrected values in the "metadataCorrections" field:
+- Include ONLY fields that need correction (languages, tags, domain)
+- Use ISO 639-1 language codes (e.g., "ru" for Russian, "en" for English, "zh" for Chinese, "ar" for Arabic, "de" for German)
+- If metadata is accurate, omit this field entirely or use an empty object: "metadataCorrections": {{}}
 
 ### Recommendations:
 Categorize suggestions by priority:
@@ -1127,6 +1158,20 @@ Respond ONLY with the JSON object, no additional text."""
                     {"suggested": recommendations_raw} if recommendations_raw else {}
                 )
 
+            # Extract metadata corrections if provided by AI
+            metadata_corrections_raw = parsed.get("metadataCorrections", {})
+            metadata_corrections = {}
+            if isinstance(metadata_corrections_raw, dict):
+                # Only include non-empty corrections
+                if metadata_corrections_raw.get("languages"):
+                    metadata_corrections["languages"] = metadata_corrections_raw[
+                        "languages"
+                    ]
+                if metadata_corrections_raw.get("tags"):
+                    metadata_corrections["tags"] = metadata_corrections_raw["tags"]
+                if metadata_corrections_raw.get("domain"):
+                    metadata_corrections["domain"] = metadata_corrections_raw["domain"]
+
             result = {
                 "qualityScore": quality_score,
                 "suggestedPrice": suggested_price,
@@ -1136,6 +1181,7 @@ Respond ONLY with the JSON object, no additional text."""
                 "recommendations": recommendations,
                 "overallSummary": overall_summary,
                 "detectedLanguages": detected_languages or [],
+                "metadataCorrections": metadata_corrections,
             }
 
             # Add enhanced fields if present

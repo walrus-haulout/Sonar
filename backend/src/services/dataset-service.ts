@@ -45,6 +45,27 @@ export interface FileSealMetadata {
 interface StoreSealMetadataOptions {
   datasetId: string;
   files: FileSealMetadata[];
+  verification?: {
+    verification_id: string;
+    quality_score?: number;
+    safety_passed?: boolean;
+    verified_at: string;
+    transcript?: string;
+    detected_languages?: string[];
+    analysis?: any;
+    transcription_details?: any;
+    quality_breakdown?: any;
+  };
+  metadata?: {
+    title: string;
+    description: string;
+    languages?: string[];
+    tags?: string[];
+    per_file_metadata?: any[];
+    audio_quality?: any;
+    speakers?: any;
+    categorization?: any;
+  };
   logger: FastifyBaseLogger;
   prismaClient?: PrismaClient;
 }
@@ -299,6 +320,8 @@ export async function getDatasetAudioStream({
 export async function storeSealMetadata({
   datasetId,
   files,
+  verification,
+  metadata,
   logger,
   prismaClient,
 }: StoreSealMetadataOptions): Promise<void> {
@@ -312,6 +335,35 @@ export async function storeSealMetadata({
   if (!dataset) {
     logger.warn({ datasetId }, 'Cannot store seal metadata: dataset not found');
     throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, 'Dataset not found.');
+  }
+
+  // Log verification data (will be stored in DB once schema is updated)
+  if (verification) {
+    logger.info(
+      { 
+        datasetId, 
+        verificationId: verification.verification_id,
+        qualityScore: verification.quality_score,
+        safetyPassed: verification.safety_passed,
+        hasTranscript: !!verification.transcript,
+        transcriptLength: verification.transcript?.length,
+        detectedLanguages: verification.detected_languages,
+      },
+      'Verification metadata received (pending schema update for storage)'
+    );
+  }
+
+  // Log dataset metadata
+  if (metadata) {
+    logger.info(
+      {
+        datasetId,
+        title: metadata.title,
+        languages: metadata.languages,
+        tags: metadata.tags,
+      },
+      'Dataset metadata received'
+    );
   }
 
   // Store Seal metadata for each file

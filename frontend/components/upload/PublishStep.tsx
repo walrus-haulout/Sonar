@@ -710,6 +710,13 @@ export function PublishStep({
                       quality_score: verification.qualityScore,
                       safety_passed: verification.safetyPassed,
                       verified_at: new Date().toISOString(),
+                      // Full transcript for pgvector storage and semantic search
+                      transcript: verification.transcript,
+                      detected_languages: verification.detectedLanguages,
+                      // Full analysis for insights and quality breakdown
+                      analysis: verification.analysis,
+                      transcription_details: verification.transcriptionDetails,
+                      quality_breakdown: verification.qualityBreakdown,
                     }
                     : null;
 
