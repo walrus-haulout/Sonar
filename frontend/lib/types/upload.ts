@@ -221,6 +221,22 @@ export interface VerificationResult {
   analysis?: AnalysisOutput; // Full enhanced AI analysis output
   error?: string;
   updatedAt: number;
+  transcriptionDetails?: {
+    speakerCount: number;
+    annotationCount: number;
+    hasUnintelligible: boolean;
+    transcriptLength: number;
+  };
+  categorizationValidation?: {
+    concerns: string[];
+    hasIssues: boolean;
+  };
+  qualityBreakdown?: {
+    clarity: number | null;
+    contentValue: number | null;
+    metadataAccuracy: number | null;
+    completeness: number | null;
+  };
 }
 
 export interface PublishResult {

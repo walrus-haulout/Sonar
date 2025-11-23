@@ -273,14 +273,64 @@ class VerificationPipeline:
 
             # Stage 6: Finalization
             logger.info(f"[{session_object_id}] Stage 6: Finalization")
+
+            # Extract transcription details
+            speaker_count = transcript.count("Speaker") if transcript else 0
+            annotation_count = transcript.count("(") if transcript else 0
+            has_unintelligible = (
+                "(unintelligible)" in transcript if transcript else False
+            )
+
+            # Extract categorization validation
+            all_concerns = analysis_result.get("concerns", [])
+            categorization_concerns = [
+                c
+                for c in all_concerns
+                if any(
+                    keyword in c.lower()
+                    for keyword in [
+                        "labeled",
+                        "domain",
+                        "use case",
+                        "content type",
+                        "categorization",
+                    ]
+                )
+            ]
+
+            # Build quality analysis breakdown
+            quality_analysis = analysis_result.get("qualityAnalysis", {})
+
             completion_payload = {
                 "approved": approved,
                 "quality": quality_result.get("quality"),
                 "copyright": copyright_result.get("copyright"),
                 "transcript": transcript,
-                "transcriptPreview": transcript[:200],
+                "transcriptPreview": transcript[:200] if transcript else "",
                 "analysis": analysis_result,
                 "safetyPassed": analysis_result.get("safetyPassed", False),
+                "transcriptionDetails": {
+                    "speakerCount": speaker_count,
+                    "annotationCount": annotation_count,
+                    "hasUnintelligible": has_unintelligible,
+                    "transcriptLength": len(transcript) if transcript else 0,
+                },
+                "categorizationValidation": {
+                    "concerns": categorization_concerns,
+                    "hasIssues": len(categorization_concerns) > 0,
+                },
+                "qualityBreakdown": {
+                    "clarity": quality_analysis.get("clarity", {}).get("score"),
+                    "contentValue": quality_analysis.get("contentValue", {}).get(
+                        "score"
+                    ),
+                    "metadataAccuracy": quality_analysis.get(
+                        "metadataAccuracy", {}
+                    ).get("score"),
+                    "completeness": quality_analysis.get("completeness", {}).get(
+                        "score"
+                    ),
+                },
             }
             completed = await self.session_store.mark_completed(
                 session_object_id, completion_payload

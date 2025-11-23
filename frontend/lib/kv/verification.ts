@@ -23,6 +23,22 @@ export interface VerificationSession {
     qualityScore?: number;
     safetyPassed?: boolean;
     insights?: string[];
+    transcriptionDetails?: {
+      speakerCount: number;
+      annotationCount: number;
+      hasUnintelligible: boolean;
+      transcriptLength: number;
+    };
+    categorizationValidation?: {
+      concerns: string[];
+      hasIssues: boolean;
+    };
+    qualityBreakdown?: {
+      clarity: number | null;
+      contentValue: number | null;
+      metadataAccuracy: number | null;
+      completeness: number | null;
+    };
   };
   error?: string;
   createdAt: number;
@@ -205,6 +221,9 @@ export function sessionToResult(session: VerificationSession): VerificationResul
     insights: session.results?.insights,
     error: session.error,
     updatedAt: session.updatedAt,
+    transcriptionDetails: session.results?.transcriptionDetails,
+    categorizationValidation: session.results?.categorizationValidation,
+    qualityBreakdown: session.results?.qualityBreakdown,
   };
 }
 

@@ -1412,6 +1412,88 @@ export function VerificationStep({
               </div>
             )}
 
+            {/* Processing Details */}
+            {(result.transcriptionDetails || result.categorizationValidation || result.qualityBreakdown) && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-aqua/20">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright mb-3">
+                  Processing Details
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Transcription Stats */}
+                  {result.transcriptionDetails && (
+                    <div className="space-y-2">
+                      <p className="font-mono text-sonar-aqua/80 font-semibold">TRANSCRIPTION</p>
+                      <div className="space-y-1 text-sonar-highlight/70">
+                        <div className="flex justify-between">
+                          <span>Speakers detected:</span>
+                          <span className="text-sonar-highlight">{result.transcriptionDetails.speakerCount}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Sound annotations:</span>
+                          <span className="text-sonar-highlight">{result.transcriptionDetails.annotationCount}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Transcript length:</span>
+                          <span className="text-sonar-highlight">{result.transcriptionDetails.transcriptLength} chars</span>
+                        </div>
+                        {result.transcriptionDetails.hasUnintelligible && (
+                          <p className="text-sonar-signal italic">Contains unintelligible sections</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quality Breakdown */}
+                  {result.qualityBreakdown && (
+                    <div className="space-y-2">
+                      <p className="font-mono text-sonar-aqua/80 font-semibold">QUALITY ANALYSIS</p>
+                      <div className="space-y-1 text-sonar-highlight/70">
+                        {result.qualityBreakdown.clarity !== null && result.qualityBreakdown.clarity !== undefined && (
+                          <div className="flex justify-between">
+                            <span>Clarity:</span>
+                            <span className="text-sonar-highlight">{result.qualityBreakdown.clarity}/10</span>
+                          </div>
+                        )}
+                        {result.qualityBreakdown.contentValue !== null && result.qualityBreakdown.contentValue !== undefined && (
+                          <div className="flex justify-between">
+                            <span>Content Value:</span>
+                            <span className="text-sonar-highlight">{result.qualityBreakdown.contentValue}/10</span>
+                          </div>
+                        )}
+                        {result.qualityBreakdown.metadataAccuracy !== null && result.qualityBreakdown.metadataAccuracy !== undefined && (
+                          <div className="flex justify-between">
+                            <span>Tag Accuracy:</span>
+                            <span className="text-sonar-highlight">{result.qualityBreakdown.metadataAccuracy}/10</span>
+                          </div>
+                        )}
+                        {result.qualityBreakdown.completeness !== null && result.qualityBreakdown.completeness !== undefined && (
+                          <div className="flex justify-between">
+                            <span>Completeness:</span>
+                            <span className="text-sonar-highlight">{result.qualityBreakdown.completeness}/10</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Categorization Validation */}
+                  {result.categorizationValidation && result.categorizationValidation.hasIssues && (
+                    <div className="space-y-2 md:col-span-2">
+                      <p className="font-mono text-sonar-signal/80 font-semibold">CATEGORIZATION ISSUES</p>
+                      <div className="bg-sonar-abyss/50 p-2 rounded space-y-1">
+                        {result.categorizationValidation.concerns.map((concern: string, idx: number) => (
+                          <div key={idx} className="flex items-start space-x-2 text-sonar-highlight/70">
+                            <span className="text-sonar-signal">!</span>
+                            <span>{concern}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Transcript Display */}
             {result.transcript && (
               <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
@@ -1545,20 +1627,83 @@ export function VerificationStep({
                 {errorDetails.copyright?.high_confidence_match && (
                   <div className="p-3 rounded-sonar bg-sonar-abyss/30">
                     <p className="font-mono font-semibold text-sonar-coral mb-2">
-                      Copyright Detected:
+                      Copyright Detected
                     </p>
-                    <p className="text-sm text-sonar-highlight/70">
-                      {errorDetails.copyright.best_match?.title}
-                      {errorDetails.copyright.best_match?.artist &&
-                        ` by ${errorDetails.copyright.best_match.artist}`}
+                    <p className="text-sm text-sonar-highlight/70 mb-3">
+                      This audio matches copyrighted material in our database. You cannot upload content you don't have rights to.
                     </p>
-                    <p className="text-xs text-sonar-highlight/50 mt-1">
-                      Confidence:{" "}
-                      {(
-                        errorDetails.copyright.best_match?.confidence * 100
-                      ).toFixed(1)}
-                      %
-                    </p>
+                    
+                    {/* Best Match */}
+                    <div className="space-y-2 mb-3">
+                      <p className="text-xs font-mono text-sonar-highlight/50">PRIMARY MATCH</p>
+                      <div className="bg-sonar-abyss/50 p-2 rounded">
+                        <p className="text-sm font-semibold text-sonar-highlight">
+                          {errorDetails.copyright.best_match?.title}
+                        </p>
+                        {errorDetails.copyright.best_match?.artist && (
+                          <p className="text-sm text-sonar-highlight/70">
+                            by {errorDetails.copyright.best_match.artist}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-xs text-sonar-highlight/50">
+                            Confidence: {(errorDetails.copyright.best_match?.confidence * 100).toFixed(1)}%
+                          </p>
+                          {errorDetails.copyright.best_match?.musicbrainz_id && (
+                            <a
+                              href={`https://musicbrainz.org/recording/${errorDetails.copyright.best_match.musicbrainz_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-sonar-aqua hover:text-sonar-highlight transition-colors"
+                            >
+                              View on MusicBrainz →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Matches */}
+                    {errorDetails.copyright.matches && errorDetails.copyright.matches.length > 1 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-mono text-sonar-highlight/50">
+                          ADDITIONAL MATCHES ({errorDetails.copyright.matches.length - 1})
+                        </p>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {errorDetails.copyright.matches.slice(1).map((match: any, idx: number) => (
+                            <div key={idx} className="bg-sonar-abyss/30 p-2 rounded text-xs">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sonar-highlight/80 truncate">
+                                    {match.title}
+                                    {match.artist && <span className="text-sonar-highlight/60"> - {match.artist}</span>}
+                                  </p>
+                                  <p className="text-sonar-highlight/50">
+                                    {(match.confidence * 100).toFixed(1)}% confidence
+                                  </p>
+                                </div>
+                                {match.musicbrainz_id && (
+                                  <a
+                                    href={`https://musicbrainz.org/recording/${match.musicbrainz_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sonar-aqua hover:text-sonar-highlight transition-colors flex-shrink-0"
+                                  >
+                                    →
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-sonar-highlight/10">
+                      <p className="text-xs text-sonar-highlight/50">
+                        <span className="font-semibold">How to fix:</span> Upload original content you created, or content you have explicit rights to use.
+                      </p>
+                    </div>
                   </div>
                 )}
 
