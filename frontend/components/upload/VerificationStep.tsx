@@ -873,7 +873,8 @@ export function VerificationStep({
         });
 
         // Check if completed or failed
-        if (session.state === "completed" || session.approved !== undefined) {
+        // Note: Use != null to check for both null AND undefined (session.approved can be null during processing)
+        if (session.state === "completed" || session.approved != null) {
           clearInterval(interval);
           pollingIntervalRef.current = null;
 
