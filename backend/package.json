@@ -13,13 +13,9 @@
     "test": "bun test",
     "setup": "bun scripts/setup.ts",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "prisma db seed",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset",
     "generate": "prisma generate"
-  },
-  "prisma": {
-    "seed": "bun prisma/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
