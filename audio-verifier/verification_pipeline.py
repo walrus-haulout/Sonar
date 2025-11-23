@@ -581,7 +581,7 @@ class VerificationPipeline:
             if per_file_metadata and len(per_file_metadata) > 1:
                 per_file_data = [
                     {
-                        "title": pf.get("title", f"File {i+1}"),
+                        "title": pf.get("title", f"File {i + 1}"),
                         "description": pf.get("description", ""),
                     }
                     for i, pf in enumerate(per_file_metadata)
@@ -719,6 +719,8 @@ Provide your analysis in the following JSON format with detailed reasoning:
 - **Metadata Accuracy** (0.2): Does the content match the provided metadata? Are descriptions accurate?
 - **Completeness** (0.2): Is the content complete without obvious truncation? Are complete thoughts/sentences included?
 
+**Default Quality Score**: If the audio is average/unremarkable with no notable quality issues or standout features, use 0.5 (50%) as the default baseline score.
+
 ### Purchase Price Suggestion (3-10 SUI):
 Suggest a fair market price in SUI tokens (minimum: 3, maximum: 10) based on:
 - **Quality Score** (40%): Higher quality = higher price (0.5-0.7 = 1.0-1.3x, 0.7-0.85 = 1.3-1.6x, 0.85-1.0 = 1.6-2.0x)
@@ -736,13 +738,11 @@ Show your calculation: Base price × quality multiplier × rarity multiplier
 
 ### Safety Screening:
 Flag as unsafe (safetyPassed: false) ONLY if content contains:
-- Hate speech or explicit discrimination
-- Graphic violence or gore descriptions
-- Child exploitation material
-- Illegal activity promotion
-- Personally identifiable information (PII)
+- Sexually explicit content or pornography
+- Graphic violence, gore, or disturbing violent imagery
+- Copyrighted material (recognizable songs, music, or audio from movies/TV/radio)
 
-Conversational datasets with mild profanity, political discussion, or sensitive topics are generally ACCEPTABLE if contextually appropriate.
+All other content is acceptable. Conversational datasets with profanity, political discussion, or other sensitive topics are ACCEPTABLE.
 
 ### Insights:
 Provide 3-5 specific, actionable insights about:
@@ -751,16 +751,26 @@ Provide 3-5 specific, actionable insights about:
 - Unique characteristics or standout features
 - Market value proposition and competitive positioning
 
+**If there are no notable insights**, use an empty array: "insights": []
+
+### Concerns:
+List specific quality or content issues found. **If there are no concerns**, use an empty array: "concerns": []
+
 ### Recommendations:
 Categorize suggestions by priority:
 - **Critical**: Issues that significantly impact quality (e.g., missing segments, poor audio quality)
 - **Suggested**: Improvements that would enhance value (e.g., better metadata, additional context)
 - **Optional**: Nice-to-have enhancements (e.g., extended analysis, supplementary materials)
 
+**If there are no recommendations**, use: "recommendations": {"critical": [], "suggested": [], "optional": []}
+
 Respond ONLY with the JSON object, no additional text."""
 
     def _build_per_file_analysis_prompt(
-        self, transcript: str, metadata: Dict[str, Any], per_file_data: List[Dict[str, str]]
+        self,
+        transcript: str,
+        metadata: Dict[str, Any],
+        per_file_data: List[Dict[str, str]],
     ) -> str:
         """
         Build prompt for per-file AI analysis.
@@ -776,7 +786,7 @@ Respond ONLY with the JSON object, no additional text."""
         files_description = ""
         for i, file_info in enumerate(per_file_data, 1):
             files_description += f"\n{i}. {file_info.get('title', f'File {i}')}"
-            if file_info.get('description'):
+            if file_info.get("description"):
                 files_description += f" - {file_info['description']}"
 
         transcript_sample = (
@@ -816,7 +826,9 @@ For each file:
 
 Respond ONLY with the JSON object, no additional text."""
 
-    def _parse_per_file_response(self, response_text: str) -> Optional[List[Dict[str, Any]]]:
+    def _parse_per_file_response(
+        self, response_text: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Parse per-file analysis response from AI.
 
@@ -891,7 +903,9 @@ Respond ONLY with the JSON object, no additional text."""
                 recommendations = recommendations_raw
             else:
                 # Legacy format: flat list
-                recommendations = {"suggested": recommendations_raw} if recommendations_raw else {}
+                recommendations = (
+                    {"suggested": recommendations_raw} if recommendations_raw else {}
+                )
 
             result = {
                 "qualityScore": quality_score,

@@ -1131,102 +1131,6 @@ export function VerificationStep({
             )}
           </GlassCard>
 
-          {/* Radar Animation */}
-          <div className="flex justify-center py-6">
-            <div className="relative w-48 h-48">
-              <RadarScanTarget
-                src="/images/walrus-icon.png"
-                alt="Verification in Progress"
-                size={192}
-              />
-            </div>
-          </div>
-
-          {/* Stage Progress */}
-          <div className="space-y-3">
-            {stages.map((stage) => {
-              const config =
-                stageConfig[stage.name as keyof typeof stageConfig];
-              const isCompleted = stage.status === "completed";
-              const isActive = stage.status === "in_progress";
-              const isPending = stage.status === "pending";
-
-              return (
-                <GlassCard
-                  key={stage.name}
-                  className={cn(
-                    "transition-all duration-300",
-                    isActive && "bg-sonar-signal/10 border border-sonar-signal",
-                  )}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3 flex-1">
-                        <div
-                          className={cn(
-                            "p-2 rounded-sonar transition-colors",
-                            isCompleted &&
-                              "bg-sonar-signal/20 text-sonar-signal",
-                            isActive && "bg-sonar-signal/30 text-sonar-signal",
-                            isPending && "bg-sonar-blue/10 text-sonar-blue/50",
-                          )}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle className="w-5 h-5" />
-                          ) : (
-                            config.icon
-                          )}
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <p
-                              className={cn(
-                                "font-mono font-semibold",
-                                isCompleted && "text-sonar-highlight/70",
-                                isActive && "text-sonar-highlight-bright",
-                                isPending && "text-sonar-highlight/50",
-                              )}
-                            >
-                              {config.label}
-                            </p>
-                            {(isActive || isCompleted) && (
-                              <div className="flex items-center space-x-2">
-                                <span className="text-sonar-signal font-mono text-sm font-bold">
-                                  {Math.round(stage.progress)}%
-                                </span>
-                                {isCompleted && stageStartTimes[stage.name] && (
-                                  <span className="text-xs text-sonar-highlight/40">
-                                    {((Date.now() - stageStartTimes[stage.name]) / 1000).toFixed(1)}s
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-xs text-sonar-highlight/50">
-                            {config.description}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    {isActive && (
-                      <div className="h-1 bg-sonar-blue/20 rounded-full overflow-hidden">
-                        <motion.div
-                          className="h-full bg-sonar-signal"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${stage.progress}%` }}
-                          transition={{ duration: 0.3 }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </GlassCard>
-              );
-            })}
-          </div>
-
           {/* Activity Feed */}
           <VerificationActivityFeed logs={activityLogs} />
 
@@ -1617,9 +1521,13 @@ export function VerificationStep({
                           ))}
                         </ul>
                       </div>
+                    ) : errorDetails.copyright?.high_confidence_match ? (
+                      <p className="text-sm text-sonar-highlight/70">
+                        Audio content was flagged for containing copyrighted material
+                      </p>
                     ) : (
                       <p className="text-sm text-sonar-highlight/70">
-                        Audio content was flagged for inappropriate material
+                        Audio content was flagged for safety reasons (copyrighted content, pornography, or gore)
                       </p>
                     )}
                   </div>
