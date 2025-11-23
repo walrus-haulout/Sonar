@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
 
 # OpenRouter model identifiers
 OPENROUTER_MODELS = {
-    "TRANSCRIPTION": "mistralai/voxtral-small-24b-2507",  # Voxtral Small for transcription
-    "ANALYSIS": "google/gemini-2.5-flash",  # Gemini 2.5 Flash for analysis
+    "TRANSCRIPTION": "openai/gpt-4o-audio-preview",  # GPT-4o Audio (best reliability)
+    "TRANSCRIPTION_FALLBACK": "mistralai/voxtral-small-24b-2507",  # Voxtral (fallback)
+    "ANALYSIS": "google/gemini-3-pro-preview",  # Gemini 3 Pro (latest model)
 }
 
 
@@ -514,16 +515,19 @@ class VerificationPipeline:
                 },
             )
 
-            # Determine audio MIME type from file extension
-            audio_mime = "audio/wav"
+            # Determine audio format for OpenRouter (supports: wav, mp3)
+            audio_format = "wav"  # Default
             if audio_file_path.endswith(".mp3"):
-                audio_mime = "audio/mpeg"
-            elif audio_file_path.endswith(".m4a"):
-                audio_mime = "audio/mp4"
-            elif audio_file_path.endswith(".webm"):
-                audio_mime = "audio/webm"
-            elif audio_file_path.endswith(".flac"):
-                audio_mime = "audio/flac"
+                audio_format = "mp3"
+            elif audio_file_path.endswith((".wav", ".wave")):
+                audio_format = "wav"
+            else:
+                # For other formats, attempt with wav format
+                # OpenRouter may auto-detect or we can add conversion later
+                audio_format = "wav"
+                logger.warning(
+                    f"[{session_object_id}] Unsupported format {audio_file_path}, attempting as wav"
+                )
 
             # Call Voxtral via OpenRouter chat completions API
             # OpenRouter uses OpenAI-compatible format for multimodal inputs
@@ -555,7 +559,10 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
                             },
                             {
                                 "type": "input_audio",
-                                "input_audio": f"data:{audio_mime};base64,{audio_base64}",
+                                "input_audio": {
+                                    "data": audio_base64,
+                                    "format": audio_format,
+                                },
                             },
                         ],
                     }
@@ -563,11 +570,21 @@ Provide clean, readable transcript with these annotations. Each speaker's dialog
             )
 
             api_start = time.time()
-            completion = self.openai_client.chat.completions.create(
-                model=OPENROUTER_MODELS["TRANSCRIPTION"],
-                messages=transcription_messages,
-                max_tokens=4096,
-            )
+            try:
+                completion = self.openai_client.chat.completions.create(
+                    model=OPENROUTER_MODELS["TRANSCRIPTION"],
+                    messages=transcription_messages,
+                    max_tokens=4096,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[{session_object_id}] Primary transcription model failed: {e}, using fallback"
+                )
+                completion = self.openai_client.chat.completions.create(
+                    model=OPENROUTER_MODELS["TRANSCRIPTION_FALLBACK"],
+                    messages=transcription_messages,
+                    max_tokens=4096,
+                )
             api_duration = time.time() - api_start
 
             transcript = completion.choices[0].message.content.strip()
