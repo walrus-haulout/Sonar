@@ -1081,6 +1081,32 @@ async def get_verification_status(session_object_id: str):
         # Extract suggested price from analysis (default 3.0 SUI)
         suggested_price = analysis.get("suggestedPrice", 3.0)
 
+        # Extract additional fields from results
+        transcription_details = results.get("transcriptionDetails", {})
+        quality_breakdown = results.get("qualityBreakdown", {})
+        categorization_validation = results.get("categorizationValidation", {})
+
+        # Extract detectedLanguages from analysis
+        detected_languages = analysis.get("detectedLanguages", [])
+
+        # Extract insights from analysis
+        insights = analysis.get("insights", [])
+
+        # Debug log to verify analysis structure
+        logger.debug(
+            f"Building verification status response",
+            extra={
+                "session_id": session_object_id,
+                "has_analysis": bool(analysis),
+                "analysis_keys": list(analysis.keys()) if analysis else [],
+                "has_detected_languages": "detectedLanguages" in analysis,
+                "detected_languages": detected_languages,
+                "has_insights": "insights" in analysis,
+                "insights_count": len(insights),
+                "has_overall_summary": "overallSummary" in analysis,
+            },
+        )
+
         # Build response with both legacy and frontend keys
         response = {
             **session,
@@ -1093,9 +1119,14 @@ async def get_verification_status(session_object_id: str):
             "analysis": analysis,
             "transcript": results.get("transcript"),
             "transcriptPreview": results.get("transcriptPreview"),
+            "detectedLanguages": detected_languages,
+            "insights": insights,
             "quality": quality,
             "qualityScore": quality_score,
             "suggestedPrice": suggested_price,
+            "qualityBreakdown": quality_breakdown,
+            "transcriptionDetails": transcription_details,
+            "categorizationValidation": categorization_validation,
             "metadata": metadata,
             "errors": errors_list,
             "warnings": session.get("warnings", []),
@@ -1156,13 +1187,25 @@ async def cancel_verification(session_object_id: str):
 class VerificationFeedback(BaseModel):
     """User feedback on verification results"""
 
-    vote: str = Field(..., pattern="^(helpful|not_helpful)$", description="Vote: 'helpful' or 'not_helpful'")
-    feedback_text: Optional[str] = Field(None, max_length=500, description="Optional feedback comment")
-    feedback_category: Optional[str] = Field(None, description="Optional feedback category")
-    wallet_address: Optional[str] = Field(None, description="Wallet address (from header if not provided)")
+    vote: str = Field(
+        ...,
+        pattern="^(helpful|not_helpful)$",
+        description="Vote: 'helpful' or 'not_helpful'",
+    )
+    feedback_text: Optional[str] = Field(
+        None, max_length=500, description="Optional feedback comment"
+    )
+    feedback_category: Optional[str] = Field(
+        None, description="Optional feedback category"
+    )
+    wallet_address: Optional[str] = Field(
+        None, description="Wallet address (from header if not provided)"
+    )
 
 
-@app.post("/verify/{session_object_id}/feedback", dependencies=[Depends(verify_bearer_token)])
+@app.post(
+    "/verify/{session_object_id}/feedback", dependencies=[Depends(verify_bearer_token)]
+)
 async def submit_verification_feedback(
     session_object_id: str,
     feedback: VerificationFeedback,
@@ -1217,7 +1260,9 @@ async def submit_verification_feedback(
                 feedback.feedback_category,
             )
 
-            logger.info(f"Feedback submitted: {feedback.vote} from {wallet_address[:8]}... for session {session_object_id[:8]}...")
+            logger.info(
+                f"Feedback submitted: {feedback.vote} from {wallet_address[:8]}... for session {session_object_id[:8]}..."
+            )
 
             # AUTO-INDEX: Generate embedding asynchronously
             if feedback.feedback_text and feedback.feedback_text.strip():
@@ -1231,7 +1276,9 @@ async def submit_verification_feedback(
                         feedback.feedback_category,
                     )
                 )
-                logger.debug(f"Scheduled embedding generation for feedback {result['id'][:8]}...")
+                logger.debug(
+                    f"Scheduled embedding generation for feedback {result['id'][:8]}..."
+                )
 
             return JSONResponse(
                 content={
@@ -1247,7 +1294,9 @@ async def submit_verification_feedback(
         raise
     except Exception as e:
         logger.error(f"Failed to submit feedback: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to submit feedback: {str(e)}"
+        )
 
 
 # ============================================================================
@@ -1327,7 +1376,9 @@ async def get_feedback_themes(
     """
     try:
         if top_n < 1 or top_n > 50:
-            raise HTTPException(status_code=400, detail="top_n must be between 1 and 50")
+            raise HTTPException(
+                status_code=400, detail="top_n must be between 1 and 50"
+            )
 
         clusterer = get_feedback_clusterer()
         themes = await clusterer.get_feedback_themes(top_n, vote)
@@ -1368,7 +1419,9 @@ async def index_feedback_batch(limit: int = 100):
     """
     try:
         if limit < 1 or limit > 1000:
-            raise HTTPException(status_code=400, detail="limit must be between 1 and 1000")
+            raise HTTPException(
+                status_code=400, detail="limit must be between 1 and 1000"
+            )
 
         indexer = get_feedback_indexer()
         count = await indexer.batch_index_feedback(limit)
