@@ -284,7 +284,13 @@ class VerificationPipeline:
             logger.info(f"[{session_object_id}] Stage 6: Finalization")
 
             # Extract transcription details
-            speaker_count = transcript.count("Speaker") if transcript else 0
+            import re
+
+            # Count unique speakers (e.g., "Speaker 1:", "Speaker 2:")
+            speaker_matches = (
+                re.findall(r"Speaker (\d+):", transcript) if transcript else []
+            )
+            speaker_count = len(set(speaker_matches))  # Count unique speaker IDs
             annotation_count = transcript.count("(") if transcript else 0
             has_unintelligible = (
                 "(unintelligible)" in transcript if transcript else False
