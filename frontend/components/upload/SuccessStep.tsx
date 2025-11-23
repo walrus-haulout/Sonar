@@ -27,6 +27,17 @@ export function SuccessStep({
 }: SuccessStepProps) {
   const [copied, setCopied] = useState(false);
 
+  // Defensive check - this should never be null, but handle it gracefully
+  if (!publish) {
+    console.error('[SuccessStep] Publish data is null - this should not happen');
+    return (
+      <div className="text-center space-y-4">
+        <p className="text-sonar-coral">Error: Missing publish data</p>
+        <SonarButton onClick={onClose}>Go Back</SonarButton>
+      </div>
+    );
+  }
+
   const datasetUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/dataset/${publish.datasetId}`;
   const txUrl = getTxExplorerUrl(publish.txDigest);
 

@@ -819,6 +819,12 @@ export function VerificationStep({
   };
 
   const startPollingEncrypted = (sessionObjectId: string) => {
+    // Guard against duplicate polling intervals (can happen in React Strict Mode)
+    if (pollingIntervalRef.current) {
+      console.log("[VerificationStep] Polling already in progress, skipping duplicate");
+      return;
+    }
+    
     addLog("VERIFY", "Starting verification pipeline...", "progress");
     
     // Poll every 2 seconds
@@ -948,6 +954,12 @@ export function VerificationStep({
   };
 
   const startPolling = (id: string, files: AudioFile[], fileIndex: number) => {
+    // Guard against duplicate polling intervals (can happen in React Strict Mode)
+    if (pollingIntervalRef.current) {
+      console.log("[VerificationStep] Polling already in progress, skipping duplicate");
+      return;
+    }
+    
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {

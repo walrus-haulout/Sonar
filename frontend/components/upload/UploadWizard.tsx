@@ -472,6 +472,12 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
                 // CRITICAL: Update verification AND advance step in single setState
                 // This ensures localStorage saves the complete state before React re-renders
                 setState((prev) => {
+                  // Guard against duplicate calls advancing beyond verification step
+                  if (prev.step !== 'verification') {
+                    console.warn('[UploadWizard] ⚠️ onVerificationComplete called but not at verification step:', prev.step);
+                    return prev; // Don't advance if we're not at verification step
+                  }
+                  
                   const newState = { 
                     ...prev, 
                     verification,
@@ -556,12 +562,21 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             />
           )}
 
-          {state.step === 'success' && (
+          {state.step === 'success' && state.publish && (
             <SuccessStep
-              publish={state.publish!}
+              publish={state.publish}
               metadata={state.metadata!}
               onClose={() => closeWizard({ clearDraft: true })}
             />
+          )}
+          
+          {state.step === 'success' && !state.publish && (
+            <div className="text-center space-y-4">
+              <p className="text-sonar-coral">Error: Reached success step without publish data</p>
+              <SonarButton onClick={() => setState(prev => ({ ...prev, step: 'publish' }))}>
+                Go Back to Publish
+              </SonarButton>
+            </div>
           )}
         </motion.div>
       </AnimatePresence>
