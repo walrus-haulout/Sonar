@@ -158,16 +158,17 @@ export async function POST(request: NextRequest) {
       apiKeyLength: headers["X-API-Key"]?.length,
     });
 
-    // Single upload attempt with 240s timeout (4 minutes)
+    // Single upload attempt with 20s timeout (Edge function has 25s limit on some plans)
     // Client handles retries if this fails
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 240000); // 240s = 4 minutes
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s
 
-    console.log("[Walrus Upload] Starting upload with 240s timeout...", {
-      url: walrusUrl.split("?")[0],
+    console.log("[Walrus Upload] Starting upload with 20s timeout...", {
+      url: walrusUrl,
       size: file.size,
       epochs,
       hasApiKey: !!BLOCKBERRY_API_KEY,
+      keyLength: BLOCKBERRY_API_KEY.length,
     });
 
     const uploadResponse = await fetch(walrusUrl, {
