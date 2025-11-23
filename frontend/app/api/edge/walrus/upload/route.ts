@@ -14,6 +14,17 @@ const DEFAULT_EPOCHS = parseInt(
   10,
 );
 
+// CRITICAL: Log API key status on module load
+console.log("[Walrus Upload API] Module initialized:", {
+  hasBlockberryKey: !!BLOCKBERRY_API_KEY,
+  keyLength: BLOCKBERRY_API_KEY ? BLOCKBERRY_API_KEY.length : 0,
+  keyPreview: BLOCKBERRY_API_KEY
+    ? `${BLOCKBERRY_API_KEY.substring(0, 8)}...`
+    : "NONE",
+  publisherUrl: WALRUS_PUBLISHER_URL,
+  aggregatorUrl: WALRUS_AGGREGATOR_URL,
+});
+
 /**
  * Edge Function: Walrus Upload Proxy
  * Proxies encrypted audio blob uploads to Walrus publisher to bypass CORS restrictions
@@ -26,6 +37,18 @@ const DEFAULT_EPOCHS = parseInt(
  * Returns: { blobId: string, certifiedEpoch: number, size: number, encodingType: string, storageId: string, deletable: boolean }
  */
 export async function POST(request: NextRequest) {
+  const requestId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+
+  console.log(
+    `[Walrus Upload API] [${requestId}] REQUEST RECEIVED at ${timestamp}`,
+    {
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries()),
+    },
+  );
+
   try {
     // Parse the form data
     const formData = await request.formData();
@@ -35,7 +58,7 @@ export async function POST(request: NextRequest) {
     const metadataParam = formData.get("metadata"); // JSON string
 
     // Log incoming request for debugging
-    console.log("[Walrus Upload API] Received request:", {
+    console.log(`[Walrus Upload API] [${requestId}] Received request:`, {
       hasFile: !!file,
       isBlob: file instanceof Blob,
       fileSize: file instanceof Blob ? file.size : "N/A",
@@ -98,8 +121,24 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      "[Walrus Upload API] Validation passed, forwarding to Walrus publisher",
+      "[Walrus Upload] Validation passed, forwarding to Walrus publisher",
     );
+
+    // CRITICAL: Require API key in production
+    if (!BLOCKBERRY_API_KEY) {
+      console.error(
+        "[Walrus Upload] CRITICAL: No BLOCKBERRY_API_KEY configured!",
+      );
+      return NextResponse.json(
+        {
+          error: "Walrus upload not configured",
+          details:
+            "BLOCKBERRY_API_KEY environment variable is not set. Blobs cannot be registered on-chain.",
+          configured: false,
+        },
+        { status: 503 },
+      );
+    }
 
     // Build Walrus URL with epochs parameter (default: 1 year = 26 epochs)
     const epochs = epochsParam
@@ -110,12 +149,14 @@ export async function POST(request: NextRequest) {
     // Upload to Walrus (PUT request as per Walrus HTTP API)
     const headers: Record<string, string> = {
       "Content-Type": "application/octet-stream",
+      "X-API-Key": BLOCKBERRY_API_KEY, // Required for authenticated Staketab access
     };
 
-    // Add Blockberry API key if configured
-    if (BLOCKBERRY_API_KEY) {
-      headers["X-API-Key"] = BLOCKBERRY_API_KEY;
-    }
+    console.log("[Walrus Upload] Request headers:", {
+      contentType: headers["Content-Type"],
+      hasApiKey: !!headers["X-API-Key"],
+      apiKeyLength: headers["X-API-Key"]?.length,
+    });
 
     // Single upload attempt with 240s timeout (4 minutes)
     // Client handles retries if this fails
@@ -126,6 +167,7 @@ export async function POST(request: NextRequest) {
       url: walrusUrl.split("?")[0],
       size: file.size,
       epochs,
+      hasApiKey: !!BLOCKBERRY_API_KEY,
     });
 
     const uploadResponse = await fetch(walrusUrl, {
@@ -136,6 +178,13 @@ export async function POST(request: NextRequest) {
     });
 
     clearTimeout(timeoutId);
+
+    console.log("[Walrus Upload] Response received:", {
+      status: uploadResponse.status,
+      ok: uploadResponse.ok,
+      statusText: uploadResponse.statusText,
+      contentType: uploadResponse.headers.get("content-type"),
+    });
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
@@ -184,6 +233,13 @@ export async function POST(request: NextRequest) {
     );
 
     const walrusResult = await uploadResponse.json();
+
+    console.log("[Walrus Upload] Raw response from Walrus publisher:", {
+      hasNewlyCreated: !!walrusResult.newlyCreated,
+      hasAlreadyCertified: !!walrusResult.alreadyCertified,
+      responseKeys: Object.keys(walrusResult),
+      fullResponse: JSON.stringify(walrusResult).substring(0, 500),
+    });
 
     // Walrus returns: { newlyCreated: { blobObject: { id, blobId, encodingType, storage: { id, ... }, deletable, ... }, ... } }
     // or { alreadyCertified: { blobId, ... } }

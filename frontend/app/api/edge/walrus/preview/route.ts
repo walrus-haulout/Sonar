@@ -9,6 +9,13 @@ export const runtime = "edge";
 
 const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || "";
 
+// CRITICAL: Log API key status on module load
+console.log("[Walrus Preview API] Module initialized:", {
+  hasBlockberryKey: !!BLOCKBERRY_API_KEY,
+  keyLength: BLOCKBERRY_API_KEY ? BLOCKBERRY_API_KEY.length : 0,
+  publisherUrl: WALRUS_PUBLISHER_URL,
+});
+
 /**
  * Edge Function: Walrus Preview Upload
  * Uploads a smaller preview blob (public, unencrypted)
@@ -42,6 +49,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL: Require API key in production
+    if (!BLOCKBERRY_API_KEY) {
+      console.error(
+        "[Walrus Preview] CRITICAL: No BLOCKBERRY_API_KEY configured!",
+      );
+      return NextResponse.json(
+        {
+          error: "Walrus preview upload not configured",
+          details: "BLOCKBERRY_API_KEY environment variable is not set",
+          configured: false,
+        },
+        { status: 503 },
+      );
+    }
+
     // Build Walrus URL with optional epochs parameter
     const epochs = epochsParam ? parseInt(epochsParam.toString(), 10) : null;
     const walrusUrl =
@@ -52,12 +74,14 @@ export async function POST(request: NextRequest) {
     // Upload to Walrus
     const headers: Record<string, string> = {
       "Content-Type": "application/octet-stream",
+      "X-API-Key": BLOCKBERRY_API_KEY, // Required for authenticated access
     };
 
-    // Add Blockberry API key if configured
-    if (BLOCKBERRY_API_KEY) {
-      headers["X-API-Key"] = BLOCKBERRY_API_KEY;
-    }
+    console.log("[Walrus Preview] Uploading to:", {
+      url: walrusUrl,
+      size: file.size,
+      hasApiKey: !!headers["X-API-Key"],
+    });
 
     const uploadResponse = await fetch(walrusUrl, {
       method: "PUT",
