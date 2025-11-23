@@ -795,7 +795,7 @@ Categorize suggestions by priority:
 - **Suggested**: Improvements that would enhance value (e.g., better metadata, additional context)
 - **Optional**: Nice-to-have enhancements (e.g., extended analysis, supplementary materials)
 
-**If there are no recommendations**, use: "recommendations": {"critical": [], "suggested": [], "optional": []}
+**If there are no recommendations**, use: "recommendations": {{"critical": [], "suggested": [], "optional": []}}
 
 Respond ONLY with the JSON object, no additional text."""
 
