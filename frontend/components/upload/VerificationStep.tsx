@@ -906,11 +906,16 @@ export function VerificationStep({
               { name: "transcription", status: "completed", progress: 100 },
               { name: "analysis", status: "completed", progress: 100 },
             ],
+            transcript: session.transcript,
             qualityScore: qualityScore / 100, // Convert 0-100 to 0-1
             suggestedPrice,
             safetyPassed,
             insights: analysis.insights || [],
+            analysis: session.analysis,
             updatedAt: Date.now(),
+            transcriptionDetails: session.transcriptionDetails,
+            categorizationValidation: session.categorizationValidation,
+            qualityBreakdown: session.qualityBreakdown,
           };
 
           console.log("[VerificationStep] ✅ Verification SUCCESS (polling)! Calling onVerificationComplete");
