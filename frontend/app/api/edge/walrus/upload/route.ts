@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  WALRUS_PUBLISHER_URL,
+  WALRUS_AGGREGATOR_URL,
+} from "@/lib/walrus/config";
 
 // Mark as Edge Runtime
 export const runtime = "edge";
 export const maxDuration = 300; // Vercel Pro max timeout (5 minutes)
-
-const WALRUS_PUBLISHER_URL = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL!;
-const WALRUS_AGGREGATOR_URL = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL!;
-
-if (!WALRUS_PUBLISHER_URL || !WALRUS_AGGREGATOR_URL) {
-  throw new Error("Missing Walrus environment variables");
-}
 
 const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || "";
 const DEFAULT_EPOCHS = parseInt(
@@ -235,14 +232,15 @@ export async function POST(request: NextRequest) {
       ...(metadata && { metadata }), // Include metadata if provided
     });
   } catch (error) {
-    const isTimeout = error instanceof Error &&
-      (error.name === 'AbortError' ||
-        error.message.includes('aborted') ||
-        error.message.includes('timeout'));
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === "AbortError" ||
+        error.message.includes("aborted") ||
+        error.message.includes("timeout"));
 
     console.error("[Walrus Upload] Error:", {
       error: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : 'unknown',
+      errorName: error instanceof Error ? error.name : "unknown",
       isTimeout,
     });
 

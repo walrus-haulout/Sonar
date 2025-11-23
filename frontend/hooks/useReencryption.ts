@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
-import { CHAIN_CONFIG } from '@/lib/sui/client';
-import { reencryptBlob, validateReencryptionOptions } from '@sonar/seal';
-import { useSeal } from './useSeal';
-import { useWalrusParallelUpload } from './useWalrusParallelUpload';
-import type { ReencryptionOptions, ReencryptionStage } from '@sonar/seal';
+import { useState } from "react";
+import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { CHAIN_CONFIG } from "@/lib/sui/client";
+import { reencryptBlob, validateReencryptionOptions } from "@sonar/seal";
+import { useSeal } from "./useSeal";
+import { useWalrusParallelUpload } from "./useWalrusParallelUpload";
+import type { ReencryptionOptions, ReencryptionStage } from "@sonar/seal";
 
 /**
  * useReencryption Hook
@@ -23,7 +23,11 @@ export interface ReencryptionRequest {
   currentEncryptedBlob: Uint8Array; // Current encrypted blob
   currentSealPolicyId: string; // Current policy ID
   newSealPolicyId: string; // New policy ID for access change
-  onProgress?: (stage: ReencryptionStage, progress: number, message: string) => void;
+  onProgress?: (
+    stage: ReencryptionStage,
+    progress: number,
+    message: string,
+  ) => void;
 }
 
 export interface ReencryptionProgress {
@@ -50,64 +54,63 @@ export function useReencryption() {
    * 5. Call reencrypt_submission() on-chain to update references
    */
   async function reencryptSubmission(
-    request: ReencryptionRequest
+    request: ReencryptionRequest,
   ): Promise<{ submissionId: string; newBlobId?: string; digest: string }> {
     return new Promise(async (resolve, reject) => {
       if (!CHAIN_CONFIG.packageId) {
-        reject(new Error('Package ID not configured'));
+        reject(new Error("Package ID not configured"));
         return;
       }
 
       if (!sealClient || !sessionKey) {
-        reject(new Error('Seal client or session not initialized'));
+        reject(new Error("Seal client or session not initialized"));
         return;
       }
 
       try {
         // Step 1: Fetch current encrypted blob
-        request.onProgress?.('decrypting', 0, 'Fetching current encrypted blob...');
-
-        // TODO: Use a proper fetcher that handles Walrus aggregators
-        const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL;
-        if (!walrusAggregator) {
-          throw new Error("Missing NEXT_PUBLIC_WALRUS_AGGREGATOR_URL environment variable");
-        }
-        // We need the blob ID. The request has `currentEncryptedBlob` as Uint8Array?
-        // The interface says `currentEncryptedBlob: Uint8Array`.
-        // If the caller passes the data, we don't need to fetch!
-        // But for large files, passing Uint8Array might be heavy.
-        // The interface should probably take `blobId` instead.
-        // But let's stick to the interface for now, assuming caller fetched it or we change the interface.
-
-        // Wait, the interface `ReencryptionRequest` has `currentEncryptedBlob: Uint8Array`.
-        // This means the caller is expected to fetch it.
-        // This is fine for now.
+        request.onProgress?.(
+          "decrypting",
+          0,
+          "Fetching current encrypted blob...",
+        );
 
         const encryptedBlob = request.currentEncryptedBlob;
 
         // Step 2: Re-encrypt blob
-        request.onProgress?.('reencrypting', 0, 'Starting re-encryption process...');
+        request.onProgress?.(
+          "reencrypting",
+          0,
+          "Starting re-encryption process...",
+        );
 
-        const { reencryptedBlob, result: reencryptStats } = await reencryptBlob(encryptedBlob, {
-          decryptionOptions: {
-            client: sealClient,
-            sessionKey,
-            packageId: CHAIN_CONFIG.packageId,
-            identity: request.currentSealPolicyId,
-            suiClient: suiClient,
+        const { reencryptedBlob, result: reencryptStats } = await reencryptBlob(
+          encryptedBlob,
+          {
+            decryptionOptions: {
+              client: sealClient,
+              sessionKey,
+              packageId: CHAIN_CONFIG.packageId,
+              identity: request.currentSealPolicyId,
+              suiClient: suiClient,
+            },
+            encryptionOptions: {
+              client: sealClient,
+              identity: request.newSealPolicyId,
+              packageId: CHAIN_CONFIG.packageId,
+              accessPolicy: "purchase", // Assuming purchase policy for now
+              threshold: 4, // Should match system config
+            },
+            onProgress: request.onProgress,
           },
-          encryptionOptions: {
-            client: sealClient,
-            identity: request.newSealPolicyId,
-            packageId: CHAIN_CONFIG.packageId,
-            accessPolicy: 'purchase', // Assuming purchase policy for now
-            threshold: 4, // Should match system config
-          },
-          onProgress: request.onProgress,
-        });
+        );
 
         // Step 3: Upload new blob to Walrus
-        request.onProgress?.('uploading', 0, 'Uploading re-encrypted blob to Walrus...');
+        request.onProgress?.(
+          "uploading",
+          0,
+          "Uploading re-encrypted blob to Walrus...",
+        );
 
         // We need to upload `reencryptedBlob`.
         // We can use `uploadBlob` from `useWalrusParallelUpload` if we had it here.
@@ -123,14 +126,18 @@ export function useReencryption() {
 
         const blob = new Blob([reencryptedBlob as any]);
         const uploadResult = await uploadBlob(blob, request.newSealPolicyId, {
-          originalMimeType: 'application/octet-stream', // We might lose mime type here if not passed
-          originalFileName: 'reencrypted.bin',
+          originalMimeType: "application/octet-stream", // We might lose mime type here if not passed
+          originalFileName: "reencrypted.bin",
         });
 
         const newBlobId = uploadResult.blobId;
 
         // Step 4: Update on-chain submission
-        request.onProgress?.('finalizing', 0, 'Updating on-chain submission...');
+        request.onProgress?.(
+          "finalizing",
+          0,
+          "Updating on-chain submission...",
+        );
 
         const tx = new Transaction();
         tx.setGasBudget(100_000_000); // 0.1 SUI
@@ -152,14 +159,18 @@ export function useReencryption() {
             onSuccess: async (result) => {
               try {
                 request.onProgress?.(
-                  'finalizing',
+                  "finalizing",
                   90,
-                  'Re-encryption confirmed. Fetching transaction details...'
+                  "Re-encryption confirmed. Fetching transaction details...",
                 );
 
                 await suiClient.waitForTransaction({ digest: result.digest });
 
-                request.onProgress?.('finalizing', 100, 'Re-encryption complete');
+                request.onProgress?.(
+                  "finalizing",
+                  100,
+                  "Re-encryption complete",
+                );
 
                 resolve({
                   submissionId: request.submissionId,
@@ -173,11 +184,11 @@ export function useReencryption() {
             onError: (error) => {
               reject(
                 new Error(
-                  `Re-encryption transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-                )
+                  `Re-encryption transaction failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                ),
               );
             },
-          }
+          },
         );
       } catch (error) {
         reject(error);
@@ -195,19 +206,22 @@ export function useReencryption() {
     const errors: string[] = [];
 
     if (!request.submissionId) {
-      errors.push('Submission ID required');
+      errors.push("Submission ID required");
     }
-    if (!request.currentEncryptedBlob || request.currentEncryptedBlob.length === 0) {
-      errors.push('Current encrypted blob required');
+    if (
+      !request.currentEncryptedBlob ||
+      request.currentEncryptedBlob.length === 0
+    ) {
+      errors.push("Current encrypted blob required");
     }
     if (!request.currentSealPolicyId) {
-      errors.push('Current Seal policy ID required');
+      errors.push("Current Seal policy ID required");
     }
     if (!request.newSealPolicyId) {
-      errors.push('New Seal policy ID required');
+      errors.push("New Seal policy ID required");
     }
     if (request.currentSealPolicyId === request.newSealPolicyId) {
-      errors.push('New policy must differ from current policy');
+      errors.push("New policy must differ from current policy");
     }
 
     return {

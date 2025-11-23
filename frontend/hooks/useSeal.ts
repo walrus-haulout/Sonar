@@ -18,6 +18,7 @@ import {
   type ProgressCallback,
 } from "@sonar/seal";
 import { suiClient, CHAIN_CONFIG, NETWORK } from "@/lib/sui/client";
+import { WALRUS_AGGREGATOR_URL } from "@/lib/walrus/config";
 
 const RAW_KEY_SERVERS = process.env.NEXT_PUBLIC_SEAL_KEY_SERVERS || "";
 const RAW_SEAL_THRESHOLD = process.env.NEXT_PUBLIC_SEAL_THRESHOLD || "4";
@@ -384,11 +385,7 @@ export function useSealDecryption() {
    */
   const fetchEncryptedBlob = useCallback(
     async (blobId: string): Promise<Uint8Array> => {
-      const walrusAggregator = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL;
-      if (!walrusAggregator) {
-        throw new Error("Missing NEXT_PUBLIC_WALRUS_AGGREGATOR_URL environment variable");
-      }
-      const response = await fetch(`${walrusAggregator}/v1/${blobId}`);
+      const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/${blobId}`);
 
       if (!response.ok) {
         throw new Error(
