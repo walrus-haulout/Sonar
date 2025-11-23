@@ -679,6 +679,40 @@ export function PublishStep({
         </GlassCard>
       ) : (
         <>
+          {/* Verification Results Summary */}
+          <GlassCard className="bg-sonar-signal/5">
+            <h3 className="text-lg font-mono font-bold text-sonar-signal mb-4">
+              ✓ Verification Complete
+            </h3>
+
+            <div className="space-y-3 text-sm">
+              {verification.qualityScore && (
+                <div className="flex justify-between">
+                  <span className="text-sonar-highlight/70">Quality Score:</span>
+                  <span className="text-sonar-signal font-mono font-bold">
+                    {Math.round(verification.qualityScore * 100)}%
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <span className="text-sonar-highlight/70">Safety Check:</span>
+                <span className="text-sonar-signal font-mono">
+                  {verification.safetyPassed ? "✓ Passed" : "⚠ Review Required"}
+                </span>
+              </div>
+
+              {verification.suggestedPrice && (
+                <div className="flex justify-between">
+                  <span className="text-sonar-highlight/70">Suggested Price:</span>
+                  <span className="text-sonar-signal font-mono">
+                    {verification.suggestedPrice} SUI
+                  </span>
+                </div>
+              )}
+            </div>
+          </GlassCard>
+
           {/* Transaction Summary */}
           <GlassCard>
             <h3 className="text-lg font-mono font-bold text-sonar-highlight-bright mb-4">
@@ -759,42 +793,44 @@ export function PublishStep({
                   </div>
                 </>
               )}
-
-              {verification.qualityScore && (
-                <div className="flex justify-between">
-                  <span className="text-sonar-highlight/70">
-                    Quality Score:
-                  </span>
-                  <span className="text-sonar-signal font-mono">
-                    {Math.round(verification.qualityScore * 100)}%
-                  </span>
-                </div>
-              )}
             </div>
           </GlassCard>
 
-          {/* Upload Fee Info */}
-          <GlassCard className="bg-sonar-blue/5">
+          {/* Info Box - Moved before payment */}
+          <GlassCard className="bg-sonar-signal/5">
+            <div className="text-sm text-sonar-highlight/80 space-y-2">
+              <p className="font-mono font-semibold text-sonar-signal">
+                Ready to Publish
+              </p>
+              <p>
+                Your audio has been encrypted, uploaded to Walrus, and verified by AI.
+                Click below to publish to the blockchain and make it available for purchase.
+              </p>
+            </div>
+          </GlassCard>
+
+          {/* Upload Fee Info - Final step before button */}
+          <GlassCard className="bg-sonar-blue/5 border-2 border-sonar-blue/30">
             <div className="flex items-start space-x-4">
               <Coins className="w-6 h-6 text-sonar-blue mt-0.5" />
               <div className="flex-1">
                 <h4 className="font-mono font-semibold text-sonar-blue mb-2">
-                  Upload Fee Required
+                  Final Step: Upload Fee
                 </h4>
                 <p className="text-sm text-sonar-highlight/80 mb-3">
-                  A fixed upload fee of{" "}
-                  <span className="text-sonar-signal font-mono">
+                  A one-time upload fee of{" "}
+                  <span className="text-sonar-signal font-mono font-bold">
                     {UPLOAD_FEE_LABEL}
                   </span>{" "}
-                  is required to publish your dataset on mainnet. This helps
-                  prevent spam uploads while tokenomics launch is pending.
+                  is required to publish your verified dataset to the blockchain.
+                  This helps prevent spam while tokenomics launch is pending.
                 </p>
-                <div className="p-3 rounded-sonar bg-sonar-abyss/30">
+                <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-sonar-highlight/70">
-                      Estimated Fee:
+                      Publication Fee:
                     </span>
-                    <span className="font-mono font-bold text-sonar-signal">
+                    <span className="font-mono font-bold text-sonar-signal text-lg">
                       {UPLOAD_FEE_LABEL}
                     </span>
                   </div>
@@ -803,16 +839,16 @@ export function PublishStep({
             </div>
           </GlassCard>
 
-          {/* Publish Button */}
+          {/* Publish Button - Absolute final action */}
           <div className="flex flex-col items-center space-y-4">
             {publishState === "idle" && (
               <SonarButton
                 variant="primary"
                 onClick={handlePublish}
                 disabled={publishDisabled}
-                className="w-full"
+                className="w-full text-lg py-4"
               >
-                Publish to Blockchain
+                Pay {UPLOAD_FEE_LABEL} & Publish to Blockchain
               </SonarButton>
             )}
 
@@ -838,22 +874,17 @@ export function PublishStep({
                 </div>
               </GlassCard>
             )}
-          </div>
 
-          {/* Info Box */}
-          <GlassCard className="bg-sonar-signal/5">
-            <div className="text-sm text-sonar-highlight/80 space-y-2">
-              <p className="font-mono font-semibold text-sonar-signal">
-                What happens next?
-              </p>
-              <ul className="space-y-1 list-disc list-inside">
-                <li>Your dataset will be published to the Sui blockchain</li>
-                <li>Buyers can discover and purchase access</li>
-                <li>Revenue will be sent directly to your wallet</li>
-                <li>You maintain full ownership and control</li>
-              </ul>
-            </div>
-          </GlassCard>
+            {/* What happens after publishing */}
+            {publishState === "idle" && (
+              <div className="text-center text-sm text-sonar-highlight/60 space-y-1 mt-2">
+                <p>After publishing:</p>
+                <p className="text-xs">
+                  Buyers can purchase access • Revenue sent to your wallet • Full ownership retained
+                </p>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
