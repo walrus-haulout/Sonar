@@ -428,6 +428,12 @@ export function buildBatchRegisterAndSubmitTransaction(
     "[Walrus] Registering main blob with encoded size:",
     mainStorageSize,
   );
+  console.log("[Walrus] DEBUG - Main blob sizes:", {
+    unencodedSize: mainBlob.size,
+    encodedStorageSize: mainStorageSize,
+    sizePassedToContract: mainBlob.size,
+    ratio: mainStorageSize / mainBlob.size,
+  });
   const mainBlobIdBigInt = base64UrlToBigInt(mainBlob.blobId);
   const mainEncodingTypeU8 = encodingTypeToU8(mainBlob.encodingType);
 
@@ -470,6 +476,12 @@ export function buildBatchRegisterAndSubmitTransaction(
     "[Walrus] Registering preview blob with encoded size:",
     previewStorageSize,
   );
+  console.log("[Walrus] DEBUG - Preview blob sizes:", {
+    unencodedSize: previewBlob.size,
+    encodedStorageSize: previewStorageSize,
+    sizePassedToContract: previewBlob.size,
+    ratio: previewStorageSize / previewBlob.size,
+  });
   const previewBlobIdBigInt = base64UrlToBigInt(previewBlob.blobId);
   const previewEncodingTypeU8 = encodingTypeToU8(previewBlob.encodingType);
 
