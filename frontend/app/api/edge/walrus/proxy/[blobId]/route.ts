@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 // Mark as Edge Runtime
 export const runtime = 'edge';
 
-const WALRUS_AGGREGATOR_URL =
-  process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL ||
-  'https://aggregator.walrus.space';
+const WALRUS_AGGREGATOR_URL = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL!;
+
+if (!WALRUS_AGGREGATOR_URL) {
+  throw new Error("Missing NEXT_PUBLIC_WALRUS_AGGREGATOR_URL environment variable");
+}
 
 /**
  * Edge Function: Walrus Blob Proxy
