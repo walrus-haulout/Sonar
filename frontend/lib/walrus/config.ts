@@ -8,8 +8,12 @@ import { NETWORK } from "@/lib/sui/client";
  * - NEXT_PUBLIC_WALRUS_AGGREGATOR_URL
  */
 
-export const WALRUS_PUBLISHER_URL = process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || "";
-export const WALRUS_AGGREGATOR_URL = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || "";
+export const WALRUS_PUBLISHER_URL = (
+  process.env.NEXT_PUBLIC_WALRUS_PUBLISHER_URL || ""
+).trim();
+export const WALRUS_AGGREGATOR_URL = (
+  process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR_URL || ""
+).trim();
 
 if (!WALRUS_PUBLISHER_URL || !WALRUS_AGGREGATOR_URL) {
   console.warn(
