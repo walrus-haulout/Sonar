@@ -1398,6 +1398,52 @@ export function VerificationStep({
               </div>
             )}
 
+            {/* Transcript Display */}
+            {result.transcript && (
+              <div className="mt-4 p-4 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
+                <p className="text-sm font-mono font-semibold text-sonar-highlight-bright mb-3">
+                  Audio Transcript
+                </p>
+                <div className="max-h-96 overflow-y-auto p-3 bg-sonar-abyss/50 rounded">
+                  <div className="space-y-1 text-sm leading-relaxed">
+                    {result.transcript.split('\n').map((line, idx) => {
+                      // Detect speaker labels (e.g., "Speaker 1:", "John:", etc.)
+                      const isSpeaker = /^[A-Z][a-zA-Z0-9\s]*\d*:/.test(line.trim());
+                      
+                      return (
+                        <p key={idx} className="whitespace-pre-wrap">
+                          {line.split(/(\([^)]+\))/).map((part, i) => {
+                            // Highlight sound effects/annotations in parentheses
+                            if (part.startsWith('(') && part.endsWith(')')) {
+                              return (
+                                <span key={i} className="italic text-sonar-blue/80">
+                                  {part}
+                                </span>
+                              );
+                            }
+                            // Highlight speaker labels
+                            if (isSpeaker && i === 0) {
+                              const [speaker, ...rest] = part.split(':');
+                              return (
+                                <span key={i}>
+                                  <span className="font-semibold text-sonar-signal">{speaker}:</span>
+                                  {rest.join(':')}
+                                </span>
+                              );
+                            }
+                            return <span key={i} className="text-sonar-highlight/80">{part}</span>;
+                          })}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+                <p className="text-xs text-sonar-highlight/50 mt-3 italic">
+                  Transcribed using Voxtral AI with speaker labels and sound annotations
+                </p>
+              </div>
+            )}
+
             {/* Insights */}
             {result.insights && result.insights.length > 0 && (
               <div className="mt-4 space-y-2">

@@ -485,7 +485,23 @@ class VerificationPipeline:
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Transcribe this audio verbatim. Return only the transcript text, without any additional commentary or formatting.",
+                                "text": """Transcribe this audio with enhanced closed caption style formatting.
+
+Include:
+- Speaker labels if multiple speakers detected (e.g., "Speaker 1:", "Speaker 2:", or use names if identifiable)
+- Sound effects in parentheses (e.g., "(bird calls)", "(door slam)", "(music playing)", "(applause)")
+- Unintelligible sections as "(unintelligible)"
+- Environmental sounds as "(ambient noise)", "(traffic sounds)", "(wind)", etc.
+- Non-speech vocalizations as "(laughter)", "(sighs)", "(coughs)", "(gasps)", etc.
+- Musical elements as "(music)", "(singing)", "(instrumental)", etc.
+
+Format example:
+Speaker 1: Hello, how are you doing today? (background music)
+Speaker 2: I'm great, thanks! (door opens) Oh, someone's here.
+(footsteps approaching)
+Speaker 3: Hey everyone! (unintelligible)
+
+Provide clean, readable transcript with these annotations. Each speaker's dialogue should start on a new line.""",
                             },
                             {
                                 "type": "input_audio",
@@ -645,6 +661,12 @@ class VerificationPipeline:
 - Channels: {quality_info.get("channels", 0)}
 - Bit Depth: {quality_info.get("bit_depth", 0)}"""
 
+        # Extract categorization fields
+        categorization = metadata.get("categorization", {})
+        use_case = categorization.get("useCase", "Not specified")
+        content_type = categorization.get("contentType", "Not specified")
+        domain = categorization.get("domain", "Not specified")
+
         # Truncate transcript if too long
         transcript_sample = (
             transcript[:2000] + "..." if len(transcript) > 2000 else transcript
@@ -657,6 +679,13 @@ class VerificationPipeline:
 - Description: {metadata.get("description", "No description")}
 - Languages: {", ".join(metadata.get("languages", []))}
 - Tags: {", ".join(metadata.get("tags", []))}
+
+## Content Categorization (User-Provided)
+- Use Case: {use_case}
+- Content Type: {content_type}
+- Domain: {domain}
+
+## Audio Technical Specs
 {audio_meta_str}
 
 ## Transcript Sample
@@ -716,7 +745,11 @@ Provide your analysis in the following JSON format with detailed reasoning:
 ### Quality Scoring Criteria (0-1 scale):
 - **Audio Clarity** (0.3): Is the transcript coherent? Minimal transcription errors? Clear speaker articulation?
 - **Content Value** (0.3): Is the content meaningful, diverse, and useful for AI training? Does it offer unique training signal?
-- **Metadata Accuracy** (0.2): Does the content match the provided metadata? Are descriptions accurate?
+- **Metadata Accuracy** (0.2): Does the content match the provided metadata? Are descriptions accurate? **CRITICAL**: Verify that the user-provided categorization accurately describes the actual audio content:
+  - Does the actual content match the claimed **Use Case**? (e.g., if labeled "podcast", is it actually podcast-style dialogue? If labeled "music", does it contain music?)
+  - Does the **Content Type** align with what you hear? (e.g., if labeled "speech/dialogue", is it really dialogue vs. monologue or music?)
+  - Does the **Domain** make sense? (e.g., if labeled "healthcare", does it discuss medical topics? If labeled "education", is it educational content?)
+  - Flag significant mismatches in the "concerns" array with specific details (e.g., "Audio labeled as 'podcast' but contains only instrumental music", "Claimed domain 'healthcare' but discusses unrelated entertainment topics")
 - **Completeness** (0.2): Is the content complete without obvious truncation? Are complete thoughts/sentences included?
 
 **Default Quality Score**: If the audio is average/unremarkable with no notable quality issues or standout features, use 0.5 (50%) as the default baseline score.
