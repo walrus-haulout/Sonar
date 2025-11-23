@@ -14,10 +14,56 @@ import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
 } from "@mysten/dapp-kit";
+import { Signer } from "@mysten/sui/cryptography";
+import type { Transaction } from "@mysten/sui/transactions";
 import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
 import type { WalrusUploadResult } from "@/lib/types/upload";
 import { getWalrusClient } from "@/lib/walrus/client";
+
+/**
+ * Wallet Signer Adapter
+ * Adapts dapp-kit wallet signing to Sui SDK Signer interface
+ */
+class WalletSigner extends Signer {
+  constructor(
+    private address: string,
+    private signAndExecuteFn: (params: {
+      transaction: Transaction;
+    }) => Promise<any>,
+  ) {
+    super();
+  }
+
+  async sign(bytes: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
+    throw new Error("Direct signing not supported with wallet adapter");
+  }
+
+  toSuiAddress(): string {
+    return this.address;
+  }
+
+  async signTransaction(bytes: Uint8Array): Promise<any> {
+    throw new Error(
+      "signTransaction(bytes) not supported - use signAndExecuteTransaction",
+    );
+  }
+
+  async signAndExecuteTransaction(options: {
+    transaction: Transaction;
+    client: any;
+  }): Promise<any> {
+    return this.signAndExecuteFn({ transaction: options.transaction });
+  }
+
+  getPublicKey(): any {
+    throw new Error("getPublicKey not supported with wallet adapter");
+  }
+
+  getKeyScheme(): "ED25519" | "Secp256k1" | "Secp256r1" {
+    return "ED25519"; // Default, actual scheme handled by wallet
+  }
+}
 
 const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
 
@@ -312,20 +358,22 @@ export function useWalrusParallelUpload() {
         stage: "registering",
       }));
 
+      // Create wallet signer adapter
+      if (!currentAccount?.address) {
+        throw new Error("No wallet connected");
+      }
+
+      const walletSigner = new WalletSigner(
+        currentAccount.address,
+        signAndExecute,
+      );
+
       // Use SDK writeBlob which properly registers on-chain
-      // The SDK will prompt user to sign the transaction via wallet
       const result = await walrusClient.walrus.writeBlob({
         blob: blobData,
         epochs: 26,
         deletable: true,
-        signer: {
-          signTransaction: async (tx: any) => {
-            const signed = await signAndExecute({
-              transaction: tx,
-            });
-            return signed;
-          },
-        } as any,
+        signer: walletSigner,
       });
 
       const blobId = result.blobId;
@@ -386,19 +434,12 @@ export function useWalrusParallelUpload() {
           const previewArrayBuffer = await previewBlob.arrayBuffer();
           const previewBlobData = new Uint8Array(previewArrayBuffer);
 
-          // Upload preview with SDK
+          // Upload preview with SDK using wallet signer
           const previewResult = await walrusClient.walrus.writeBlob({
             blob: previewBlobData,
             epochs: 26,
             deletable: true,
-            signer: {
-              signTransaction: async (tx: any) => {
-                const signed = await signAndExecute({
-                  transaction: tx,
-                });
-                return signed;
-              },
-            } as any,
+            signer: walletSigner,
           });
 
           finalPreviewBlobId = previewResult.blobId;
