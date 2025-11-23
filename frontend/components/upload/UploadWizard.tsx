@@ -242,8 +242,18 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
           }
 
           // Skip verification step if already completed
+          console.log('[UploadWizard] 🔍 DEBUG - Checking verification skip:', {
+            currentStep: parsed.step,
+            verificationExists: !!parsed.verification,
+            verificationState: parsed.verification?.state,
+            verificationObject: parsed.verification ? JSON.stringify(parsed.verification, null, 2) : 'null',
+            shouldSkip: parsed.step === 'verification' && parsed.verification?.state === 'completed',
+            timestamp: new Date().toISOString()
+          });
+          
           if (parsed.step === 'verification' && parsed.verification?.state === 'completed') {
             console.log('[UploadWizard] ⏭️ Verification already completed, advancing to publish step');
+            console.log('[UploadWizard] 📊 Verification result:', JSON.stringify(parsed.verification, null, 2));
             parsed.step = 'publish';
           }
 
@@ -420,6 +430,7 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
               audioFiles={state.audioFiles}
               metadata={state.metadata!}
               walrusUpload={state.walrusUpload!}
+              existingVerification={state.verification}
               onVerificationComplete={(verification) => {
                 setState((prev) => ({ ...prev, verification }));
                 goToNextStep();

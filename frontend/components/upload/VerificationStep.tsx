@@ -213,6 +213,7 @@ interface VerificationStepProps {
   sealIdentity?: string;
   encryptedObjectBcsHex?: string;
   walrusUpload?: WalrusUploadResult; // Alternative: pass full upload result
+  existingVerification?: VerificationResult | null; // Pass existing verification from localStorage
   onVerificationComplete: (result: VerificationResult) => void;
   onError: (error: string) => void;
 }
@@ -235,6 +236,7 @@ export function VerificationStep({
   sealIdentity,
   encryptedObjectBcsHex,
   walrusUpload,
+  existingVerification,
   onVerificationComplete,
   onError,
 }: VerificationStepProps) {
@@ -291,7 +293,7 @@ export function VerificationStep({
   // Auto-start verification when component mounts
   useEffect(() => {
     // Log props received
-    console.log("[VerificationStep] Props received:", {
+    console.log("[VerificationStep] 🔍 DEBUG - Component mounted with props:", {
       hasWalrusUpload: !!walrusUpload,
       walrusUploadBlobId: walrusUpload?.blobId,
       walrusUploadSealPolicyId: walrusUpload?.seal_policy_id?.slice(0, 20),
@@ -301,14 +303,47 @@ export function VerificationStep({
       encryptedObjectBcsHexLength:
         walrusUpload?.encryptedObjectBcsHex?.length ?? 0,
       hasLegacyProps: !!(walrusBlobId || sealIdentity || encryptedObjectBcsHex),
+      hasExistingVerification: !!existingVerification,
+      existingVerificationState: existingVerification?.state,
+      hasStartedRefValue: hasStartedRef.current,
+      timestamp: new Date().toISOString()
     });
 
     // Prevent duplicate requests in React 18 Strict Mode
     if (hasStartedRef.current) {
+      console.log("[VerificationStep] 🛑 Already started (hasStartedRef=true), skipping mount logic");
+      addLog("DEBUG", "Mount logic skipped - already started (React Strict Mode)", "info");
       return;
     }
 
     hasStartedRef.current = true;
+    console.log("[VerificationStep] ✅ Setting hasStartedRef=true");
+    
+    // Skip if verification already completed (from localStorage restoration)
+    console.log("[VerificationStep] 🔍 DEBUG - Checking if should skip verification:", {
+      existingVerificationExists: !!existingVerification,
+      existingVerificationState: existingVerification?.state,
+      shouldSkip: existingVerification?.state === 'completed',
+      existingVerificationFull: existingVerification ? JSON.stringify(existingVerification, null, 2) : 'null',
+      timestamp: new Date().toISOString()
+    });
+    
+    if (existingVerification?.state === 'completed') {
+      console.log("[VerificationStep] ⏭️ Verification already completed, auto-advancing...");
+      console.log("[VerificationStep] 📊 Existing verification result:", JSON.stringify(existingVerification, null, 2));
+      addLog("RESTORE", "✅ Verification already completed from previous session", "success");
+      addLog("RESTORE", `Safety: ${existingVerification.safetyPassed ? 'PASSED' : 'FAILED'}, Quality: ${existingVerification.qualityScore || 'N/A'}`, "success");
+      setResult(existingVerification);
+      setVerificationState("completed");
+      // Auto-advance immediately
+      setTimeout(() => {
+        console.log("[VerificationStep] 🚀 Calling onVerificationComplete with existing result");
+        onVerificationComplete(existingVerification);
+      }, 500);
+      return;
+    }
+    
+    console.log("[VerificationStep] 🆕 No existing verification, starting fresh verification process");
     addLog("INIT", "Initializing verification process...", "info");
     // Move to waiting-auth state - user needs to authorize first
     setVerificationState("waiting-auth");
@@ -333,17 +368,33 @@ export function VerificationStep({
    * Reuses existing valid session if available, creates new one only if needed
    */
   const handleAuthorizeVerification = async () => {
+    console.log("[VerificationStep] 🔍 DEBUG - handleAuthorizeVerification called:", {
+      isAuthorizingRefValue: isAuthorizingRef.current,
+      verificationState,
+      hasExistingVerification: !!existingVerification,
+      existingVerificationState: existingVerification?.state,
+      timestamp: new Date().toISOString()
+    });
+    
     // Guard against duplicate authorization attempts
     if (isAuthorizingRef.current) {
       console.log(
         "[VerificationStep] Authorization already in progress, skipping duplicate",
       );
+      addLog("DEBUG", "Authorization already in progress, skipping", "warning");
       return;
+    }
+
+    // Warn if we're requesting auth when verification already completed
+    if (existingVerification?.state === 'completed') {
+      console.warn("[VerificationStep] ⚠️ WARNING: Requesting authorization when verification already completed!");
+      addLog("WARN", "⚠️ Authorization requested but verification already completed - this should not happen!", "warning");
     }
 
     isAuthorizingRef.current = true;
 
     console.log("[VerificationStep] Requesting user authorization...");
+    addLog("AUTH", "Requesting wallet authorization...", "info");
     setIsCreatingSession(true);
     setErrorMessage(null);
 
@@ -408,17 +459,37 @@ export function VerificationStep({
   };
 
   const startVerification = async () => {
+    console.log("[VerificationStep] 🔍 DEBUG - startVerification called:", {
+      isVerifyingRefValue: isVerifyingRef.current,
+      verificationState,
+      hasExistingVerification: !!existingVerification,
+      existingVerificationState: existingVerification?.state,
+      hasSessionKeyExport: !!sessionKeyExport,
+      timestamp: new Date().toISOString()
+    });
+    
     // Guard against duplicate verification attempts
     if (isVerifyingRef.current) {
       console.log(
         "[VerificationStep] Verification already in progress, skipping duplicate",
       );
+      addLog("DEBUG", "Verification already in progress, skipping duplicate", "warning");
       return;
+    }
+
+    // ERROR if we're starting verification when already completed
+    if (existingVerification?.state === 'completed') {
+      console.error("[VerificationStep] ❌ ERROR: Starting verification when already completed!");
+      console.error("[VerificationStep] Existing verification:", JSON.stringify(existingVerification, null, 2));
+      addLog("ERROR", "❌ Attempting to start verification when already completed - THIS IS A BUG!", "error");
+      addLog("ERROR", `Existing result: Safety ${existingVerification.safetyPassed ? 'PASSED' : 'FAILED'}`, "error");
+      // Don't return - let it continue to surface the bug
     }
 
     isVerifyingRef.current = true;
 
     console.log("[VerificationStep] Starting verification...");
+    addLog("VERIFY", "Starting verification pipeline...", "progress");
     setErrorMessage(null);
     setErrorDetails(null);
     setWarnings([]);
