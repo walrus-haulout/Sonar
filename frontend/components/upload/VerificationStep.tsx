@@ -575,6 +575,13 @@ export function VerificationStep({
         insights: [`Successfully verified ${files.length} file(s)`],
         updatedAt: Date.now(),
       };
+      console.log("[VerificationStep] ✅ Verification SUCCESS! Calling onVerificationComplete");
+      console.log("[VerificationStep] Result summary:", {
+        id: finalResult.id,
+        state: finalResult.state,
+        safetyPassed: finalResult.safetyPassed,
+        qualityScore: finalResult.qualityScore,
+      });
       setResult(finalResult);
       setVerificationState("completed");
       onVerificationComplete(finalResult);
@@ -906,6 +913,13 @@ export function VerificationStep({
             updatedAt: Date.now(),
           };
 
+          console.log("[VerificationStep] ✅ Verification SUCCESS (polling)! Calling onVerificationComplete");
+          console.log("[VerificationStep] Result summary:", {
+            id: finalResult.id,
+            state: finalResult.state,
+            safetyPassed: finalResult.safetyPassed,
+            qualityScore: finalResult.qualityScore,
+          });
           setResult(finalResult);
           setVerificationState("completed");
           onVerificationComplete(finalResult);

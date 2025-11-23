@@ -221,8 +221,10 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
     const savedState = localStorage.getItem(STORAGE_KEY);
     if (savedState) {
       try {
+        console.log('[UploadWizard] 📦 Raw localStorage data length:', savedState.length);
         const parsed = JSON.parse(savedState);
         console.log('[UploadWizard] ✅ Restored state from localStorage, step:', parsed.step);
+        console.log('[UploadWizard] 🔍 Keys in parsed state:', Object.keys(parsed));
         // Only restore verification and publish steps (long-running processes)
         // File-upload and metadata steps always start fresh (file data can't be restored from localStorage)
         // Note: We can't restore full file data, user will need to re-upload
@@ -247,14 +249,17 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
           }
 
           // Skip verification step if already completed
-          console.log('[UploadWizard] 🔍 DEBUG - Checking verification skip:', {
-            currentStep: parsed.step,
-            verificationExists: !!parsed.verification,
-            verificationState: parsed.verification?.state,
-            verificationObject: parsed.verification ? JSON.stringify(parsed.verification, null, 2) : 'null',
-            shouldSkip: parsed.step === 'verification' && parsed.verification?.state === 'completed',
-            timestamp: new Date().toISOString()
-          });
+          console.log('[UploadWizard] 🔍 DEBUG - Checking verification skip:');
+          console.log('  currentStep:', parsed.step);
+          console.log('  verificationExists:', !!parsed.verification);
+          console.log('  verificationState:', parsed.verification?.state);
+          console.log('  verificationId:', parsed.verification?.id);
+          console.log('  shouldSkip:', parsed.step === 'verification' && parsed.verification?.state === 'completed');
+          if (parsed.verification) {
+            console.log('  FULL verification object:', parsed.verification);
+          } else {
+            console.log('  ❌ verification is NULL/UNDEFINED');
+          }
           
           if (parsed.step === 'verification' && parsed.verification?.state === 'completed') {
             console.log('[UploadWizard] ⏭️ Verification already completed, advancing to publish step');
