@@ -241,6 +241,12 @@ export function UploadWizard({ open, onOpenChange, fullscreen = false }: UploadW
             return;
           }
 
+          // Skip verification step if already completed
+          if (parsed.step === 'verification' && parsed.verification?.state === 'completed') {
+            console.log('[UploadWizard] ⏭️ Verification already completed, advancing to publish step');
+            parsed.step = 'publish';
+          }
+
           console.log('[UploadWizard] 🔄 Restoring state to step:', parsed.step);
           setState((prev) => ({
             ...prev,
