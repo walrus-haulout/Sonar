@@ -336,6 +336,34 @@ export function PublishStep({
                 },
               });
 
+              // Debug logging
+              console.log("[PublishStep] Transaction details:", {
+                digest: result.digest,
+                hasObjectChanges: !!txDetails.objectChanges,
+                objectChangesCount: txDetails.objectChanges?.length || 0,
+                hasEvents: !!txDetails.events,
+                eventsCount: txDetails.events?.length || 0,
+                hasEffects: !!txDetails.effects,
+                effectsCreatedCount: txDetails.effects?.created?.length || 0,
+                effectsMutatedCount: txDetails.effects?.mutated?.length || 0,
+              });
+
+              if (txDetails.objectChanges) {
+                console.log("[PublishStep] Object changes:", txDetails.objectChanges.map(c => ({
+                  type: c.type,
+                  objectId: 'objectId' in c ? c.objectId : 'N/A',
+                  objectType: 'objectType' in c ? c.objectType : 'N/A',
+                })));
+              }
+
+              if (txDetails.events) {
+                console.log("[PublishStep] Events:", txDetails.events.map(e => ({
+                  type: e.type,
+                  hasSubmissionId: !!(e.parsedJson as any)?.submission_id,
+                  parsedJson: e.parsedJson,
+                })));
+              }
+
               // 1. Check objectChanges
               if (txDetails.objectChanges) {
                 for (const change of txDetails.objectChanges) {
@@ -431,8 +459,37 @@ export function PublishStep({
                 }
               }
 
+              // 5. FINAL FALLBACK: Check ALL created objects and log their types
+              if (!datasetId && txDetails.effects?.created) {
+                console.warn("[PublishStep] Dataset ID not found via standard methods. Checking all created objects...");
+                for (const createdRef of txDetails.effects.created) {
+                  try {
+                    const objectId = extractObjectId(createdRef);
+                    if (!objectId) continue;
+                    const obj = await suiClient.getObject({
+                      id: objectId,
+                      options: { showType: true, showContent: true },
+                    });
+                    console.log("[PublishStep] Created object:", {
+                      objectId,
+                      type: obj.data?.type,
+                      hasContent: !!obj.data?.content,
+                    });
+                    
+                    // Less strict matching - just check if it's from our package
+                    if (obj.data?.type && obj.data.type.includes(CHAIN_CONFIG.packageId || '')) {
+                      console.log("[PublishStep] Using fallback: object from our package:", objectId);
+                      datasetId = objectId;
+                      break;
+                    }
+                  } catch (e) {
+                    console.warn("[PublishStep] Error checking created object:", e);
+                  }
+                }
+              }
+
               if (datasetId) {
-                console.log("Dataset ID confirmed:", datasetId);
+                console.log("[PublishStep] ✅ Dataset ID confirmed:", datasetId);
 
                 // Clear pending uploads
                 if (isMultiFile && walrusUpload.files) {
