@@ -21,23 +21,27 @@ Once published, your dataset is permanent and immutable. You cannot delete or ed
 Review everything one final time:
 
 **Verification Results**:
+
 - Status: "Passed"
 - Quality score shown
 - Rarity score (preliminary estimate)
 - No safety or copyright flags
 
 **Metadata**:
+
 - Title is accurate and specific
 - Description is detailed
 - Languages are correct
 - Tags are appropriate
 
 **Audio Details**:
+
 - File size confirmed
 - Duration correct
 - Format acceptable
 
 **Agreement**:
+
 - I own or have rights to this audio
 - Content is original and not copyrighted
 - Content complies with safety guidelines
@@ -52,6 +56,7 @@ If anything is wrong, go back and edit metadata or upload different audio. Once 
 When you click "Publish", you will be prompted to sign a blockchain transaction in your wallet. The transaction includes:
 
 **Dataset Information**:
+
 - Your wallet address (proves ownership)
 - Title and description
 - Language tags
@@ -59,24 +64,37 @@ When you click "Publish", you will be prompted to sign a blockchain transaction 
 - Timestamp (proves when you published)
 
 **Encrypted References**:
+
 - Walrus blob ID (location of encrypted audio)
 - SEAL capsules (encrypted key shares)
 - Policy ID (who can decrypt)
 
 **Reward Information**:
+
 - Initial token allocation
 - Vesting schedule (90 days)
 - Quality bonus tier
 - Rarity multiplier (preliminary)
 
 **Marketplace Settings**:
+
 - Purchase price (you set or default applied)
 - Revenue split (standard: 60% to you, 40% to platform)
 - Availability (immediately active)
 
 ### Upload Fee
 
-Publishing requires a fixed upload fee of **0.25 SUI**. This fee helps prevent spam submissions and keeps the marketplace clean and high-quality.
+Publishing requires a variable upload fee of **0.5 to 10 SUI per file** based on your quality score. Higher quality datasets cost more to submit, ensuring serious creators and preventing spam.
+
+**Pricing Structure:**
+
+- Quality 0-50: 0.5 SUI per file
+- Quality 50-75: 0.5-5 SUI per file (scales linearly)
+- Quality 75-100: 5-10 SUI per file (scales linearly)
+
+**Multi-file datasets:** Receive a 10% bundle discount on the total fee.
+
+Example: 5 files at quality 80 (≈6.5 SUI each) = 32.5 SUI total → 29.25 SUI after 10% discount
 
 The fee is charged from your wallet when you publish.
 
@@ -103,6 +121,7 @@ The fee is charged from your wallet when you publish.
 ### Progress Indicator
 
 You will see:
+
 - "Submitting transaction..."
 - "Waiting for blockchain confirmation..."
 - "Finalizing publication..."
@@ -112,6 +131,7 @@ This typically takes 10-30 seconds.
 ### Do Not Close
 
 While publishing:
+
 - Keep the page open
 - Do not close your browser
 - Do not disconnect your wallet
@@ -125,6 +145,7 @@ Closing during this process may leave your transaction in pending state.
 ### Immediate (Within 30 seconds)
 
 Your dataset appears in:
+
 - Your profile (under "My Submissions")
 - Blockchain explorer (search your wallet address)
 - Your submission history
@@ -134,6 +155,7 @@ Buyers cannot see or purchase yet, but blockchain confirms ownership.
 ### Within 5 Minutes
 
 Your dataset appears in:
+
 - Marketplace search results
 - Marketplace browse view
 - Global dataset listings
@@ -143,6 +165,7 @@ Buyers can now see and preview your audio (first 30 seconds).
 ### Within 1 Hour
 
 Your leaderboard position updates:
+
 - Points are calculated
 - Tier progresses (if applicable)
 - Achievements unlock (if qualified)
@@ -153,6 +176,7 @@ You can monitor your points in your profile.
 ### Over 1 Week
 
 System optimizations complete:
+
 - Similar submissions are identified
 - Saturation levels calculated
 - Rarity score finalized (may change from preliminary estimate)
@@ -165,6 +189,7 @@ Your final rarity score and points may differ slightly from the preliminary esti
 ### Encrypted Storage
 
 Your encrypted audio:
+
 - Is stored on Walrus (decentralized)
 - Remains encrypted at all times
 - Cannot be decrypted without authorization
@@ -183,6 +208,7 @@ Your audio is your responsibility to backup if you want to keep your own copy.
 ### Access Control
 
 Only people who:
+
 - Purchase your dataset, OR
 - You explicitly authorize, OR
 - Have valid SessionKey with blockchain approval
@@ -194,6 +220,7 @@ Can decrypt and access your audio. No one else can.
 ### Initial Allocation
 
 When you publish, you earn initial points based on:
+
 - **Rarity Score** (0-100): How unique is the audio?
 - **Quality Score** (0-1): Technical audio quality
 - **Specificity Grade** (A-F): How detailed and specific?
@@ -228,6 +255,7 @@ Payment is vested over 30 days and sent directly to your wallet.
 ### How Ranking Works
 
 Your rank on the global leaderboard is determined by:
+
 1. **Total Points**: All-time points from all datasets
 2. **Tier**: Current achievement tier (Contributor to Legend)
 3. **Submissions**: Number of published datasets
@@ -239,6 +267,7 @@ Higher points = higher rank. Rank updates within 1 hour of publishing.
 ### Tier Progression
 
 As you accumulate points, you advance tiers:
+
 - **0-999**: Contributor
 - **1,000-4,999**: Bronze
 - **5,000-9,999**: Silver
@@ -263,19 +292,23 @@ You can track your progress in your profile.
 After publishing, the system automatically checks if you have unlocked any achievements:
 
 **Milestone Achievements**:
+
 - First Blood: Published first dataset
 - Content Creator: 10+ submissions
 - Prolific Creator: 50+ submissions
 
 **Rarity Achievements**:
+
 - Rare Hunter I: 10+ high/critical rarity submissions
 - Bulk Pioneer: First bulk (100+) submission
 
 **Quality Achievements**:
+
 - Quality Master: Average rarity score 80+
 - Perfectionist: 5+ Grade A specificity submissions
 
 **Tier Achievements**:
+
 - Bronze Hands: Reached Bronze tier
 - Silver Hands: Reached Silver tier
 - Gold Hands: Reached Gold tier
@@ -289,6 +322,7 @@ Achievements are unlocked automatically and visible in your profile.
 When buyers browse your dataset:
 
 **Public Information**:
+
 - Your username/wallet address
 - Title and full description
 - Tags and metadata
@@ -300,6 +334,7 @@ When buyers browse your dataset:
 - Your tier and rank
 
 **Hidden Until Purchase**:
+
 - Full-quality audio
 - Full-length audio
 - Technical metadata
@@ -312,6 +347,7 @@ This ensures buyers know what they are purchasing before buying.
 ### View Performance
 
 In your dashboard, see:
+
 - Downloads/purchases count
 - Revenue earned
 - Days since publication
@@ -322,6 +358,7 @@ In your dashboard, see:
 ### Keyword Rankings
 
 Track how your dataset ranks for specific searches:
+
 - Search for your title
 - Check your position
 - See competing datasets
@@ -330,6 +367,7 @@ Track how your dataset ranks for specific searches:
 ### Sales History
 
 View:
+
 - Purchase dates
 - Buyer counts
 - Revenue over time

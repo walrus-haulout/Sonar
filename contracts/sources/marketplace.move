@@ -51,9 +51,12 @@ module sonar::marketplace {
 
     // ========== Submission Fee Configuration ==========
 
-    /// Fixed fee (in MIST) required for audio submissions.
-    /// 0.25 SUI = 250_000_000 MIST (1 SUI = 1_000_000_000 MIST)
-    const SUBMISSION_FEE_SUI: u64 = 250_000_000;
+    /// Variable pricing: 0.5-10 SUI per file based on quality
+    /// Minimum fee per file: 0.5 SUI = 500_000_000 MIST
+    const MIN_SUBMISSION_FEE_PER_FILE: u64 = 500_000_000;
+    
+    /// Maximum fee per file: 10 SUI = 10_000_000_000 MIST
+    const MAX_SUBMISSION_FEE_PER_FILE: u64 = 10_000_000_000;
 
     /// Recipient of submission fees (protocol deployer).
     const SUBMISSION_FEE_RECIPIENT: address = @0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39;
@@ -518,16 +521,13 @@ module sonar::marketplace {
         let uploader = tx_context::sender(ctx);
         let registration_id = object::uid_to_inner(&registration.id);
         let fee_paid = coin::value(&submission_fee);
-        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
+        
+        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
+        assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
-        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
-        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
-
-        if (coin::value(&submission_fee) > 0) {
-            transfer::public_transfer(submission_fee, uploader);
-        } else {
-            coin::destroy_zero(submission_fee);
-        };
+        // Transfer entire fee to recipient (fee calculated by frontend based on quality)
+        transfer::public_transfer(submission_fee, SUBMISSION_FEE_RECIPIENT);
 
         // Check reward pool can cover minimum reward
         let circulating = get_circulating_supply(marketplace);
@@ -582,7 +582,7 @@ module sonar::marketplace {
             walrus_blob_id: submission.walrus_blob_id,
             preview_blob_id: submission.preview_blob_id,
             duration_seconds: submission.duration_seconds,
-            burn_fee_paid: SUBMISSION_FEE_SUI,
+            burn_fee_paid: fee_paid,
             submitted_at_epoch: tx_context::epoch(ctx)
         });
 
@@ -652,11 +652,11 @@ module sonar::marketplace {
     }
 
     /// Submit audio with Walrus metadata
-    /// Collects a fixed submission fee (0.25 SUI) that is forwarded to deployer
+    /// Collects variable submission fee (0.5-10 SUI per file) based on quality
     /// Creates AudioSubmission object owned by uploader
     public entry fun submit_audio(
         marketplace: &mut QualityMarketplace,
-        mut submission_fee: Coin<SUI>,
+        submission_fee: Coin<SUI>,
         walrus_blob_id: String,
         preview_blob_id: String,
         seal_policy_id: String,
@@ -672,16 +672,13 @@ module sonar::marketplace {
 
         let uploader = tx_context::sender(ctx);
         let fee_paid = coin::value(&submission_fee);
-        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
+        
+        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
+        assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
-        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
-        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
-
-        if (coin::value(&submission_fee) > 0) {
-            transfer::public_transfer(submission_fee, uploader);
-        } else {
-            coin::destroy_zero(submission_fee);
-        };
+        // Transfer entire fee to recipient (fee calculated by frontend based on quality)
+        transfer::public_transfer(submission_fee, SUBMISSION_FEE_RECIPIENT);
 
         // Check reward pool can cover minimum reward (30+ quality score)
         let circulating = get_circulating_supply(marketplace);
@@ -731,7 +728,7 @@ module sonar::marketplace {
             walrus_blob_id: submission.walrus_blob_id,
             preview_blob_id: submission.preview_blob_id,
             duration_seconds,
-            burn_fee_paid: SUBMISSION_FEE_SUI,
+            burn_fee_paid: fee_paid,
             submitted_at_epoch: tx_context::epoch(ctx)
         });
 
@@ -740,16 +737,16 @@ module sonar::marketplace {
     }
 
     /// Submit multiple audio files as a dataset
-    /// Collects the fixed submission fee (0.25 SUI) and forwards it to deployer
+    /// Collects variable submission fee (0.5-10 SUI per file) with 10% bundle discount
     /// Creates a DatasetSubmission containing multiple audio files
     public entry fun submit_audio_dataset(
         marketplace: &mut QualityMarketplace,
-        mut submission_fee: Coin<SUI>,
+        submission_fee: Coin<SUI>,
         blob_ids: vector<String>,
         preview_blob_ids: vector<String>,
         seal_policy_ids: vector<String>,
         durations: vector<u64>,
-        bundle_discount_bps: u64,      // Basis points: 2000 = 20% discount
+        bundle_discount_bps: u64,      // Basis points: 1000 = 10% discount (applied by frontend)
         ctx: &mut TxContext
     ) {
         // Circuit breaker check
@@ -765,20 +762,23 @@ module sonar::marketplace {
         assert!(vector::length(&preview_blob_ids) == file_count, E_INVALID_PARAMETER);
         assert!(vector::length(&seal_policy_ids) == file_count, E_INVALID_PARAMETER);
         assert!(vector::length(&durations) == file_count, E_INVALID_PARAMETER);
-        assert!(bundle_discount_bps <= 5000, E_INVALID_PARAMETER); // Max 50% discount
+        assert!(bundle_discount_bps == 1000, E_INVALID_PARAMETER); // Must be 10% discount
 
         let uploader = tx_context::sender(ctx);
         let fee_paid = coin::value(&submission_fee);
-        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
+        
+        // Validate total fee is reasonable for file count
+        // Min: file_count * 0.5 SUI * 0.9 (with 10% discount)
+        // Max: file_count * 10 SUI * 0.9 (with 10% discount)
+        let file_count_u64 = (file_count as u64);
+        let min_expected = (file_count_u64 * MIN_SUBMISSION_FEE_PER_FILE * 9) / 10;
+        let max_expected = (file_count_u64 * MAX_SUBMISSION_FEE_PER_FILE * 9) / 10;
+        
+        assert!(fee_paid >= min_expected, E_INVALID_BURN_FEE);
+        assert!(fee_paid <= max_expected, E_INVALID_BURN_FEE);
 
-        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
-        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
-
-        if (coin::value(&submission_fee) > 0) {
-            transfer::public_transfer(submission_fee, uploader);
-        } else {
-            coin::destroy_zero(submission_fee);
-        };
+        // Transfer entire fee to recipient (fee calculated by frontend with discount)
+        transfer::public_transfer(submission_fee, SUBMISSION_FEE_RECIPIENT);
 
         // Check reward pool can cover minimum reward (30+ quality score)
         let circulating = get_circulating_supply(marketplace);
@@ -838,7 +838,7 @@ module sonar::marketplace {
             file_count,
             total_duration,
             bundle_discount_bps,
-            burn_fee_paid: SUBMISSION_FEE_SUI,
+            burn_fee_paid: fee_paid,
             submitted_at_epoch: tx_context::epoch(ctx)
         });
 
@@ -1459,16 +1459,13 @@ module sonar::marketplace {
         let capacity_bytes = verification_session::plaintext_size_bytes(session);
 
         let fee_paid = coin::value(&submission_fee);
-        assert!(fee_paid >= SUBMISSION_FEE_SUI, E_INVALID_BURN_FEE);
+        
+        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
+        assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
-        let required_fee = coin::split(&mut submission_fee, SUBMISSION_FEE_SUI, ctx);
-        transfer::public_transfer(required_fee, SUBMISSION_FEE_RECIPIENT);
-
-        if (coin::value(&submission_fee) > 0) {
-            transfer::public_transfer(submission_fee, uploader);
-        } else {
-            coin::destroy_zero(submission_fee);
-        };
+        // Transfer entire fee to recipient (fee calculated by frontend based on quality)
+        transfer::public_transfer(submission_fee, SUBMISSION_FEE_RECIPIENT);
 
         // Calculate quality reward
         let circulating = get_circulating_supply(marketplace);

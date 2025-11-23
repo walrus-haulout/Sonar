@@ -18,6 +18,7 @@ SONAR is a decentralized marketplace for high-quality audio data across the full
 ## The Problem
 
 Current audio data marketplaces suffer from:
+
 - Poor quality control (no validation)
 - Privacy concerns (centralized storage)
 - Unsustainable tokenomics (fixed burn rates lead to death spirals)
@@ -30,26 +31,30 @@ Current audio data marketplaces suffer from:
 SONAR addresses these challenges through:
 
 ### 1. Quality-First Approach
+
 - LLM-validated audio quality scoring and content analysis
 - Tiered rewards based on contribution quality (0.001% - 0.005% of supply)
 - Submission fees prevent spam (0.001% burn)
 
 ### 2. Privacy by Design
+
 - Client-side encryption with Mysten Seal before upload
 - Decentralized storage on Walrus
 - Only authorized purchasers receive decryption shares
 - Zero blob ID exposure in public events
 
 ### 3. Fair Revenue Economics
+
 SONAR ensures creators are fairly rewarded for their contributions:
 
 - **60% to creators** - You keep the majority of revenue from dataset purchases
 - **40% to protocol** - Funds operations, development, and community programs
-- **0.25 SUI upload fee** - Prevents spam while keeping the marketplace clean
+- **0.5-10 SUI upload fee per file** - Quality-based pricing prevents spam (10% discount for multi-file bundles)
 
 This simple, transparent split ensures both creators and the protocol can thrive.
 
 ### 4. Sustainable Protocol Design
+
 - Fixed revenue splits that creators can rely on
 - Transparent fee structure
 - Community-governed protocol improvements
@@ -59,6 +64,7 @@ This simple, transparent split ensures both creators and the protocol can thrive
 ## How It Works
 
 ### For Creators
+
 1. Record or capture audio (speech, music, environmental sounds, etc.)
 2. Upload via SONAR interface (client-side Seal encryption)
 3. Pay small burn fee (0.001% of circulating supply)
@@ -67,6 +73,7 @@ This simple, transparent split ensures both creators and the protocol can thrive
 6. List datasets for sale to unlock vesting early
 
 ### For Data Buyers
+
 1. Browse marketplace with quality filters
 2. Purchase datasets with SONAR tokens
 3. Receive authenticated decryption access
@@ -74,6 +81,7 @@ This simple, transparent split ensures both creators and the protocol can thrive
 5. Decrypt with Seal shares
 
 ### For the Ecosystem
+
 - Automatic burns create deflationary pressure (60% → 20%)
 - Liquidity vault accumulates for AMM deployment (0% → 20%)
 - Treasury receives consistent funding (10%)
@@ -84,7 +92,9 @@ This simple, transparent split ensures both creators and the protocol can thrive
 ## Key Innovations
 
 ### Absolute Threshold Model
+
 Traditional percentage-based burn models cause u64 overflow in Move:
+
 ```move
 // ❌ OVERFLOW RISK
 let ratio = (current_supply * 1_000_000) / initial_supply;
@@ -92,6 +102,7 @@ let ratio = (current_supply * 1_000_000) / initial_supply;
 ```
 
 SONAR uses absolute token counts:
+
 ```move
 // ✅ NO OVERFLOW - Direct comparison
 if (circulating_supply > 50_000_000_000_000_000) {
@@ -100,17 +111,21 @@ if (circulating_supply > 50_000_000_000_000_000) {
 ```
 
 ### Dynamic Circulating Supply
+
 Correctly calculates circulating supply by excluding escrowed tokens:
+
 ```move
 Circulating = Total Supply - Reward Pool - Liquidity Vault
 ```
 
 This ensures:
+
 - Accurate tier assignments
 - Fair reward calculations
 - No distortion from locked tokens
 
 ### Privacy-First Architecture
+
 - Audio encrypted client-side with Seal before leaving user's device
 - Blob IDs never exposed in public blockchain events
 - Decryption shares only provided to verified purchasers
@@ -137,6 +152,7 @@ SONAR uses a **hybrid encryption policy** with multiple access paths:
 - **Your Access (Owner):** Can always decrypt your own data with your wallet
 
 All access is encrypted using **threshold cryptography (4-of-6 key servers)**, meaning:
+
 - No single SONAR team member can decrypt data alone
 - 4 independent key servers must participate to authorize decryption
 - Every decryption is signed and recorded on the blockchain
@@ -145,6 +161,7 @@ All access is encrypted using **threshold cryptography (4-of-6 key servers)**, m
 ### AI Model Training
 
 Models trained with SONAR community data are released **open-source and free to use**:
+
 - Published under permissive open licenses
 - Never sold or used for proprietary purposes
 - Benefit the entire AI/audio community
@@ -160,6 +177,7 @@ Models trained with SONAR community data are released **open-source and free to 
 ### Privacy Guarantees
 
 SONAR cannot access your data:
+
 - **Before encryption** - Audio encrypted on your device before upload
 - **After deletion** - Data removed from Walrus storage
 - **Without authorization** - Admin access requires secure key server authentication
@@ -170,21 +188,25 @@ SONAR cannot access your data:
 ## Technology Stack
 
 ### Blockchain
+
 - **Sui Network:** Fast, low-cost L1 blockchain
 - **Move Language:** Type-safe smart contract development
 - **Capability-Based Security:** AdminCap, ValidatorCap pattern
 
 ### Storage & Privacy
+
 - **Walrus:** Decentralized blob storage network
 - **Mysten Seal:** Threshold encryption for access control
 - **Client-Side Encryption:** Data never exposed unencrypted
 
 ### Validation
+
 - **LLM Quality Scoring:** Automated audio quality assessment and content analysis
 - **Resilient Pipeline:** Retry logic for validation failures
 - **On-Chain Verification:** ValidatorCap signatures
 
 ### Frontend (Planned)
+
 - React with Sui Wallet Adapter
 - Real-time economic metrics display
 - Audio recording and encryption UI
@@ -195,25 +217,30 @@ SONAR cannot access your data:
 ## Token Economics
 
 ### SNR Token
+
 - **Type:** Sui Fungible Token (Coin<SONAR>)
 - **Total Supply:** 100,000,000 SNR (fixed, non-mintable)
 - **Decimals:** 9
 - **Ticker:** SNR
 
 ### Earn Points for Future Airdrop
+
 **Early alpha users are earning points now for a future SNR airdrop.** As you upload datasets and participate in the marketplace, you accumulate points that will be redeemable for SNR tokens when token trading launches. Advanced reward tiers, deflationary burn model, and quality-based incentives are coming soon.
 
 ### Initial Distribution
+
 - **Reward Pool:** 70,000,000 SNR (70%)
 - **Team Allocation:** 30,000,000 SNR (30%, vested 24 months)
 
 ### Utility
+
 - Submission fees (burned)
 - Quality rewards (vested 90 days)
 - Dataset purchases (dynamic splits)
 - Future governance (post-AdminCap burn)
 
 ### Deflationary Mechanics
+
 - Submission burns (0.001% per submission)
 - Purchase burns (60% → 20% adaptive)
 - Fixed supply (no minting)
@@ -226,6 +253,7 @@ SONAR cannot access your data:
 This project implements a **full-stack decentralized audio marketplace** with real-time waveform visualization, wallet authentication, and encrypted streaming.
 
 ### Completed ✅
+
 - ✅ Monorepo setup with Bun workspaces
 - ✅ Shared type definitions package (@sonar/shared)
 - ✅ Complete backend API (Fastify + Prisma + PostgreSQL)
@@ -243,10 +271,12 @@ This project implements a **full-stack decentralized audio marketplace** with re
 - ✅ **BigInt-safe token utilities** (precision-safe calculations for all amounts)
 
 ### In Progress 🔄
+
 - 🔄 E2E testing (see E2E_TESTING.md for checklist)
 - 🔄 Production deployment and monitoring
 
 ### Planned ⏳
+
 - ⏳ User profiles and purchase history
 - ⏳ Playlist functionality
 - ⏳ Social features (sharing, ratings)
@@ -301,12 +331,14 @@ sonar/
 ## Development
 
 ### Prerequisites
+
 - [Bun](https://bun.sh) (v1.0+)
 - Node.js (v18+) - for npm packages
 - PostgreSQL (v14+) - for database
 - Sui Wallet extension (or similar wallet)
 
 ### Quick Start
+
 ```bash
 # Install dependencies
 bun install
@@ -335,16 +367,19 @@ cd frontend && bun run dev
 **Solution:** The backend must be running for authentication and download features to work. Follow these steps:
 
 1. **Check if backend is running:**
+
    ```bash
    curl -s http://localhost:3001/health && echo "Backend is running"
    ```
 
 2. **Start the backend in a separate terminal:**
+
    ```bash
    cd backend && bun run dev
    ```
 
 3. **Verify backend health:**
+
    ```bash
    curl http://localhost:3001/health
    # Should return 200 OK
@@ -357,6 +392,7 @@ cd frontend && bun run dev
 **Note:** The marketplace can be browsed without the backend, but authentication and downloads require backend connectivity.
 
 ### Running Tests
+
 ```bash
 # Run backend unit tests (nonce management)
 bun test backend/src/lib/auth/__tests__/
@@ -365,6 +401,7 @@ bun test backend/src/lib/auth/__tests__/
 ```
 
 ### Deployment
+
 ```bash
 # Docker build
 docker build -t sonar-backend:latest -f backend/Dockerfile .
@@ -385,6 +422,7 @@ railway up
 This project is being developed for the Walrus Haulout 2025 Hackathon. After the hackathon, we welcome contributions!
 
 ### Areas of Interest
+
 - Smart contract development (Move)
 - Frontend development (React/TypeScript)
 - Audio processing and validation
@@ -396,11 +434,13 @@ This project is being developed for the Walrus Haulout 2025 Hackathon. After the
 ## Security
 
 ### Current Status
+
 - Design phase - no deployed contracts yet
 - Security considerations documented in specification
 - Audit planned before mainnet deployment
 
 ### Reporting Issues
+
 For security concerns, please email: security@sonar.xyz (placeholder)
 
 ---
@@ -425,6 +465,7 @@ TBD (To be determined post-hackathon)
 Built for **Walrus Haulout 2025 Hackathon**
 
 Special thanks to:
+
 - Mysten Labs for Sui, Walrus, and Seal
 - The Sui developer community
 - Hackathon organizers and mentors
@@ -433,4 +474,4 @@ Special thanks to:
 
 **SONAR Protocol - Amplifying Data Value**
 
-*Decentralized. Private. Quality-First.*
+_Decentralized. Private. Quality-First._

@@ -10,6 +10,7 @@ When a dataset is purchased, the revenue is divided as follows:
 - **40%** goes to the protocol for operations, development, and community programs
 
 This fixed split is:
+
 - **Predictable**: Creators know exactly what they'll earn
 - **Fair**: Creators keep the majority of revenue
 - **Sustainable**: The protocol receives stable funding for ongoing development
@@ -17,7 +18,7 @@ This fixed split is:
 
 ## Upload Fee
 
-To prevent spam submissions, there is a fixed **0.25 SUI** upload fee that all creators pay when publishing a dataset.
+To prevent spam submissions, there is a variable **0.5 to 10 SUI per file** upload fee based on quality score. Multi-file datasets receive a 10% bundle discount.
 
 ## Vesting
 

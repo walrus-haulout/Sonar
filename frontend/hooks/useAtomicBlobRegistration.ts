@@ -157,7 +157,7 @@ export function useAtomicBlobRegistration() {
     previewBlobId: string,
     sealPolicyId: string,
     durationSeconds: number,
-    submissionFeeMist: number = 250_000_000, // 0.25 SUI
+    submissionFeeMist: number = 500_000_000, // 0.5 SUI minimum (actual fee varies 0.5-10 SUI based on quality)
     previewBlobHash?: Uint8Array,
   ): Promise<{ submissionId: string; digest: string }> {
     return new Promise((resolve, reject) => {

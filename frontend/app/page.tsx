@@ -1,7 +1,7 @@
-import { GlassCard } from '@/components/ui/GlassCard';
-import { SonarBackground } from '@/components/animations/SonarBackground';
-import { SonicWaveformHero } from '@/components/animations/SonicWaveformHero';
-import { ProtocolStatsSection } from '@/components/sections/ProtocolStatsSection';
+import { GlassCard } from "@/components/ui/GlassCard";
+import { SonarBackground } from "@/components/animations/SonarBackground";
+import { SonicWaveformHero } from "@/components/animations/SonicWaveformHero";
+import { ProtocolStatsSection } from "@/components/sections/ProtocolStatsSection";
 
 export default function HomePage() {
   return (
@@ -53,16 +53,21 @@ export default function HomePage() {
               Contribute Data
             </h3>
             <p className="text-sm text-sonar-highlight-bright/70">
-              Upload audio datasets of any type: music, speech, environmental sounds, vocals, sound effects, and more. Pay 0.25 SUI to prevent spam. 60% of purchase revenue goes to you.
+              Upload audio datasets of any type: music, speech, environmental
+              sounds, vocals, sound effects, and more. Upload fee: 0.5-10 SUI
+              per file based on quality. 60% of purchase revenue goes to you.
             </p>
           </GlassCard>
         </div>
 
         {/* Coming Soon Section */}
         <div className="max-w-2xl mx-auto text-center py-12 px-6 border border-sonar-signal/20 rounded-lg bg-sonar-abyss/20 backdrop-blur-sm mb-12">
-          <h3 className="text-2xl font-mono text-sonar-highlight mb-4">SNR Token Economics</h3>
+          <h3 className="text-2xl font-mono text-sonar-highlight mb-4">
+            SNR Token Economics
+          </h3>
           <p className="text-sonar-highlight-bright/80">
-            Earn points now for a future SNR airdrop. Advanced reward tiers, deflationary burn model, and quality-based incentives coming soon.
+            Earn points now for a future SNR airdrop. Advanced reward tiers,
+            deflationary burn model, and quality-based incentives coming soon.
           </p>
         </div>
 
@@ -72,9 +77,7 @@ export default function HomePage() {
         {/* Footer */}
         <div className="mt-20 text-center text-sonar-highlight-bright/50 text-sm space-y-2">
           <p>Built for Walrus Haulout 2025 Hackathon</p>
-          <p className="font-mono">
-            Powered by Sui • Walrus • Mysten Seal
-          </p>
+          <p className="font-mono">Powered by Sui • Walrus • Mysten Seal</p>
         </div>
       </div>
     </main>

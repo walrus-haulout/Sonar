@@ -43,12 +43,13 @@ When someone purchases your dataset, you receive 60% of the purchase price. Paym
 ## Platform Treasury
 
 The platform receives 40% of purchase revenue to fund:
+
 - Server operations
 - Development and improvements
 - Community programs
 - Protocol governance
 
-The 0.25 SUI upload fee helps prevent spam submissions.
+The variable upload fee (0.5-10 SUI per file, based on quality) helps prevent spam submissions while rewarding quality.
 
 ## Vesting Schedules
 
@@ -91,11 +92,13 @@ Airdrops are separate from rewards and vesting.
 ### Token Supply Changes
 
 **Increase**:
+
 - Creator rewards (up to 80% of purchases)
 - Airdrop distributions
 - Founder/team allocation (fixed)
 
 **Decrease**:
+
 - Burn on purchases (0-20% depending on supply)
 - Submission fees (burned)
 - Developer programs (if burn > awards)
@@ -105,18 +108,21 @@ The system targets equilibrium: supply growth = burn + usage.
 ### Example Scenarios
 
 **Scenario 1: Rapid Growth**
+
 - Many new creators earning points
 - Many purchases happening
 - Supply growing faster than burn
 - Adaptive burns increase to 20% to slow growth
 
 **Scenario 2: Market Plateau**
+
 - Fewer new creators
 - Stable purchase volume
 - Supply stabilizing
 - Adaptive burns reduce to 10% to increase creator rewards
 
 **Scenario 3: Market Decline**
+
 - Fewer users and purchases
 - Supply threatening to overinflate
 - Adaptive burns reduce to 0%
@@ -132,6 +138,7 @@ SNR tokens are used for:
 **Rewards**: Earn by creating and participating
 
 Token value grows with:
+
 - Adoption (more purchases)
 - Scarcity (burn > creation)
 - Utility (needed for marketplace)
@@ -140,6 +147,7 @@ Token value grows with:
 ## Preventing Price Manipulation
 
 **Anti-Whale Measures**:
+
 - Vesting schedules prevent dumping
 - Adaptive burns prevent over-minting
 - DAO governance prevents sudden changes

@@ -20,6 +20,21 @@ import type { WalrusUploadResult } from "@/lib/types/upload";
 
 const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
 
+/**
+ * Validate Walrus blob ID format
+ * Blob IDs should be base64url encoded strings (typically 43-44 characters)
+ */
+function isValidBlobId(blobId: string | undefined): boolean {
+  if (!blobId || typeof blobId !== 'string') {
+    return false;
+  }
+
+  // Blob IDs are base64url encoded (A-Za-z0-9_-)
+  // Typical length is 43-44 characters for 256-bit hashes
+  const base64urlPattern = /^[A-Za-z0-9_-]{16,}$/;
+  return base64urlPattern.test(blobId) && blobId.length >= 16;
+}
+
 export interface WalrusUploadProgress {
   totalFiles: number;
   completedFiles: number;
@@ -139,6 +154,9 @@ export function useWalrusParallelUpload() {
       maxRetries: number = 10,
     ): Promise<{ response: Response; attempt: number }> => {
       let lastError: Error | null = null;
+      const fileName = formData.get("file") instanceof File
+        ? (formData.get("file") as File).name
+        : "unknown";
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -157,6 +175,7 @@ export function useWalrusParallelUpload() {
 
           console.log(
             `[Upload] Edge Function upload attempt ${attempt}/${maxRetries}`,
+            { fileName, attempt, maxRetries },
           );
 
           const response = await fetch("/api/edge/walrus/upload", {
@@ -165,7 +184,7 @@ export function useWalrusParallelUpload() {
           });
 
           if (response.ok) {
-            console.log(`[Upload] Success on attempt ${attempt}`);
+            console.log(`[Upload] Success on attempt ${attempt}`, { fileName });
             return { response, attempt };
           }
 
@@ -180,12 +199,13 @@ export function useWalrusParallelUpload() {
 
           console.warn(
             `[Upload] Attempt ${attempt}/${maxRetries} failed with HTTP ${response.status}: ${errorDetail}`,
+            { fileName, status: response.status, errorDetail },
           );
 
           // Non-200 response, retry if not the last attempt
           if (attempt < maxRetries) {
             const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-            console.log(`[Upload] Retrying in ${delayMs}ms...`);
+            console.log(`[Upload] Retrying in ${delayMs}ms...`, { fileName, attempt });
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             continue;
           }
@@ -193,20 +213,31 @@ export function useWalrusParallelUpload() {
           return { response, attempt };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
+          const isTimeout = lastError.message.includes("timeout") ||
+            lastError.message.includes("aborted");
 
           console.error(
             `[Upload] Attempt ${attempt}/${maxRetries} failed with error:`,
-            lastError.message,
+            {
+              fileName,
+              error: lastError.message,
+              isTimeout,
+              attempt,
+              maxRetries,
+            },
           );
 
-          // If last attempt, throw error
+          // If last attempt, throw error with context
           if (attempt === maxRetries) {
-            throw lastError;
+            const contextualError = new Error(
+              `Upload failed after ${maxRetries} attempts: ${lastError.message}${isTimeout ? " (timeout)" : ""}`
+            );
+            throw contextualError;
           }
 
           // Retry with progressive delay
           const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-          console.log(`[Upload] Retrying in ${delayMs}ms...`);
+          console.log(`[Upload] Retrying in ${delayMs}ms...`, { fileName, attempt });
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
@@ -285,6 +316,20 @@ export function useWalrusParallelUpload() {
       const deletable = result.deletable;
       const certifiedEpoch = result.certifiedEpoch;
 
+      // Validate blob ID format
+      if (!isValidBlobId(blobId)) {
+        console.error('[Upload] Invalid blob ID received from Walrus:', {
+          blobId,
+          blobIdType: typeof blobId,
+          blobIdLength: blobId?.length,
+          fullResult: result,
+        });
+        throw new Error(
+          `Invalid blob ID received from Walrus: "${blobId}". ` +
+          `Expected base64url encoded string. Upload may have failed.`
+        );
+      }
+
       console.log("[Upload] Main blob uploaded:", {
         blobId,
         storageId,
@@ -326,36 +371,60 @@ export function useWalrusParallelUpload() {
           `[Upload] Uploading preview blob: ${previewFileName} (${previewSizeMB}MB)`,
         );
 
-        const { response: previewResponse, attempt: previewAttempt } =
-          await fetchUploadWithRetry(previewFormData, 10);
+        try {
+          const { response: previewResponse, attempt: previewAttempt } =
+            await fetchUploadWithRetry(previewFormData, 10);
 
-        if (!previewResponse.ok) {
-          let previewErrorMessage = `Preview upload failed on attempt ${previewAttempt}: ${previewResponse.statusText}`;
-          try {
-            const errorBody = await previewResponse.json();
-            previewErrorMessage =
-              errorBody.error || errorBody.details || previewErrorMessage;
-          } catch {
-            // Fallback to statusText if JSON parsing fails
+          if (!previewResponse.ok) {
+            let previewErrorMessage = `Preview upload failed on attempt ${previewAttempt}: ${previewResponse.statusText}`;
+            try {
+              const errorBody = await previewResponse.json();
+              previewErrorMessage =
+                errorBody.error || errorBody.details || previewErrorMessage;
+            } catch {
+              // Fallback to statusText if JSON parsing fails
+            }
+
+            // Log warning but don't fail the entire upload
+            console.warn(
+              `[Upload] Preview upload failed (non-fatal): ${previewErrorMessage}`,
+              {
+                fileName: previewFileName,
+                size: previewSizeMB,
+                attempt: previewAttempt,
+                status: previewResponse.status,
+              },
+            );
+            // Continue without preview
+          } else {
+            const previewResult = await previewResponse.json();
+
+            // Edge Function returns parsed response directly
+            finalPreviewBlobId = previewResult.blobId;
+            previewStorageId = previewResult.storageId;
+            previewEncodingType = previewResult.encodingType;
+            previewDeletable = previewResult.deletable;
+            previewSize = previewResult.size || previewBlob.size;
+
+            console.log("[Upload] Preview blob uploaded:", {
+              blobId: finalPreviewBlobId,
+              storageId: previewStorageId,
+              encodingType: previewEncodingType,
+              size: previewSize,
+            });
           }
-          throw new Error(previewErrorMessage);
+        } catch (previewError) {
+          // Log error but don't fail the entire upload
+          console.warn(
+            `[Upload] Preview upload exception (non-fatal):`,
+            previewError instanceof Error ? previewError.message : previewError,
+            {
+              fileName: previewFileName,
+              size: previewSizeMB,
+            },
+          );
+          // Continue without preview
         }
-
-        const previewResult = await previewResponse.json();
-
-        // Edge Function returns parsed response directly
-        finalPreviewBlobId = previewResult.blobId;
-        previewStorageId = previewResult.storageId;
-        previewEncodingType = previewResult.encodingType;
-        previewDeletable = previewResult.deletable;
-        previewSize = previewResult.size || previewBlob.size;
-
-        console.log("[Upload] Preview blob uploaded:", {
-          blobId: finalPreviewBlobId,
-          storageId: previewStorageId,
-          encodingType: previewEncodingType,
-          size: previewSize,
-        });
       }
 
       console.log("[Upload] HTTP upload complete:", {
@@ -421,8 +490,8 @@ export function useWalrusParallelUpload() {
 
       console.log("[Walrus] Building batch registration transaction...");
 
-      // 0.25 SUI for submission fee
-      const SUI_PAYMENT_AMOUNT = 250_000_000n;
+      // 0.5-10 SUI for submission fee (varies based on quality)
+      const SUI_PAYMENT_AMOUNT = 500_000_000n; // Minimum fee
 
       // We need to find a SUI coin for the submission fee
       // This is a bit tricky since we can't easily "pick" a coin in the frontend without more helpers

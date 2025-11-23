@@ -1,0 +1,572 @@
+[warning] Client/Server api version mismatch, client api version : 1.61.1, server api version : 1.60.1
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY Walrus
+INCLUDING DEPENDENCY WAL
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING sonar
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+   [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/token.move:22:46
+   [0m[34m│[0m
+[0m[34m22[0m [0m[34m│[0m         let (treasury_cap, metadata) = coin::[0m[33mcreate_currency[0m(
+   [0m[34m│[0m                                              [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mThe function 'sui::coin::create_currency' is deprecated: Use `coin_registry::new_currency_with_otw` instead[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/hybrid_seal_policy.move:3:14
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m     use std::[0m[33mvector[0m;
+  [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/blob_manager.move:5:14
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m     use sui::[0m[33mtransfer[0m;
+  [0m[34m│[0m              [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+   [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/blob_manager.move:51:17
+   [0m[34m│[0m
+[0m[34m51[0m [0m[34m│[0m         let mut [0m[33msui[0m = sui_payment;
+   [0m[34m│[0m             [0m[34m---[0m [0m[33m^^^[0m [0m[33mThe variable 'sui' is never used mutably[0m
+   [0m[34m│[0m             [0m[34m│[0m    
+   [0m[34m│[0m             [0m[34mConsider removing the 'mut' declaration here[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:217:12
+    [0m[34m│[0m
+[0m[34m217[0m [0m[34m│[0m     public [0m[33mentry[0m fun create_session(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:284:12
+    [0m[34m│[0m
+[0m[34m284[0m [0m[34m│[0m     public [0m[33mentry[0m fun submit_deletion_receipt(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:318:12
+    [0m[34m│[0m
+[0m[34m318[0m [0m[34m│[0m     public [0m[33mentry[0m fun submit_encrypted_upload(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:357:12
+    [0m[34m│[0m
+[0m[34m357[0m [0m[34m│[0m     public [0m[33mentry[0m fun update_stage(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:423:12
+    [0m[34m│[0m
+[0m[34m423[0m [0m[34m│[0m     public [0m[33mentry[0m fun finalize_verification(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/verification_session.move:461:12
+    [0m[34m│[0m
+[0m[34m461[0m [0m[34m│[0m     public [0m[33mentry[0m fun fail_session(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:466:12
+    [0m[34m│[0m
+[0m[34m466[0m [0m[34m│[0m     public [0m[33mentry[0m fun register_blob_intent(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:503:12
+    [0m[34m│[0m
+[0m[34m503[0m [0m[34m│[0m     public [0m[33mentry[0m fun finalize_submission_with_blob(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:505:13
+    [0m[34m│[0m
+[0m[34m505[0m [0m[34m│[0m         mut [0m[33msubmission_fee[0m: Coin<SUI>,
+    [0m[34m│[0m         [0m[34m---[0m [0m[33m^^^^^^^^^^^^^^[0m [0m[33mThe variable 'submission_fee' is never used mutably[0m
+    [0m[34m│[0m         [0m[34m│[0m    
+    [0m[34m│[0m         [0m[34mConsider removing the 'mut' declaration here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:622:12
+    [0m[34m│[0m
+[0m[34m622[0m [0m[34m│[0m     public [0m[33mentry[0m fun reencrypt_submission(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:657:12
+    [0m[34m│[0m
+[0m[34m657[0m [0m[34m│[0m     public [0m[33mentry[0m fun submit_audio(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:742:12
+    [0m[34m│[0m
+[0m[34m742[0m [0m[34m│[0m     public [0m[33mentry[0m fun submit_audio_dataset(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:852:12
+    [0m[34m│[0m
+[0m[34m852[0m [0m[34m│[0m     public [0m[33mentry[0m fun finalize_submission(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:974:12
+    [0m[34m│[0m
+[0m[34m974[0m [0m[34m│[0m     public [0m[33mentry[0m fun claim_vested_tokens(
+    [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:1019:12
+     [0m[34m│[0m
+[0m[34m1019[0m [0m[34m│[0m     public [0m[33mentry[0m fun purchase_dataset(
+     [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+     [0m[34m┌─[0m /Users/angel/Projects/sonar/contracts/sources/marketplace.move:1434:13
+     [0m[34m│[0m
+[0m[34m1434[0m [0m[34m│[0m         mut [0m[33msubmission_fee[0m: Coin<SUI>,
+     [0m[34m│[0m         [0m[34m---[0m [0m[33m^^^^^^^^^^^^^^[0m [0m[33mThe variable 'submission_fee' is never used mutably[0m
+     [0m[34m│[0m         [0m[34m│[0m    
+     [0m[34m│[0m         [0m[34mConsider removing the 'mut' declaration here[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+Total number of linter warnings suppressed: 7 (unique lints: 1)
+Skipping dependency verification
+{
+  "digest": "4LvgtZXQhVkWmiCMSbFmWb8YJjeCRHUwfBUu12y8FtVK",
+  "transaction": {
+    "data": {
+      "messageVersion": "v1",
+      "transaction": {
+        "kind": "ProgrammableTransaction",
+        "inputs": [
+          {
+            "type": "pure",
+            "valueType": "address",
+            "value": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+          }
+        ],
+        "transactions": [
+          {
+            "Publish": [
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "0x0000000000000000000000000000000000000000000000000000000000000002"
+            ]
+          },
+          {
+            "TransferObjects": [
+              [
+                {
+                  "Result": 0
+                }
+              ],
+              {
+                "Input": 0
+              }
+            ]
+          }
+        ]
+      },
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "gasData": {
+        "payment": [
+          {
+            "objectId": "0xf5ac2e327fdd25f501a6fa841e5630a04111a5e149283e79e83b5d34a664bb45",
+            "version": 685463419,
+            "digest": "8f2kKrDXs1PNHGPnMxmtFdJAxURnW8yHawd8QfP3nRtY"
+          }
+        ],
+        "owner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+        "price": "505",
+        "budget": "500000000"
+      }
+    },
+    "txSignatures": [
+      "AKy6S04mp9Qs9yfGN87KwmCtkkyNQZU45mFpEUzaKlaKaH2s8g+iJZqIkTTco9cUpfe7/44fgZ92V/TM5nSxqwad/gYnokUPVVY60px+YGQxGfEBhiNMJm22y0WkUDavsg=="
+    ]
+  },
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "955",
+    "gasUsed": {
+      "computationCost": "1515000",
+      "storageCost": "234148400",
+      "storageRebate": "978120",
+      "nonRefundableStorageFee": "9880"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0xf5ac2e327fdd25f501a6fa841e5630a04111a5e149283e79e83b5d34a664bb45",
+        "sequenceNumber": "685463419"
+      }
+    ],
+    "transactionDigest": "4LvgtZXQhVkWmiCMSbFmWb8YJjeCRHUwfBUu12y8FtVK",
+    "created": [
+      {
+        "owner": {
+          "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+        },
+        "reference": {
+          "objectId": "0x0e55fdbb63c96672bebeed7d17a98c5d581a4cbbef812f7389f26fdfde01e340",
+          "version": 685463420,
+          "digest": "GxDYQvzjP6ZTSLDwLuhgFiJsS6omrySLACP5WyJ4kqwU"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 685463420
+          }
+        },
+        "reference": {
+          "objectId": "0x6151dbd0ae2002180f19dccfb367aa76d2f7ddf7e965365c470411c3aa2bc79b",
+          "version": 685463420,
+          "digest": "8uM37i6ALAYTggQMDBx2buXii8M8mgVrxVkVsNVtFHm9"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 685463420
+          }
+        },
+        "reference": {
+          "objectId": "0x7514bd0781eb42148f3b55a9fa16a3e5e94b5728f9669118fc028c66b6538f1b",
+          "version": 685463420,
+          "digest": "HR4WZi9dYBvB7ZTmHq4rprn3tYPKdagq92pB2eQzKyaS"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 685463420
+          }
+        },
+        "reference": {
+          "objectId": "0x8bd5907ec6066415a154b5690dba80a72a62bba81b3133dd7b8e416ed7c81384",
+          "version": 685463420,
+          "digest": "HiZvENWbp4mnB3TAgLnXTSkyvRdKgwqB7Fdwi6UVsuS4"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+        },
+        "reference": {
+          "objectId": "0xa9ba0ba38cdc31313325d52beddeeade07d67bcdad8034bbf49afb8ea02c8c0b",
+          "version": 685463420,
+          "digest": "AmQ7ykgRobDsZF6Y1UsBYuigfUPB6M7Q3Tg5qpTbV4t3"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3",
+          "version": 1,
+          "digest": "GVHosJaNP5ZbC5Ag69Wr71zPqjLMagPVW4PWfYecjJWT"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0xbef66f6d765a08a939758d6fcf748c27c5b459005dd8559f83a90e736cf79815",
+          "version": 685463420,
+          "digest": "4tUZAKZETzevusKdsQWaRRwh7TvAe7MN7pc2KdAHMoq8"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+        },
+        "reference": {
+          "objectId": "0xcd1c8342fc21cbabb2d43f111461a6bed56bee05439513504defc98c471eb748",
+          "version": 685463420,
+          "digest": "CfSRksMznh2Lx2vLjFyFthm5AmmzTCKfsZ3Kd4osJJhB"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+        },
+        "reference": {
+          "objectId": "0xe3ac674427f0a4611ed2d7a9e0faeb8a9ee0d7d4319aa20dcba27578578a52e6",
+          "version": 685463420,
+          "digest": "Cp4LkNq9h4AWbBVCt8X758td7WHSZhZLWQzz9MYL2vnE"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+        },
+        "reference": {
+          "objectId": "0xf5ac2e327fdd25f501a6fa841e5630a04111a5e149283e79e83b5d34a664bb45",
+          "version": 685463420,
+          "digest": "GNQkvcDgcwkmGWagxjBKAWVKKccmB25jmSASwUkjedeY"
+        }
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "reference": {
+        "objectId": "0xf5ac2e327fdd25f501a6fa841e5630a04111a5e149283e79e83b5d34a664bb45",
+        "version": 685463420,
+        "digest": "GNQkvcDgcwkmGWagxjBKAWVKKccmB25jmSASwUkjedeY"
+      }
+    },
+    "eventsDigest": "FGuQQY4Tec2qqJcBtqBvwxGkwXeK4cSPbxSvsoWGzzsW",
+    "dependencies": [
+      "yqtELKLqAuSGkt6PX52KHKvmDKCrV3KCLxm6HAqL6DZ",
+      "AeqmrGytM9Q3ZSs3KkwybyCpUYvDjW5MEQDBpPMD53BY",
+      "HgNZBJfnTbN1cfmb8juxQ9Nf68uxSqf1iHX7TqkUcTRi"
+    ]
+  },
+  "events": [
+    {
+      "id": {
+        "txDigest": "4LvgtZXQhVkWmiCMSbFmWb8YJjeCRHUwfBUu12y8FtVK",
+        "eventSeq": "0"
+      },
+      "packageId": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3",
+      "transactionModule": "deletion_proofs",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "type": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::deletion_proofs::RegistryInitialized",
+      "parsedJson": {
+        "registry_id": "0x8bd5907ec6066415a154b5690dba80a72a62bba81b3133dd7b8e416ed7c81384"
+      },
+      "bcsEncoding": "base64",
+      "bcs": "i9WQfsYGZBWhVLVpDbqApypiu6gbMTPde45BbtfIE4Q="
+    },
+    {
+      "id": {
+        "txDigest": "4LvgtZXQhVkWmiCMSbFmWb8YJjeCRHUwfBUu12y8FtVK",
+        "eventSeq": "1"
+      },
+      "packageId": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3",
+      "transactionModule": "verification_session",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "type": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::verification_session::RegistryInitialized",
+      "parsedJson": {
+        "registry_id": "0x6151dbd0ae2002180f19dccfb367aa76d2f7ddf7e965365c470411c3aa2bc79b"
+      },
+      "bcsEncoding": "base64",
+      "bcs": "YVHb0K4gAhgPGdzPs2eqdtL33ffpZTZcRwQRw6orx5s="
+    },
+    {
+      "id": {
+        "txDigest": "4LvgtZXQhVkWmiCMSbFmWb8YJjeCRHUwfBUu12y8FtVK",
+        "eventSeq": "2"
+      },
+      "packageId": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3",
+      "transactionModule": "storage_lease",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "type": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::storage_lease::RegistryInitialized",
+      "parsedJson": {
+        "registry_id": "0x7514bd0781eb42148f3b55a9fa16a3e5e94b5728f9669118fc028c66b6538f1b"
+      },
+      "bcsEncoding": "base64",
+      "bcs": "dRS9B4HrQhSPO1Wp+haj5elLVyj5ZpEY/AKMZrZTjxs="
+    }
+  ],
+  "objectChanges": [
+    {
+      "type": "mutated",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0xf5ac2e327fdd25f501a6fa841e5630a04111a5e149283e79e83b5d34a664bb45",
+      "version": "685463420",
+      "previousVersion": "685463419",
+      "digest": "GNQkvcDgcwkmGWagxjBKAWVKKccmB25jmSASwUkjedeY"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "objectType": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::verification_session::ValidatorCap",
+      "objectId": "0x0e55fdbb63c96672bebeed7d17a98c5d581a4cbbef812f7389f26fdfde01e340",
+      "version": "685463420",
+      "digest": "GxDYQvzjP6ZTSLDwLuhgFiJsS6omrySLACP5WyJ4kqwU"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 685463420
+        }
+      },
+      "objectType": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::verification_session::SessionRegistry",
+      "objectId": "0x6151dbd0ae2002180f19dccfb367aa76d2f7ddf7e965365c470411c3aa2bc79b",
+      "version": "685463420",
+      "digest": "8uM37i6ALAYTggQMDBx2buXii8M8mgVrxVkVsNVtFHm9"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 685463420
+        }
+      },
+      "objectType": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::storage_lease::LeaseRegistry",
+      "objectId": "0x7514bd0781eb42148f3b55a9fa16a3e5e94b5728f9669118fc028c66b6538f1b",
+      "version": "685463420",
+      "digest": "HR4WZi9dYBvB7ZTmHq4rprn3tYPKdagq92pB2eQzKyaS"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 685463420
+        }
+      },
+      "objectType": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::deletion_proofs::ProofRegistry",
+      "objectId": "0x8bd5907ec6066415a154b5690dba80a72a62bba81b3133dd7b8e416ed7c81384",
+      "version": "685463420",
+      "digest": "HiZvENWbp4mnB3TAgLnXTSkyvRdKgwqB7Fdwi6UVsuS4"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "objectType": "0x2::package::UpgradeCap",
+      "objectId": "0xa9ba0ba38cdc31313325d52beddeeade07d67bcdad8034bbf49afb8ea02c8c0b",
+      "version": "685463420",
+      "digest": "AmQ7ykgRobDsZF6Y1UsBYuigfUPB6M7Q3Tg5qpTbV4t3"
+    },
+    {
+      "type": "published",
+      "packageId": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3",
+      "version": "1",
+      "digest": "GVHosJaNP5ZbC5Ag69Wr71zPqjLMagPVW4PWfYecjJWT",
+      "modules": [
+        "blob_manager",
+        "deletion_proofs",
+        "economics",
+        "hybrid_seal_policy",
+        "marketplace",
+        "open_access_policy",
+        "purchase_policy",
+        "sonar_token",
+        "storage_lease",
+        "verification_session"
+      ]
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": "Immutable",
+      "objectType": "0x2::coin::CoinMetadata<0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::sonar_token::SONAR_TOKEN>",
+      "objectId": "0xbef66f6d765a08a939758d6fcf748c27c5b459005dd8559f83a90e736cf79815",
+      "version": "685463420",
+      "digest": "4tUZAKZETzevusKdsQWaRRwh7TvAe7MN7pc2KdAHMoq8"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "objectType": "0x2::coin::TreasuryCap<0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::sonar_token::SONAR_TOKEN>",
+      "objectId": "0xcd1c8342fc21cbabb2d43f111461a6bed56bee05439513504defc98c471eb748",
+      "version": "685463420",
+      "digest": "CfSRksMznh2Lx2vLjFyFthm5AmmzTCKfsZ3Kd4osJJhB"
+    },
+    {
+      "type": "created",
+      "sender": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39",
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "objectType": "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3::deletion_proofs::VerifierCap",
+      "objectId": "0xe3ac674427f0a4611ed2d7a9e0faeb8a9ee0d7d4319aa20dcba27578578a52e6",
+      "version": "685463420",
+      "digest": "Cp4LkNq9h4AWbBVCt8X758td7WHSZhZLWQzz9MYL2vnE"
+    }
+  ],
+  "balanceChanges": [
+    {
+      "owner": {
+        "AddressOwner": "0xca793690985183dc8e2180fd059d76f3b0644f5c2ecd3b01cdebe7d40b0cca39"
+      },
+      "coinType": "0x2::sui::SUI",
+      "amount": "-234685280"
+    }
+  ],
+  "timestampMs": "1763919415637",
+  "confirmedLocalExecution": true,
+  "checkpoint": "215378062"
+}

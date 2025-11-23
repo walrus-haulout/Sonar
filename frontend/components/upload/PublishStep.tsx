@@ -73,7 +73,8 @@ interface PublishStepProps {
   onError: (error: string) => void;
 }
 
-const UPLOAD_FEE_MIST = 250_000_000; // 0.25 SUI expressed in MIST (1 SUI = 1_000_000_000 MIST)
+const MIN_PRICE_PER_FILE_MIST = 500_000_000; // 0.5 SUI per file
+const MAX_PRICE_PER_FILE_MIST = 10_000_000_000; // 10 SUI per file
 const MIST_PER_SUI = 1_000_000_000;
 
 function formatMistToSui(mist: number) {
@@ -81,7 +82,38 @@ function formatMistToSui(mist: number) {
   return Number(value.toFixed(9)).toString();
 }
 
-const UPLOAD_FEE_LABEL = `${formatMistToSui(UPLOAD_FEE_MIST)} SUI`;
+// Calculate price per file based on quality score (0-100)
+// Quality 0-50: 0.5 SUI, 50-75: 0.5-5 SUI, 75-100: 5-10 SUI
+function calculateFilePriceMist(qualityScore: number): number {
+  const normalizedScore = Math.max(0, Math.min(100, qualityScore));
+
+  if (normalizedScore <= 50) {
+    return MIN_PRICE_PER_FILE_MIST;
+  } else if (normalizedScore <= 75) {
+    // Linear interpolation from 0.5 to 5 SUI
+    const progress = (normalizedScore - 50) / 25;
+    return MIN_PRICE_PER_FILE_MIST + 4_500_000_000 * progress;
+  } else {
+    // Linear interpolation from 5 to 10 SUI
+    const progress = (normalizedScore - 75) / 25;
+    return 5_000_000_000 + 5_000_000_000 * progress;
+  }
+}
+
+// Calculate total dataset price with 10% bundle discount for multi-file datasets
+function calculateDatasetPriceMist(
+  pricePerFileMist: number,
+  fileCount: number,
+): number {
+  const totalPrice = pricePerFileMist * fileCount;
+
+  // Apply 10% bundle discount for 2+ files
+  if (fileCount >= 2) {
+    return Math.floor(totalPrice * 0.9); // 10% discount
+  }
+
+  return totalPrice;
+}
 
 /**
  * PublishStep Component
@@ -151,9 +183,35 @@ export function PublishStep({
     try {
       setPublishState("signing");
 
+      // Validate blockchain configuration early
       if (!CHAIN_CONFIG.packageId || !CHAIN_CONFIG.marketplaceId) {
+        const missingIds = [];
+        if (!CHAIN_CONFIG.packageId) missingIds.push("PACKAGE_ID");
+        if (!CHAIN_CONFIG.marketplaceId) missingIds.push("MARKETPLACE_ID");
+
         onError(
-          `Blockchain configuration missing required IDs: ${CHAIN_CONFIG.missingKeys.join(", ") || "PACKAGE_ID / MARKETPLACE_ID"}`,
+          `Blockchain configuration incomplete. Missing: ${missingIds.join(", ")}. ` +
+          `Please check your .env file and ensure all contract addresses are deployed.`
+        );
+        setPublishState("idle");
+        return;
+      }
+
+      // Validate package ID format (should be a valid Sui object ID)
+      if (!CHAIN_CONFIG.packageId.startsWith("0x") || CHAIN_CONFIG.packageId.length < 10) {
+        onError(
+          `Invalid PACKAGE_ID format: "${CHAIN_CONFIG.packageId}". ` +
+          `Expected a valid Sui object ID starting with "0x".`
+        );
+        setPublishState("idle");
+        return;
+      }
+
+      // Validate marketplace ID format
+      if (!CHAIN_CONFIG.marketplaceId.startsWith("0x") || CHAIN_CONFIG.marketplaceId.length < 10) {
+        onError(
+          `Invalid MARKETPLACE_ID format: "${CHAIN_CONFIG.marketplaceId}". ` +
+          `Expected a valid Sui object ID starting with "0x".`
         );
         setPublishState("idle");
         return;
@@ -182,7 +240,17 @@ export function PublishStep({
         const sealPolicyIds = files.map((f) => f.seal_policy_id);
         const durations = files.map((f) => Math.max(1, Math.floor(f.duration))); // Convert to u64
 
-        const uploadFeeCoin = tx.splitCoins(tx.gas, [UPLOAD_FEE_MIST])[0];
+        // Calculate total upload fee with 10% bundle discount
+        const qualityScore = verification.qualityScore
+          ? verification.qualityScore * 100
+          : 50;
+        const pricePerFileMist = calculateFilePriceMist(qualityScore);
+        const totalUploadFeeMist = calculateDatasetPriceMist(
+          pricePerFileMist,
+          files.length,
+        );
+
+        const uploadFeeCoin = tx.splitCoins(tx.gas, [totalUploadFeeMist])[0];
 
         tx.moveCall({
           target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio_dataset`,
@@ -223,7 +291,7 @@ export function PublishStep({
           if (!walrusUpload.blobId || walrusUpload.blobId.length < 16) {
             onError(
               `Invalid Walrus blob ID: "${walrusUpload.blobId}". ` +
-                `Upload may have failed. Please try re-uploading.`,
+              `Upload may have failed. Please try re-uploading.`,
             );
             setPublishState("idle");
             return;
@@ -236,7 +304,7 @@ export function PublishStep({
           ) {
             onError(
               `Invalid Seal policy ID: "${walrusUpload.seal_policy_id}". ` +
-                `Encryption may have failed. Please try re-encrypting.`,
+              `Encryption may have failed. Please try re-encrypting.`,
             );
             setPublishState("idle");
             return;
@@ -565,8 +633,8 @@ export function PublishStep({
                 );
                 throw new Error(
                   "Failed to extract dataset ID from transaction. " +
-                    "The transaction succeeded but no AudioSubmission or DatasetSubmission object was found. " +
-                    `Transaction digest: ${result.digest}`,
+                  "The transaction succeeded but no AudioSubmission or DatasetSubmission object was found. " +
+                  `Transaction digest: ${result.digest}`,
                 );
               }
 
@@ -607,42 +675,42 @@ export function PublishStep({
                   const files =
                     walrusUpload.files && walrusUpload.files.length > 0
                       ? walrusUpload.files.map((file) => ({
-                          file_index: file.file_index || 0,
-                          seal_policy_id: file.seal_policy_id,
-                          blob_id: file.blobId,
-                          preview_blob_id: file.previewBlobId ?? null,
-                          duration_seconds: Math.max(
-                            1,
-                            Math.floor(file.duration),
-                          ),
-                          mime_type:
-                            file.mimeType ||
-                            walrusUpload.mimeType ||
-                            "audio/mpeg",
-                          preview_mime_type:
-                            file.previewMimeType ??
-                            walrusUpload.previewMimeType ??
-                            null,
-                        }))
+                        file_index: file.file_index || 0,
+                        seal_policy_id: file.seal_policy_id,
+                        blob_id: file.blobId,
+                        preview_blob_id: file.previewBlobId ?? null,
+                        duration_seconds: Math.max(
+                          1,
+                          Math.floor(file.duration),
+                        ),
+                        mime_type:
+                          file.mimeType ||
+                          walrusUpload.mimeType ||
+                          "audio/mpeg",
+                        preview_mime_type:
+                          file.previewMimeType ??
+                          walrusUpload.previewMimeType ??
+                          null,
+                      }))
                       : [
-                          {
-                            file_index: 0,
-                            seal_policy_id: walrusUpload.seal_policy_id,
-                            blob_id: walrusUpload.blobId,
-                            preview_blob_id: fallbackPreviewId,
-                            duration_seconds: fallbackDuration,
-                            mime_type: fallbackMime,
-                            preview_mime_type: fallbackPreviewMime,
-                          },
-                        ];
+                        {
+                          file_index: 0,
+                          seal_policy_id: walrusUpload.seal_policy_id,
+                          blob_id: walrusUpload.blobId,
+                          preview_blob_id: fallbackPreviewId,
+                          duration_seconds: fallbackDuration,
+                          mime_type: fallbackMime,
+                          preview_mime_type: fallbackPreviewMime,
+                        },
+                      ];
 
                   const verificationMetadata = verification
                     ? {
-                        verification_id: verification.id,
-                        quality_score: verification.qualityScore,
-                        safety_passed: verification.safetyPassed,
-                        verified_at: new Date().toISOString(),
-                      }
+                      verification_id: verification.id,
+                      quality_score: verification.qualityScore,
+                      safety_passed: verification.safetyPassed,
+                      verified_at: new Date().toISOString(),
+                    }
                     : null;
 
                   const datasetMetadata = {
@@ -862,19 +930,19 @@ export function PublishStep({
                     )}
                     {verification.qualityBreakdown.metadataAccuracy !==
                       null && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-sonar-highlight/60">
-                          Metadata:
-                        </span>
-                        <span className="text-sonar-signal font-mono">
-                          {Math.round(
-                            verification.qualityBreakdown.metadataAccuracy *
+                        <div className="flex justify-between text-xs">
+                          <span className="text-sonar-highlight/60">
+                            Metadata:
+                          </span>
+                          <span className="text-sonar-signal font-mono">
+                            {Math.round(
+                              verification.qualityBreakdown.metadataAccuracy *
                               100,
-                          )}
-                          %
-                        </span>
-                      </div>
-                    )}
+                            )}
+                            %
+                          </span>
+                        </div>
+                      )}
                     {verification.qualityBreakdown.completeness !== null && (
                       <div className="flex justify-between text-xs">
                         <span className="text-sonar-highlight/60">
@@ -966,7 +1034,7 @@ export function PublishStep({
                 <span className="text-sonar-highlight/70">Languages:</span>
                 <span className="text-sonar-highlight-bright font-mono">
                   {(verification.detectedLanguages &&
-                  verification.detectedLanguages.length > 0
+                    verification.detectedLanguages.length > 0
                     ? verification.detectedLanguages
                     : metadata.languages || []
                   ).join(", ") || "Not specified"}
@@ -1064,63 +1132,137 @@ export function PublishStep({
                   Final Step: Upload Fee
                 </h4>
                 <p className="text-sm text-sonar-highlight/80 mb-3">
-                  A one-time upload fee of{" "}
-                  <span className="text-sonar-signal font-mono font-bold">
-                    {UPLOAD_FEE_LABEL}
-                  </span>{" "}
-                  is required to publish your verified dataset to the
-                  blockchain. This helps prevent spam while tokenomics launch is
-                  pending.
+                  Upload fee is calculated based on quality score (0.5-10 SUI
+                  per file). Higher quality = higher fee. This helps prevent
+                  spam and rewards quality data.
                 </p>
-                <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-sonar-highlight/70">
-                      Publication Fee:
-                    </span>
-                    <span className="font-mono font-bold text-sonar-signal text-lg">
-                      {UPLOAD_FEE_LABEL}
-                    </span>
-                  </div>
-                </div>
+
+                {(() => {
+                  const qualityScore = verification.qualityScore
+                    ? verification.qualityScore * 100
+                    : 50;
+                  const pricePerFileMist = calculateFilePriceMist(qualityScore);
+                  const fileCount = walrusUpload.files?.length || 1;
+                  const subtotalMist = pricePerFileMist * fileCount;
+                  const totalFeeMist = calculateDatasetPriceMist(
+                    pricePerFileMist,
+                    fileCount,
+                  );
+                  const discountMist = subtotalMist - totalFeeMist;
+
+                  const pricePerFileLabel = formatMistToSui(pricePerFileMist);
+                  const subtotalLabel = formatMistToSui(subtotalMist);
+                  const totalFeeLabel = formatMistToSui(totalFeeMist);
+                  const discountLabel = formatMistToSui(discountMist);
+
+                  return (
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-blue/20">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs text-sonar-highlight/70">
+                            Price per file (Quality: {Math.round(qualityScore)}
+                            ):
+                          </span>
+                          <span className="font-mono font-bold text-sonar-signal">
+                            {pricePerFileLabel} SUI
+                          </span>
+                        </div>
+                        {fileCount > 1 && (
+                          <>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs text-sonar-highlight/70">
+                                Number of files:
+                              </span>
+                              <span className="font-mono font-bold text-sonar-highlight">
+                                {fileCount}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs text-sonar-highlight/70">
+                                Subtotal:
+                              </span>
+                              <span className="font-mono text-sonar-highlight">
+                                {subtotalLabel} SUI
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs text-sonar-signal">
+                                Bundle discount (10%):
+                              </span>
+                              <span className="font-mono text-sonar-signal">
+                                -{discountLabel} SUI
+                              </span>
+                            </div>
+                            <div className="h-px bg-sonar-blue/20 my-2" />
+                          </>
+                        )}
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-sonar-highlight/70 font-semibold">
+                            Total Publication Fee:
+                          </span>
+                          <span className="font-mono font-bold text-sonar-signal text-lg">
+                            {totalFeeLabel} SUI
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-sonar-highlight/60 italic">
+                        Quality range: 0.5 SUI (basic) → 10 SUI (exceptional)
+                        per file
+                        {fileCount > 1 && " • Bundle: 10% discount applied"}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </GlassCard>
 
           {/* Publish Button - Absolute final action */}
           <div className="flex flex-col items-center space-y-4">
-            {publishState === "idle" && (
-              <SonarButton
-                variant="primary"
-                onClick={handlePublish}
-                disabled={publishDisabled}
-                className="w-full text-lg py-4"
-              >
-                Pay {UPLOAD_FEE_LABEL} & Publish to Blockchain
-              </SonarButton>
-            )}
+            {publishState === "idle" &&
+              (() => {
+                const qualityScore = verification.qualityScore
+                  ? verification.qualityScore * 100
+                  : 50;
+                const pricePerFileMist = calculateFilePriceMist(qualityScore);
+                const fileCount = walrusUpload.files?.length || 1;
+                const totalFeeMist = pricePerFileMist * fileCount;
+                const totalFeeLabel = formatMistToSui(totalFeeMist);
+
+                return (
+                  <SonarButton
+                    variant="primary"
+                    onClick={handlePublish}
+                    disabled={publishDisabled}
+                    className="w-full text-lg py-4"
+                  >
+                    Pay {totalFeeLabel} SUI & Publish to Blockchain
+                  </SonarButton>
+                );
+              })()}
 
             {(publishState === "signing" ||
               publishState === "broadcasting" ||
               publishState === "confirming") && (
-              <GlassCard className="w-full bg-sonar-signal/10 border border-sonar-signal">
-                <div className="flex items-center space-x-4">
-                  <Loader2 className="w-6 h-6 text-sonar-signal animate-spin" />
-                  <div className="flex-1">
-                    <p className="font-mono font-semibold text-sonar-highlight-bright">
-                      {publishState === "signing" &&
-                        "Waiting for wallet signature..."}
-                      {publishState === "broadcasting" &&
-                        "Broadcasting transaction..."}
-                      {publishState === "confirming" &&
-                        "Confirming on blockchain..."}
-                    </p>
-                    <p className="text-xs text-sonar-highlight/70 mt-1">
-                      Please do not close this window
-                    </p>
+                <GlassCard className="w-full bg-sonar-signal/10 border border-sonar-signal">
+                  <div className="flex items-center space-x-4">
+                    <Loader2 className="w-6 h-6 text-sonar-signal animate-spin" />
+                    <div className="flex-1">
+                      <p className="font-mono font-semibold text-sonar-highlight-bright">
+                        {publishState === "signing" &&
+                          "Waiting for wallet signature..."}
+                        {publishState === "broadcasting" &&
+                          "Broadcasting transaction..."}
+                        {publishState === "confirming" &&
+                          "Confirming on blockchain..."}
+                      </p>
+                      <p className="text-xs text-sonar-highlight/70 mt-1">
+                        Please do not close this window
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </GlassCard>
-            )}
+                </GlassCard>
+              )}
 
             {/* What happens after publishing */}
             {publishState === "idle" && (

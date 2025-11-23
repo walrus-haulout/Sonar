@@ -153,6 +153,13 @@ export async function POST(request: NextRequest) {
 
       const errorDetails =
         parsedError?.error || parsedError?.details || errorText;
+
+      // Extract response headers for debugging
+      const responseHeaders: Record<string, string> = {};
+      uploadResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
       console.error("[Walrus Upload] Failed:", {
         status: uploadResponse.status,
         statusText: uploadResponse.statusText,
@@ -160,12 +167,16 @@ export async function POST(request: NextRequest) {
         fullResponse: parsedError || errorText,
         walrusUrl: walrusUrl.split("?")[0],
         hasBlockberryKey: !!BLOCKBERRY_API_KEY,
+        responseHeaders,
+        fileSize: file.size,
+        fileSizeMB: (file.size / (1024 * 1024)).toFixed(2),
       });
 
       return NextResponse.json(
         {
           error: "Failed to upload to Walrus",
           details: errorDetails,
+          status: uploadResponse.status,
         },
         { status: uploadResponse.status },
       );
@@ -224,13 +235,26 @@ export async function POST(request: NextRequest) {
       ...(metadata && { metadata }), // Include metadata if provided
     });
   } catch (error) {
-    console.error("[Walrus Upload] Error:", error);
+    const isTimeout = error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message.includes('aborted') ||
+        error.message.includes('timeout'));
+
+    console.error("[Walrus Upload] Error:", {
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'unknown',
+      isTimeout,
+    });
+
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: isTimeout
+          ? "Upload timeout - file may be too large or network is slow"
+          : "Internal server error",
         message: error instanceof Error ? error.message : "Unknown error",
+        isTimeout,
       },
-      { status: 500 },
+      { status: isTimeout ? 504 : 500 },
     );
   }
 }
