@@ -474,7 +474,7 @@ export function VerificationStep({
       });
 
       console.log("[VerificationStep] Session obtained (cached or new)");
-      setSessionKeyExport(exported);
+      setSessionKeyExport(exported); // Set early for UI state
       setIsCreatingSession(false);
       setIsConfirmingSession(true);
       isAuthorizingRef.current = false;
@@ -495,8 +495,8 @@ export function VerificationStep({
       setVerificationState("running");
       addLog("VERIFY", "Starting AI verification pipeline", "progress");
 
-      // Start verification with session data
-      startVerification();
+      // Start verification with session data - pass exported directly to avoid race condition
+      startVerificationWithSession(exported);
     } catch (error) {
       console.error("[VerificationStep] Failed to create session:", error);
       const errorMsg = getErrorMessage(error);
@@ -524,13 +524,20 @@ export function VerificationStep({
     }
   };
 
-  const startVerification = async () => {
-    console.log("[VerificationStep] 🔍 DEBUG - startVerification called:", {
+  /**
+   * Start verification with explicit session export parameter
+   * This avoids race condition with React state updates
+   */
+  const startVerificationWithSession = async (sessionExport?: any) => {
+    const exportToUse = sessionExport || sessionKeyExport;
+    
+    console.log("[VerificationStep] 🔍 DEBUG - startVerificationWithSession called:", {
       isVerifyingRefValue: isVerifyingRef.current,
       verificationState,
       hasExistingVerification: !!existingVerification,
       existingVerificationState: existingVerification?.state,
-      hasSessionKeyExport: !!sessionKeyExport,
+      hasSessionKeyExport: !!exportToUse,
+      sessionExportProvided: !!sessionExport,
       timestamp: new Date().toISOString(),
     });
 
@@ -577,7 +584,7 @@ export function VerificationStep({
     setErrorDetails(null);
     setWarnings([]);
 
-    if (!sessionKeyExport) {
+    if (!exportToUse) {
       console.error("[VerificationStep] ❌ No session key export available");
       addLog("ERROR", "Session expired - re-authorization needed", "error");
       setErrorMessage("Session expired. Please authorize again.");
@@ -588,6 +595,31 @@ export function VerificationStep({
     
     console.log("[VerificationStep] ✅ Session key export validated, proceeding with verification");
     addLog("VERIFY", "Session validated, preparing verification request", "progress");
+
+    // Continue with existing verification logic using exportToUse instead of sessionKeyExport
+    await verifyWithSession(exportToUse);
+  };
+
+  /**
+   * Legacy wrapper for backward compatibility
+   */
+  const startVerification = async () => {
+    console.log("[VerificationStep] 🔍 DEBUG - startVerification called:", {
+      isVerifyingRefValue: isVerifyingRef.current,
+      verificationState,
+      hasExistingVerification: !!existingVerification,
+      existingVerificationState: existingVerification?.state,
+      hasSessionKeyExport: !!sessionKeyExport,
+      timestamp: new Date().toISOString(),
+    });
+    
+    return startVerificationWithSession(sessionKeyExport);
+  };
+
+  /**
+   * Core verification logic extracted from startVerification
+   */
+  const verifyWithSession = async (sessionExport: any) => {
 
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(
@@ -624,7 +656,7 @@ export function VerificationStep({
       setTotalFiles(1);
       setCurrentFileIndex(0);
 
-      await verifyEncryptedBlob(blobId, identity);
+      await verifyEncryptedBlob(blobId, identity, sessionExport);
     } else {
       // Legacy file upload flow (for backwards compatibility)
       if (!audioFile && (!audioFiles || audioFiles.length === 0)) {
@@ -729,9 +761,11 @@ export function VerificationStep({
   const verifyEncryptedBlob = async (
     walrusBlobId: string,
     sealIdentity: string,
+    sessionExport?: any,
   ) => {
     try {
-      if (!sessionKeyExport) {
+      const exportToUse = sessionExport || sessionKeyExport;
+      if (!exportToUse) {
         throw new Error(
           "No active session. Please authorize verification first.",
         );
@@ -756,7 +790,7 @@ export function VerificationStep({
 
       // Validate and inject keyServers + threshold into session payload
       // Priority: session export > config > empty fallback
-      let keyServers = sessionKeyExport.keyServers;
+      let keyServers = exportToUse.keyServers;
       if (
         !keyServers ||
         !Array.isArray(keyServers) ||
@@ -780,8 +814,8 @@ export function VerificationStep({
         return;
       }
 
-      const threshold = sessionKeyExport.threshold ?? configThreshold ?? 4;
-      const sessionPayload = { ...sessionKeyExport, keyServers, threshold };
+      const threshold = exportToUse.threshold ?? configThreshold ?? 4;
+      const sessionPayload = { ...exportToUse, keyServers, threshold };
 
       // Stringify with Uint8Array replacer - converts Uint8Array to arrays
       let sessionKeyJson: string;

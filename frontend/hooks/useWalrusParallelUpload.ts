@@ -25,7 +25,7 @@ const MAX_UPLOAD_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
  * Blob IDs should be base64url encoded strings (typically 43-44 characters)
  */
 function isValidBlobId(blobId: string | undefined): boolean {
-  if (!blobId || typeof blobId !== 'string') {
+  if (!blobId || typeof blobId !== "string") {
     return false;
   }
 
@@ -42,11 +42,11 @@ export interface WalrusUploadProgress {
   fileProgress: number; // 0-100
   totalProgress: number; // 0-100
   stage:
-  | "encrypting"
-  | "uploading"
-  | "registering"
-  | "finalizing"
-  | "completed";
+    | "encrypting"
+    | "uploading"
+    | "registering"
+    | "finalizing"
+    | "completed";
   currentRetry?: number; // Current retry attempt (1-10)
   maxRetries?: number; // Max retry attempts
 }
@@ -154,9 +154,10 @@ export function useWalrusParallelUpload() {
       maxRetries: number = 10,
     ): Promise<{ response: Response; attempt: number }> => {
       let lastError: Error | null = null;
-      const fileName = formData.get("file") instanceof File
-        ? (formData.get("file") as File).name
-        : "unknown";
+      const fileName =
+        formData.get("file") instanceof File
+          ? (formData.get("file") as File).name
+          : "unknown";
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -205,7 +206,10 @@ export function useWalrusParallelUpload() {
           // Non-200 response, retry if not the last attempt
           if (attempt < maxRetries) {
             const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-            console.log(`[Upload] Retrying in ${delayMs}ms...`, { fileName, attempt });
+            console.log(`[Upload] Retrying in ${delayMs}ms...`, {
+              fileName,
+              attempt,
+            });
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             continue;
           }
@@ -213,7 +217,8 @@ export function useWalrusParallelUpload() {
           return { response, attempt };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
-          const isTimeout = lastError.message.includes("timeout") ||
+          const isTimeout =
+            lastError.message.includes("timeout") ||
             lastError.message.includes("aborted");
 
           console.error(
@@ -230,14 +235,17 @@ export function useWalrusParallelUpload() {
           // If last attempt, throw error with context
           if (attempt === maxRetries) {
             const contextualError = new Error(
-              `Upload failed after ${maxRetries} attempts: ${lastError.message}${isTimeout ? " (timeout)" : ""}`
+              `Upload failed after ${maxRetries} attempts: ${lastError.message}${isTimeout ? " (timeout)" : ""}`,
             );
             throw contextualError;
           }
 
           // Retry with progressive delay
           const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-          console.log(`[Upload] Retrying in ${delayMs}ms...`, { fileName, attempt });
+          console.log(`[Upload] Retrying in ${delayMs}ms...`, {
+            fileName,
+            attempt,
+          });
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
@@ -318,7 +326,7 @@ export function useWalrusParallelUpload() {
 
       // Validate blob ID format
       if (!isValidBlobId(blobId)) {
-        console.error('[Upload] Invalid blob ID received from Walrus:', {
+        console.error("[Upload] Invalid blob ID received from Walrus:", {
           blobId,
           blobIdType: typeof blobId,
           blobIdLength: blobId?.length,
@@ -326,7 +334,7 @@ export function useWalrusParallelUpload() {
         });
         throw new Error(
           `Invalid blob ID received from Walrus: "${blobId}". ` +
-          `Expected base64url encoded string. Upload may have failed.`
+            `Expected base64url encoded string. Upload may have failed.`,
         );
       }
 
@@ -406,8 +414,7 @@ export function useWalrusParallelUpload() {
             previewDeletable = previewResult.deletable;
             previewSize = previewResult.size || previewBlob.size;
 
-            console.log("[Upload] Preview blob uploaded:", {
-              blobId: finalPreviewBlobId,
+            console.log("[Upload] Preview blob uploaded:", finalPreviewBlobId, {
               storageId: previewStorageId,
               encodingType: previewEncodingType,
               size: previewSize,
@@ -427,14 +434,19 @@ export function useWalrusParallelUpload() {
         }
       }
 
-      console.log("[Upload] HTTP upload complete:", {
-        mainBlobId: blobId,
-        mainEncodingType: encodingType,
-        mainSize: encryptedBlob.size,
-        previewBlobId: finalPreviewBlobId,
-        previewEncodingType,
-        previewSize,
-      });
+      console.log("[Upload] HTTP upload complete:");
+      console.log(
+        "  Main blob:",
+        blobId,
+        `(${encryptedBlob.size} bytes, ${encodingType})`,
+      );
+      console.log(
+        "  Preview blob:",
+        finalPreviewBlobId || "none",
+        finalPreviewBlobId
+          ? `(${previewSize} bytes, ${previewEncodingType})`
+          : "",
+      );
 
       return {
         blobId,

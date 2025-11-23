@@ -1,15 +1,19 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Lock, Upload, Shield, CheckCircle, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { AudioFile, EncryptionResult, FileUploadResult } from '@/lib/types/upload';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { useSealEncryption } from '@/hooks/useSeal';
-import { useWalrusParallelUpload } from '@/hooks/useWalrusParallelUpload';
-import { CHAIN_CONFIG } from '@/lib/sui/client';
-import { bytesToHex } from '@sonar/seal';
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Lock, Upload, Shield, CheckCircle, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  AudioFile,
+  EncryptionResult,
+  FileUploadResult,
+} from "@/lib/types/upload";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { useSealEncryption } from "@/hooks/useSeal";
+import { useWalrusParallelUpload } from "@/hooks/useWalrusParallelUpload";
+import { CHAIN_CONFIG } from "@/lib/sui/client";
+import { bytesToHex } from "@sonar/seal";
 
 /**
  * Generate preview blob from audio file
@@ -20,7 +24,8 @@ async function generatePreviewBlob(audioFile: AudioFile): Promise<Blob> {
   // For now, just return a small portion of the original file
   const chunkSize = Math.min(audioFile.file.size, 1024 * 1024); // 1MB max
   const snippet = audioFile.file.slice(0, chunkSize);
-  const resolvedType = audioFile.mimeType || audioFile.file.type || 'application/octet-stream';
+  const resolvedType =
+    audioFile.mimeType || audioFile.file.type || "application/octet-stream";
   return new Blob([snippet], {
     type: resolvedType,
   });
@@ -29,16 +34,24 @@ async function generatePreviewBlob(audioFile: AudioFile): Promise<Blob> {
 interface EncryptionStepProps {
   audioFile: AudioFile; // Backwards compatibility (single file)
   audioFiles?: AudioFile[]; // Multi-file support
-  onEncrypted: (result: EncryptionResult & {
-    walrusBlobId: string;
-    previewBlobId?: string;
-    files?: FileUploadResult[]; // Per-file results for multi-file
-    bundleDiscountBps?: number;
-  }) => void;
+  onEncrypted: (
+    result: EncryptionResult & {
+      walrusBlobId: string;
+      previewBlobId?: string;
+      files?: FileUploadResult[]; // Per-file results for multi-file
+      bundleDiscountBps?: number;
+    },
+  ) => void;
   onError: (error: string) => void;
 }
 
-type EncryptionStage = 'encrypting' | 'generating-preview' | 'uploading-walrus' | 'registering' | 'finalizing' | 'completed';
+type EncryptionStage =
+  | "encrypting"
+  | "generating-preview"
+  | "uploading-walrus"
+  | "registering"
+  | "finalizing"
+  | "completed";
 
 /**
  * EncryptionStep Component
@@ -53,7 +66,7 @@ export function EncryptionStep({
   const filesToProcess = audioFiles.length > 0 ? audioFiles : [audioFile];
   const isMultiFile = audioFiles.length > 0;
 
-  const [stage, setStage] = useState<EncryptionStage>('encrypting');
+  const [stage, setStage] = useState<EncryptionStage>("encrypting");
   const [progress, setProgress] = useState(0);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [completedFiles, setCompletedFiles] = useState<FileUploadResult[]>([]);
@@ -63,8 +76,8 @@ export function EncryptionStep({
   const { uploadBlob, progress: uploadProgress } = useWalrusParallelUpload();
 
   const addLog = (message: string) => {
-    console.log('[EncryptionStep]', message);
-    setLogs(prev => [...prev, message]);
+    console.log("[EncryptionStep]", message);
+    setLogs((prev) => [...prev, message]);
   };
 
   useEffect(() => {
@@ -79,50 +92,56 @@ export function EncryptionStep({
     }
   }, [sealError]);
 
-
   // Prevent tab close/refresh during upload
   useEffect(() => {
-    const isUploading = stage !== 'completed' && progress > 0;
+    const isUploading = stage !== "completed" && progress > 0;
 
     if (!isUploading) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = ''; // Chrome requires returnValue to be set
+      e.returnValue = ""; // Chrome requires returnValue to be set
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [stage, progress]);
 
   // Sync stage with upload progress
   useEffect(() => {
-    if (uploadProgress.stage === 'registering') {
-      setStage('registering');
+    if (uploadProgress.stage === "registering") {
+      setStage("registering");
     }
   }, [uploadProgress.stage]);
 
   const performEncryptionAndUpload = async () => {
     try {
       const totalFiles = filesToProcess.length;
-      setStage('encrypting');
+      setStage("encrypting");
       setProgress(0);
       setLogs([]);
 
-      addLog(`Starting upload flow for ${totalFiles} file${totalFiles > 1 ? 's' : ''}`);
+      addLog(
+        `Starting upload flow for ${totalFiles} file${totalFiles > 1 ? "s" : ""}`,
+      );
 
       // Check for pending uploads (Recovery Flow)
       try {
-        const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
-        const allFilesUploaded = filesToProcess.every(f =>
-          pending[f.id!] && pending[f.id!].status === 'uploaded' && pending[f.id!].walrusBlobId
+        const pending = JSON.parse(
+          localStorage.getItem("pending_uploads") || "{}",
+        );
+        const allFilesUploaded = filesToProcess.every(
+          (f) =>
+            pending[f.id!] &&
+            pending[f.id!].status === "uploaded" &&
+            pending[f.id!].walrusBlobId,
         );
 
         if (allFilesUploaded) {
-          addLog('Found previously uploaded files. Resuming recovery flow...');
+          addLog("Found previously uploaded files. Resuming recovery flow...");
 
           const results = filesToProcess.map((f, index) => {
             const p = pending[f.id!];
@@ -132,7 +151,7 @@ export function EncryptionStep({
               blobId: p.walrusBlobId,
               previewBlobId: p.previewBlobId,
               seal_policy_id: p.sealPolicyId,
-              encryptedObjectBcsHex: p.encryptedObjectBcsHex || '',
+              encryptedObjectBcsHex: p.encryptedObjectBcsHex || "",
               duration: p.duration,
               metadata: p.metadata,
               encryptedData: new Uint8Array(0), // Data not needed for verification (fetches from Walrus)
@@ -142,12 +161,13 @@ export function EncryptionStep({
           });
 
           setCompletedFiles(results);
-          setStage('finalizing');
+          setStage("finalizing");
           setProgress(100);
 
           // Prepare final result immediately
           const result = results[0];
-          const bundleDiscountBps = totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
+          const bundleDiscountBps =
+            totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
 
           const finalResult = {
             encryptedBlob: new Blob([]), // Empty blob as we don't have data
@@ -163,45 +183,49 @@ export function EncryptionStep({
             previewMimeType: result.previewMimeType,
           };
 
-          addLog('Resumed successfully from local storage');
+          addLog("Resumed successfully from local storage");
           setTimeout(() => {
             onEncrypted(finalResult);
           }, 500);
           return;
         }
       } catch (e) {
-        console.warn('Failed to check pending uploads:', e);
+        console.warn("Failed to check pending uploads:", e);
       }
 
       // Step 1: Determine file size and strategy
       const totalSize = filesToProcess.reduce((sum, f) => sum + f.file.size, 0);
-      const strategy = 'Blockberry HTTP API';
+      const strategy = "Blockberry HTTP API";
       addLog(`Total file size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
       addLog(`Upload strategy: ${strategy}`);
 
       // Step 2: Process files in parallel
       const filePromises = filesToProcess.map(async (file, index) => {
-        addLog(`[File ${index + 1}/${totalFiles}] Starting encryption: ${file.file.name}`);
+        addLog(
+          `[File ${index + 1}/${totalFiles}] Starting encryption: ${file.file.name}`,
+        );
 
         // Track pending upload for recovery
         try {
-          const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
+          const pending = JSON.parse(
+            localStorage.getItem("pending_uploads") || "{}",
+          );
           pending[file.id!] = {
             fileName: file.file.name,
             fileSize: file.file.size,
             timestamp: Date.now(),
-            status: 'encrypting',
+            status: "encrypting",
           };
-          localStorage.setItem('pending_uploads', JSON.stringify(pending));
+          localStorage.setItem("pending_uploads", JSON.stringify(pending));
         } catch (e) {
-          console.error('Failed to save pending upload:', e);
+          console.error("Failed to save pending upload:", e);
         }
 
         // Encrypt
         const encryptionResult = await encrypt(
           file.file,
           {
-            accessPolicy: 'purchase',
+            accessPolicy: "purchase",
             packageId: CHAIN_CONFIG.packageId ?? undefined,
             useEnvelope: true, // Force envelope encryption for all files to keep encrypted object small
           },
@@ -209,12 +233,16 @@ export function EncryptionStep({
             const fileProgress = (index + progressPercent / 100) / totalFiles;
             setProgress(Math.min(fileProgress * 40, 40)); // 0-40% for encryption
             if (progressPercent % 25 === 0) {
-              addLog(`[File ${index + 1}/${totalFiles}] Encryption progress: ${progressPercent}%`);
+              addLog(
+                `[File ${index + 1}/${totalFiles}] Encryption progress: ${progressPercent}%`,
+              );
             }
-          }
+          },
         );
 
-        addLog(`[File ${index + 1}/${totalFiles}] Encryption complete - Policy ID: ${encryptionResult.identity.slice(0, 20)}...`);
+        addLog(
+          `[File ${index + 1}/${totalFiles}] Encryption complete - Policy ID: ${encryptionResult.identity.slice(0, 20)}...`,
+        );
 
         // Extract encrypted object BCS hex for verifier
         // For envelope encryption, extract sealed key from envelope
@@ -228,7 +256,7 @@ export function EncryptionStep({
           const keyLengthView = new DataView(
             encryptionResult.encryptedData.buffer,
             encryptionResult.encryptedData.byteOffset,
-            4
+            4,
           );
           const sealedKeyLength = keyLengthView.getUint32(0, true); // little-endian
 
@@ -237,45 +265,58 @@ export function EncryptionStep({
           // Minimum: ~150 bytes (2 servers), Maximum: ~800 bytes (7+ servers)
           if (sealedKeyLength < 150 || sealedKeyLength > 800) {
             addLog(
-              `[File ${index + 1}/${totalFiles}] WARNING: Unexpected sealed key length: ${sealedKeyLength} (expected 150-800 for 2-7 key servers)`
+              `[File ${index + 1}/${totalFiles}] WARNING: Unexpected sealed key length: ${sealedKeyLength} (expected 150-800 for 2-7 key servers)`,
             );
           }
 
-          const sealedKey = encryptionResult.encryptedData.slice(4, 4 + sealedKeyLength);
+          const sealedKey = encryptionResult.encryptedData.slice(
+            4,
+            4 + sealedKeyLength,
+          );
           addLog(
-            `[File ${index + 1}/${totalFiles}] Envelope extracted: keyLength=${sealedKeyLength}, totalSize=${encryptionResult.encryptedData.length}`
+            `[File ${index + 1}/${totalFiles}] Envelope extracted: keyLength=${sealedKeyLength}, totalSize=${encryptionResult.encryptedData.length}`,
           );
         }
 
         // Create BCS-compatible encrypted object
         // For envelope encryption, we only need the sealed key (which is the encrypted object)
         // This is small (~200-800 bytes) and safe to pass around.
-        let encryptedObjectBcsHex = '';
+        let encryptedObjectBcsHex = "";
 
         if (encryptionResult.metadata.isEnvelope) {
           const keyLengthView = new DataView(
             encryptionResult.encryptedData.buffer,
             encryptionResult.encryptedData.byteOffset,
-            4
+            4,
           );
           const sealedKeyLength = keyLengthView.getUint32(0, true);
-          const sealedKey = encryptionResult.encryptedData.slice(4, 4 + sealedKeyLength);
+          const sealedKey = encryptionResult.encryptedData.slice(
+            4,
+            4 + sealedKeyLength,
+          );
           encryptedObjectBcsHex = bytesToHex(sealedKey);
 
-          addLog(`[File ${index + 1}/${totalFiles}] Extracted sealed key for verification (${sealedKey.length} bytes)`);
+          addLog(
+            `[File ${index + 1}/${totalFiles}] Extracted sealed key for verification (${sealedKey.length} bytes)`,
+          );
         } else {
           // Fallback for non-envelope (should not happen with current config)
           // We don't want to send the whole file as hex
-          console.warn('Non-envelope encryption detected, skipping encryptedObjectBcsHex');
+          console.warn(
+            "Non-envelope encryption detected, skipping encryptedObjectBcsHex",
+          );
         }
 
         // Generate preview
-        setStage('generating-preview');
+        setStage("generating-preview");
         const previewBlob = await generatePreviewBlob(file);
-        addLog(`[File ${index + 1}/${totalFiles}] Preview generated (${(previewBlob.size / 1024).toFixed(2)} KB)`);
+        addLog(
+          `[File ${index + 1}/${totalFiles}] Preview generated (${(previewBlob.size / 1024).toFixed(2)} KB)`,
+        );
 
-        const resolvedMimeType = file.mimeType || file.file.type || '';
-        const previewMimeType = previewBlob.type || resolvedMimeType || undefined;
+        const resolvedMimeType = file.mimeType || file.file.type || "";
+        const previewMimeType =
+          previewBlob.type || resolvedMimeType || undefined;
         const metadataWithMime = {
           ...encryptionResult.metadata,
           originalMimeType: resolvedMimeType,
@@ -283,10 +324,14 @@ export function EncryptionStep({
         };
 
         // Step 3: Upload to Walrus using parallel upload hook
-        setStage('uploading-walrus');
-        addLog(`[File ${index + 1}/${totalFiles}] Uploading to Walrus via ${strategy}... (Attempt ${uploadProgress.currentRetry ?? 1}/${uploadProgress.maxRetries ?? 10})`);
+        setStage("uploading-walrus");
+        addLog(
+          `[File ${index + 1}/${totalFiles}] Uploading to Walrus via ${strategy}... (Attempt ${uploadProgress.currentRetry ?? 1}/${uploadProgress.maxRetries ?? 10})`,
+        );
 
-        const encryptedBlob = new Blob([new Uint8Array(encryptionResult.encryptedData)]);
+        const encryptedBlob = new Blob([
+          new Uint8Array(encryptionResult.encryptedData),
+        ]);
         try {
           const walrusResult = await uploadBlob(
             encryptedBlob,
@@ -296,34 +341,43 @@ export function EncryptionStep({
               previewBlob,
               previewMimeType,
               mimeType: resolvedMimeType,
-            }
+            },
           );
 
-          addLog(`[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`);
-
-        // Update pending upload with blob ID
-        try {
-          const pending = JSON.parse(localStorage.getItem('pending_uploads') || '{}');
-          if (pending[file.id!]) {
-            pending[file.id!] = {
-              ...pending[file.id!],
-              status: 'uploaded',
-              walrusBlobId: walrusResult.blobId,
-              previewBlobId: walrusResult.previewBlobId,
-              sealPolicyId: encryptionResult.identity,
-              encryptedObjectBcsHex, // Save for verification
-              duration: file.duration,
-              // Store minimal metadata needed for registration
-              metadata: {
-                originalMimeType: resolvedMimeType,
-                originalFileName: file.file.name,
-              }
-            };
-            localStorage.setItem('pending_uploads', JSON.stringify(pending));
+          addLog(
+            `[File ${index + 1}/${totalFiles}] Upload complete - Blob ID: ${walrusResult.blobId}`,
+          );
+          if (walrusResult.previewBlobId) {
+            addLog(
+              `[File ${index + 1}/${totalFiles}] Preview Blob ID: ${walrusResult.previewBlobId}`,
+            );
           }
-        } catch (e) {
-          console.error('Failed to update pending upload:', e);
-        }
+
+          // Update pending upload with blob ID
+          try {
+            const pending = JSON.parse(
+              localStorage.getItem("pending_uploads") || "{}",
+            );
+            if (pending[file.id!]) {
+              pending[file.id!] = {
+                ...pending[file.id!],
+                status: "uploaded",
+                walrusBlobId: walrusResult.blobId,
+                previewBlobId: walrusResult.previewBlobId,
+                sealPolicyId: encryptionResult.identity,
+                encryptedObjectBcsHex, // Save for verification
+                duration: file.duration,
+                // Store minimal metadata needed for registration
+                metadata: {
+                  originalMimeType: resolvedMimeType,
+                  originalFileName: file.file.name,
+                },
+              };
+              localStorage.setItem("pending_uploads", JSON.stringify(pending));
+            }
+          } catch (e) {
+            console.error("Failed to update pending upload:", e);
+          }
 
           const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
           setProgress(40 + completedProgress);
@@ -343,9 +397,13 @@ export function EncryptionStep({
           };
         } catch (uploadError) {
           // Re-throw with context for better error messaging
-          const isPreviewError = uploadError instanceof Error && uploadError.message.includes('Preview upload failed');
+          const isPreviewError =
+            uploadError instanceof Error &&
+            uploadError.message.includes("Preview upload failed");
           if (isPreviewError) {
-            addLog(`[File ${index + 1}/${totalFiles}] CRITICAL: Preview upload failed - upload cannot proceed. ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
+            addLog(
+              `[File ${index + 1}/${totalFiles}] CRITICAL: Preview upload failed - upload cannot proceed. ${uploadError instanceof Error ? uploadError.message : "Unknown error"}`,
+            );
           }
           throw uploadError;
         }
@@ -355,15 +413,16 @@ export function EncryptionStep({
       setCompletedFiles(results);
 
       // Step 4: Finalize
-      setStage('finalizing');
+      setStage("finalizing");
       setProgress(90);
-      addLog('Finalizing upload...');
+      addLog("Finalizing upload...");
       await new Promise((resolve) => setTimeout(resolve, 500));
       setProgress(100);
 
       // Prepare final result
       const result = results[0];
-      const bundleDiscountBps = totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
+      const bundleDiscountBps =
+        totalFiles >= 6 ? 2000 : totalFiles >= 2 ? 1000 : 0;
 
       const finalResult = {
         encryptedBlob: new Blob([new Uint8Array(result.encryptedData)]),
@@ -379,51 +438,55 @@ export function EncryptionStep({
         previewMimeType: result.previewMimeType,
       };
 
-      setStage('completed');
-      addLog('SUCCESS! Upload flow completed');
+      setStage("completed");
+      addLog("SUCCESS! Upload flow completed");
 
       setTimeout(() => {
         onEncrypted(finalResult);
       }, 1000);
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Encryption or upload failed';
-      console.error('Encryption or upload failed:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Encryption or upload failed";
+      console.error("Encryption or upload failed:", error);
       addLog(`ERROR: ${errorMessage}`);
       onError(errorMessage);
     }
   };
 
-  const stages: Array<{ key: EncryptionStage; label: string; icon: React.ReactNode }> = [
+  const stages: Array<{
+    key: EncryptionStage;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
     {
-      key: 'encrypting',
-      label: 'Encrypting with Mysten Seal',
+      key: "encrypting",
+      label: "Encrypting with Mysten Seal",
       icon: <Lock className="w-5 h-5" />,
     },
     {
-      key: 'generating-preview',
-      label: 'Generating Preview',
+      key: "generating-preview",
+      label: "Generating Preview",
       icon: <Shield className="w-5 h-5" />,
     },
     {
-      key: 'uploading-walrus',
-      label: 'Uploading to Walrus',
+      key: "uploading-walrus",
+      label: "Uploading to Walrus",
       icon: <Upload className="w-5 h-5" />,
     },
     {
-      key: 'registering',
-      label: 'Registering on-chain',
+      key: "registering",
+      label: "Registering on-chain",
       icon: <Shield className="w-5 h-5" />,
     },
     {
-      key: 'finalizing',
-      label: 'Finalizing',
+      key: "finalizing",
+      label: "Finalizing",
       icon: <CheckCircle className="w-5 h-5" />,
     },
   ];
 
   const currentStageIndex = stages.findIndex((s) => s.key === stage);
-  const isUploading = stage !== 'completed' && progress > 0;
+  const isUploading = stage !== "completed" && progress > 0;
 
   return (
     <div className="space-y-6">
@@ -433,9 +496,9 @@ export function EncryptionStep({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className={cn(
-            'p-4 rounded-sonar',
-            'bg-sonar-coral/10 border-2 border-sonar-coral',
-            'flex items-start space-x-3'
+            "p-4 rounded-sonar",
+            "bg-sonar-coral/10 border-2 border-sonar-coral",
+            "flex items-start space-x-3",
           )}
         >
           <AlertTriangle className="w-5 h-5 text-sonar-coral mt-0.5 flex-shrink-0" />
@@ -444,8 +507,8 @@ export function EncryptionStep({
               Do Not Close This Tab
             </p>
             <p className="text-sm text-sonar-highlight/80">
-              Your upload is in progress. Closing or refreshing this browser tab will
-              interrupt the upload process and you'll need to start over.
+              Your upload is in progress. Closing or refreshing this browser tab
+              will interrupt the upload process and you'll need to start over.
             </p>
           </div>
         </motion.div>
@@ -479,7 +542,7 @@ export function EncryptionStep({
               className="text-sonar-signal"
               initial={{ strokeDashoffset: 552.92 }}
               animate={{ strokeDashoffset: 552.92 * (1 - progress / 100) }}
-              transition={{ duration: 0.5, ease: 'easeInOut' }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
             />
           </svg>
 
@@ -548,18 +611,19 @@ export function EncryptionStep({
             >
               <GlassCard
                 className={cn(
-                  'transition-all duration-300',
-                  isCurrent && 'bg-sonar-signal/10 border border-sonar-signal',
-                  isCompleted && 'opacity-70'
+                  "transition-all duration-300",
+                  isCurrent && "bg-sonar-signal/10 border border-sonar-signal",
+                  isCompleted && "opacity-70",
                 )}
               >
                 <div className="flex items-center space-x-4">
                   <div
                     className={cn(
-                      'p-3 rounded-sonar transition-colors',
-                      isCompleted && 'bg-sonar-signal/20 text-sonar-signal',
-                      isCurrent && 'bg-sonar-signal/30 text-sonar-signal animate-pulse',
-                      isPending && 'bg-sonar-blue/10 text-sonar-blue/50'
+                      "p-3 rounded-sonar transition-colors",
+                      isCompleted && "bg-sonar-signal/20 text-sonar-signal",
+                      isCurrent &&
+                        "bg-sonar-signal/30 text-sonar-signal animate-pulse",
+                      isPending && "bg-sonar-blue/10 text-sonar-blue/50",
                     )}
                   >
                     {isCompleted ? (
@@ -572,10 +636,10 @@ export function EncryptionStep({
                   <div className="flex-1">
                     <p
                       className={cn(
-                        'font-mono font-semibold',
-                        isCompleted && 'text-sonar-highlight/70',
-                        isCurrent && 'text-sonar-highlight-bright',
-                        isPending && 'text-sonar-highlight/50'
+                        "font-mono font-semibold",
+                        isCompleted && "text-sonar-highlight/70",
+                        isCurrent && "text-sonar-highlight-bright",
+                        isPending && "text-sonar-highlight/50",
                       )}
                     >
                       {stageInfo.label}
@@ -610,11 +674,13 @@ export function EncryptionStep({
               Your audio is being encrypted client-side using Mysten Seal. The
               encrypted data is then uploaded to Walrus decentralized storage.
               Only you control the decryption keys.
-              {isMultiFile && ' Multiple files are processed in parallel for faster uploads.'}
+              {isMultiFile &&
+                " Multiple files are processed in parallel for faster uploads."}
             </p>
             {uploadProgress.currentRetry && uploadProgress.currentRetry > 1 && (
               <p className="text-sonar-coral">
-                Retrying upload (Attempt {uploadProgress.currentRetry}/{uploadProgress.maxRetries})...
+                Retrying upload (Attempt {uploadProgress.currentRetry}/
+                {uploadProgress.maxRetries})...
               </p>
             )}
           </div>
