@@ -76,23 +76,32 @@ function encodingTypeToU8(encodingType: string | undefined): number {
 
 /**
  * Calculate storage size for Walrus blob reservation
- * Walrus erasure coding increases blob size by 4-5x
- * Using 5x as a safe multiplier to ensure sufficient storage
+ * Walrus erasure coding increases blob size by 4-5x depending on network configuration
+ * Using 6x as a safe multiplier to ensure sufficient storage and account for network overhead
  *
  * @param unencodedSize - Original blob size in bytes
- * @returns Storage size to reserve (5x original)
+ * @returns Storage size to reserve (6x original with safety margin)
  */
 function calculateWalrusStorageSize(unencodedSize: number): number {
-  // Walrus erasure coding overhead: 4-5x depending on sharding configuration
-  // Using 5x for safety to avoid EResourceSize errors
-  const WALRUS_ERASURE_OVERHEAD = 5;
+  // Walrus erasure coding overhead: 4-5x depending on sharding configuration (n_shards)
+  // The actual formula is complex and depends on:
+  // - encoding_type (RS2 = 1)
+  // - n_shards (network configuration)
+  // - symbol_size calculations
+  // 
+  // Using 6x multiplier with additional padding to avoid EResourceSize errors
+  // This ensures we always have enough storage regardless of network configuration
+  const WALRUS_ERASURE_OVERHEAD = 6;
+  const SAFETY_PADDING = 1.1; // 10% additional padding
 
-  const storageSize = Math.ceil(unencodedSize * WALRUS_ERASURE_OVERHEAD);
+  const storageSize = Math.ceil(
+    unencodedSize * WALRUS_ERASURE_OVERHEAD * SAFETY_PADDING,
+  );
 
   console.log("[Walrus] Storage size calculation:", {
     unencodedSize,
     storageSize,
-    overhead: WALRUS_ERASURE_OVERHEAD + "x",
+    overhead: `${WALRUS_ERASURE_OVERHEAD}x + ${((SAFETY_PADDING - 1) * 100).toFixed(0)}% padding`,
   });
 
   return storageSize;
