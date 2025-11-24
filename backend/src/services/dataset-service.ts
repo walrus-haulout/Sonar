@@ -515,10 +515,10 @@ export async function storeSealMetadata({
       quality_breakdown: verification?.quality_breakdown || null,
 
       // Additional metadata
-      per_file_metadata: metadata?.per_file_metadata || null,
-      audio_quality: metadata?.audio_quality || null,
-      speakers: metadata?.speakers || null,
-      categorization: metadata?.categorization || null,
+      per_file_metadata: metadata?.per_file_metadata ?? undefined,
+      audio_quality: metadata?.audio_quality ?? undefined,
+      speakers: metadata?.speakers ?? undefined,
+      categorization: metadata?.categorization ?? undefined,
 
       metadata_updated_at: new Date(),
       seal_policy_id: files[0]?.seal_policy_id,

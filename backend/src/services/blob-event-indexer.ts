@@ -167,14 +167,14 @@ export class BlobEventIndexer {
           bundle_discount_bps: 0,
           blockchain_synced_at: new Date(parseInt(timestampMs)),
           indexed_at: new Date(),
-          // Store metadata for reference
-          metadata: {
+          // Store reference data in existing JSON fields
+          per_file_metadata: [{
             blob_id: main_blob_id,
             preview_blob_id: preview_blob_id,
             seal_policy_id: seal_policy_id,
             tx_digest: id.txDigest,
             event_seq: id.eventSeq,
-          },
+          }],
         },
       });
 

@@ -108,27 +108,37 @@ export class BlockchainIndexer {
 
       const datasets: BlockchainDataset[] = [];
 
-      // Query AudioSubmission objects (single-file submissions)
-      const audioSubmissionsResponse = await suiClient.queryObjects({
-        filter: {
-          StructType: `${SONAR_PACKAGE_ID}::marketplace::AudioSubmission`,
+      // Query AudioSubmission creation events to find object IDs
+      // Note: SuiClient doesn't have queryObjects for StructType filtering
+      // We use event-based discovery instead
+      const audioEventsResponse = await suiClient.queryEvents({
+        query: {
+          MoveEventType: `${SONAR_PACKAGE_ID}::marketplace::AudioSubmissionCreated`,
         },
-        options: {
-          showContent: true,
-          showType: true,
-          showOwner: true,
-        },
-        cursor,
+        cursor: cursor ? { txDigest: cursor, eventSeq: '0' } : null,
         limit: 25,
+        order: 'descending',
       });
 
-      logger.info({ 
-        count: audioSubmissionsResponse.data.length,
-        hasNextPage: audioSubmissionsResponse.hasNextPage,
+      // Fetch objects for discovered IDs
+      const audioObjectIds = audioEventsResponse.data
+        .map((e: any) => e.parsedJson?.submission_id)
+        .filter(Boolean);
+
+      const audioSubmissions = audioObjectIds.length > 0
+        ? await suiClient.multiGetObjects({
+            ids: audioObjectIds,
+            options: { showContent: true, showType: true, showOwner: true },
+          })
+        : [];
+
+      logger.info({
+        count: audioSubmissions.length,
+        hasNextPage: audioEventsResponse.hasNextPage,
       }, 'Fetched AudioSubmission objects');
 
       // Process AudioSubmission objects
-      for (const obj of audioSubmissionsResponse.data) {
+      for (const obj of audioSubmissions) {
         try {
           if (obj.data?.content?.dataType === 'moveObject') {
             const fields = obj.data.content.fields as any;
@@ -156,27 +166,34 @@ export class BlockchainIndexer {
         }
       }
 
-      // Query DatasetSubmission objects (multi-file datasets)
-      const datasetSubmissionsResponse = await suiClient.queryObjects({
-        filter: {
-          StructType: `${SONAR_PACKAGE_ID}::marketplace::DatasetSubmission`,
+      // Query DatasetSubmission creation events to find object IDs
+      const datasetEventsResponse = await suiClient.queryEvents({
+        query: {
+          MoveEventType: `${SONAR_PACKAGE_ID}::marketplace::DatasetSubmissionCreated`,
         },
-        options: {
-          showContent: true,
-          showType: true,
-          showOwner: true,
-        },
-        cursor,
+        cursor: cursor ? { txDigest: cursor, eventSeq: '0' } : null,
         limit: 25,
+        order: 'descending',
       });
 
-      logger.info({ 
-        count: datasetSubmissionsResponse.data.length,
-        hasNextPage: datasetSubmissionsResponse.hasNextPage,
+      const datasetObjectIds = datasetEventsResponse.data
+        .map((e: any) => e.parsedJson?.submission_id)
+        .filter(Boolean);
+
+      const datasetSubmissions = datasetObjectIds.length > 0
+        ? await suiClient.multiGetObjects({
+            ids: datasetObjectIds,
+            options: { showContent: true, showType: true, showOwner: true },
+          })
+        : [];
+
+      logger.info({
+        count: datasetSubmissions.length,
+        hasNextPage: datasetEventsResponse.hasNextPage,
       }, 'Fetched DatasetSubmission objects');
 
       // Process DatasetSubmission objects
-      for (const obj of datasetSubmissionsResponse.data) {
+      for (const obj of datasetSubmissions) {
         try {
           if (obj.data?.content?.dataType === 'moveObject') {
             const fields = obj.data.content.fields as any;
@@ -208,8 +225,8 @@ export class BlockchainIndexer {
 
       return {
         datasets,
-        hasMore: audioSubmissionsResponse.hasNextPage || datasetSubmissionsResponse.hasNextPage,
-        nextCursor: audioSubmissionsResponse.nextCursor || datasetSubmissionsResponse.nextCursor,
+        hasMore: audioEventsResponse.hasNextPage || datasetEventsResponse.hasNextPage,
+        nextCursor: audioEventsResponse.nextCursor?.txDigest || datasetEventsResponse.nextCursor?.txDigest,
       };
     } catch (error) {
       logger.error({ error }, 'Failed to fetch datasets from blockchain');

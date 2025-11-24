@@ -87,7 +87,7 @@ async function semanticSearch(
     // Fetch full dataset details for results
     const datasetIds = results
       .map((r) => r.metadata?.dataset_id)
-      .filter((id) => id);
+      .filter((id): id is string => Boolean(id));
 
     let datasets: any[] = [];
     if (datasetIds.length > 0) {
@@ -326,7 +326,7 @@ async function findSimilarDatasets(
     // Fetch full dataset details
     const datasetIds = results
       .map((r) => r.metadata?.dataset_id)
-      .filter((id) => id && id !== dataset.id);
+      .filter((id): id is string => Boolean(id) && id !== dataset.id);
 
     let similarDatasets: any[] = [];
     if (datasetIds.length > 0) {
