@@ -17,7 +17,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '../lib/db';
-import { suiClient, DATASET_TYPE } from '../lib/sui/client';
+import { suiClient, SONAR_PACKAGE_ID } from '../lib/sui/client';
 import { logger } from '../lib/logger';
 
 interface BlockchainDataset {
@@ -88,7 +88,12 @@ export class BlockchainIndexer {
   }
 
   /**
-   * Fetch all datasets from blockchain via RPC
+   * Fetch all datasets from blockchain via type-based query
+   * 
+   * Strategy: Query all AudioSubmission and DatasetSubmission objects by StructType,
+   * regardless of owner. AudioSubmission/DatasetSubmission objects are owned by the
+   * uploader's wallet (via transfer::transfer), so we can't use getOwnedObjects with
+   * a fixed owner address.
    */
   private async fetchDatasetsFromBlockchain(cursor?: string): Promise<{
     datasets: BlockchainDataset[];
@@ -96,47 +101,115 @@ export class BlockchainIndexer {
     nextCursor?: string;
   }> {
     try {
-      const response = await suiClient.getOwnedObjects({
-        owner: '0x0', // Query all objects (use marketplace address in production)
-        filter: { StructType: DATASET_TYPE },
-        options: {
-          showContent: true,
-          showType: true,
-        },
-        cursor,
-        limit: 50,
-      });
+      if (!SONAR_PACKAGE_ID) {
+        logger.error('SONAR_PACKAGE_ID not configured');
+        return { datasets: [], hasMore: false };
+      }
 
       const datasets: BlockchainDataset[] = [];
 
-      for (const obj of response.data) {
-        if (obj.data?.content?.dataType === 'moveObject') {
-          const fields = obj.data.content.fields as any;
-          
-          datasets.push({
-            id: obj.data.objectId,
-            creator: fields.uploader || fields.creator,
-            quality_score: parseInt(fields.quality_score || '0'),
-            price: fields.price || fields.dataset_price || '0',
-            listed: fields.listed !== false,
-            duration_seconds: parseInt(fields.duration_seconds || '0'),
-            languages: fields.languages || [],
-            formats: fields.formats || ['audio/mpeg'],
-            media_type: fields.media_type || 'audio',
-            title: fields.title || 'Untitled Dataset',
-            description: fields.description || '',
-            total_purchases: parseInt(fields.total_purchases || '0'),
-            file_count: parseInt(fields.file_count || '1'),
-            total_duration: parseInt(fields.total_duration || fields.duration_seconds || '0'),
-            bundle_discount_bps: parseInt(fields.bundle_discount_bps || '0'),
-          });
+      // Query AudioSubmission objects (single-file submissions)
+      const audioSubmissionsResponse = await suiClient.queryObjects({
+        filter: {
+          StructType: `${SONAR_PACKAGE_ID}::marketplace::AudioSubmission`,
+        },
+        options: {
+          showContent: true,
+          showType: true,
+          showOwner: true,
+        },
+        cursor,
+        limit: 25,
+      });
+
+      logger.info({ 
+        count: audioSubmissionsResponse.data.length,
+        hasNextPage: audioSubmissionsResponse.hasNextPage,
+      }, 'Fetched AudioSubmission objects');
+
+      // Process AudioSubmission objects
+      for (const obj of audioSubmissionsResponse.data) {
+        try {
+          if (obj.data?.content?.dataType === 'moveObject') {
+            const fields = obj.data.content.fields as any;
+            
+            datasets.push({
+              id: obj.data.objectId,
+              creator: fields.uploader,
+              quality_score: parseInt(fields.quality_score || '0'),
+              price: fields.dataset_price || '0',
+              listed: fields.listed_for_sale !== false,
+              duration_seconds: parseInt(fields.duration_seconds || '0'),
+              languages: [], // Metadata comes from backend API
+              formats: ['audio/mpeg'],
+              media_type: 'audio',
+              title: 'Untitled Dataset',
+              description: '',
+              total_purchases: parseInt(fields.purchase_count || '0'),
+              file_count: 1,
+              total_duration: parseInt(fields.duration_seconds || '0'),
+              bundle_discount_bps: 0,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, objectId: obj.data?.objectId }, 'Failed to process AudioSubmission');
         }
       }
 
+      // Query DatasetSubmission objects (multi-file datasets)
+      const datasetSubmissionsResponse = await suiClient.queryObjects({
+        filter: {
+          StructType: `${SONAR_PACKAGE_ID}::marketplace::DatasetSubmission`,
+        },
+        options: {
+          showContent: true,
+          showType: true,
+          showOwner: true,
+        },
+        cursor,
+        limit: 25,
+      });
+
+      logger.info({ 
+        count: datasetSubmissionsResponse.data.length,
+        hasNextPage: datasetSubmissionsResponse.hasNextPage,
+      }, 'Fetched DatasetSubmission objects');
+
+      // Process DatasetSubmission objects
+      for (const obj of datasetSubmissionsResponse.data) {
+        try {
+          if (obj.data?.content?.dataType === 'moveObject') {
+            const fields = obj.data.content.fields as any;
+            
+            datasets.push({
+              id: obj.data.objectId,
+              creator: fields.uploader,
+              quality_score: parseInt(fields.quality_score || '0'),
+              price: fields.dataset_price || '0',
+              listed: fields.listed_for_sale !== false,
+              duration_seconds: parseInt(fields.total_duration || '0'),
+              languages: [],
+              formats: ['audio/mpeg'],
+              media_type: 'audio',
+              title: 'Untitled Dataset',
+              description: '',
+              total_purchases: parseInt(fields.purchase_count || '0'),
+              file_count: parseInt(fields.file_count || '1'),
+              total_duration: parseInt(fields.total_duration || '0'),
+              bundle_discount_bps: parseInt(fields.bundle_discount_bps || '0'),
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, objectId: obj.data?.objectId }, 'Failed to process DatasetSubmission');
+        }
+      }
+
+      logger.info({ total: datasets.length }, 'Total datasets fetched from blockchain');
+
       return {
         datasets,
-        hasMore: response.hasNextPage,
-        nextCursor: response.nextCursor || undefined,
+        hasMore: audioSubmissionsResponse.hasNextPage || datasetSubmissionsResponse.hasNextPage,
+        nextCursor: audioSubmissionsResponse.nextCursor || datasetSubmissionsResponse.nextCursor,
       };
     } catch (error) {
       logger.error({ error }, 'Failed to fetch datasets from blockchain');

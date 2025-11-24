@@ -264,12 +264,17 @@ export function PublishStep({
           return;
         }
 
+        // Strict seal policy ID validation (must be 0x + 64 hex characters)
+        const sealPolicyIdPattern = /^0x[a-fA-F0-9]{64}$/;
         if (
           !walrusUpload.seal_policy_id ||
-          !walrusUpload.seal_policy_id.startsWith("0x")
+          !sealPolicyIdPattern.test(walrusUpload.seal_policy_id)
         ) {
           onError(
-            `Invalid Seal policy ID: "${walrusUpload.seal_policy_id}". Encryption may have failed. Please try re-encrypting.`,
+            `Invalid Seal policy ID format: "${walrusUpload.seal_policy_id}". ` +
+              `Expected format: 0x followed by 64 hexadecimal characters. ` +
+              `Current length: ${walrusUpload.seal_policy_id?.length || 0} characters. ` +
+              `Encryption may have failed. Please try re-encrypting.`,
           );
           setPublishState("idle");
           return;
@@ -550,9 +555,17 @@ export function PublishStep({
               }
 
               if (datasetId) {
+                // Generate explorer URLs for user
+                const network = "mainnet";
+                const explorerUrl = `https://suiscan.xyz/${network}/object/${datasetId}`;
+                const txExplorerUrl = `https://suiscan.xyz/${network}/tx/${result.digest}`;
+
                 console.log(
-                  "[PublishStep] ✅ Dataset ID confirmed:",
-                  datasetId,
+                  `[PublishStep] ✅ Dataset published successfully!\n` +
+                    `Dataset ID: ${datasetId}\n` +
+                    `Transaction: ${result.digest}\n` +
+                    `View Dataset: ${explorerUrl}\n` +
+                    `View Transaction: ${txExplorerUrl}`,
                 );
 
                 // Clear pending uploads
