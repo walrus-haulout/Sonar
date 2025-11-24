@@ -319,7 +319,7 @@ export function useWalrusUpload() {
 
       // Upload with Walrus SDK (handles encoding, registration, upload, certification)
       console.log("[Upload] Calling Walrus SDK writeBlob()...");
-      const { blobId, blobObject } = await walrusClient.writeBlob({
+      const { blobId, blobObject } = await walrusClient.walrus.writeBlob({
         blob: blobData,
         deletable: false, // Set to true to enable deletion/refunds
         epochs: 26, // ~26 days storage
@@ -329,7 +329,7 @@ export function useWalrusUpload() {
 
       // Extract metadata from blob object
       const blobObjectId = blobObject.id.id;
-      const storageId = blobObject.storage?.id;
+      const storageId = (blobObject.storage as any)?.id?.id || (blobObject.storage as any)?.id;
       const encodingType = blobObject.encoding_type;
       const deletable = blobObject.deletable;
 
@@ -433,7 +433,7 @@ export function useWalrusUpload() {
 
           // Upload preview with Walrus SDK
           console.log("[Upload] Uploading preview blob with Walrus SDK...");
-          const previewResult = await walrusClient.writeBlob({
+          const previewResult = await walrusClient.walrus.writeBlob({
             blob: previewBlobData,
             deletable: false,
             epochs: 26,
@@ -443,8 +443,8 @@ export function useWalrusUpload() {
 
           finalPreviewBlobId = previewResult.blobId;
           previewBlobObjectId = previewResult.blobObject.id.id;
-          previewStorageId = previewResult.blobObject.storage?.id;
-          previewEncodingType = previewResult.blobObject.encoding_type;
+          previewStorageId = (previewResult.blobObject.storage as any)?.id?.id || (previewResult.blobObject.storage as any)?.id;
+          previewEncodingType = String(previewResult.blobObject.encoding_type);
           previewDeletable = previewResult.blobObject.deletable;
           previewSize = previewBlob.size;
 
@@ -693,7 +693,7 @@ export function useWalrusUpload() {
         blobId: publisherResult.blobId,
         previewBlobId: publisherResult.previewBlobId,
         seal_policy_id,
-        strategy: "walrus-sdk",
+        strategy: "user-paid",
         mimeType: publisherResult.mimeType,
         previewMimeType: publisherResult.previewMimeType,
         // No txDigest - blockchain submission happens in PublishStep
@@ -783,6 +783,6 @@ export function useWalrusUpload() {
     progress,
 
     // Utilities
-    getUploadStrategy: () => "walrus-sdk" as const,
+    getUploadStrategy: () => "user-paid" as const,
   };
 }

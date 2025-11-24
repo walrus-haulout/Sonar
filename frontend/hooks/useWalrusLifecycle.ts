@@ -62,11 +62,10 @@ export function useWalrusLifecycle() {
       }
 
       // Create extension transaction
-      const tx = new Transaction();
-      await walrusClient.extendBlobTransaction({
+      const tx = await walrusClient.walrus.extendBlobTransaction({
         blobObjectId,
-        additionalEpochs,
-        transaction: tx,
+        epochs: additionalEpochs,
+        transaction: new Transaction(),
       });
 
       console.log("[Walrus Lifecycle] Extending blob:", {
@@ -113,10 +112,10 @@ export function useWalrusLifecycle() {
       }
 
       // Create deletion transaction
-      const tx = new Transaction();
-      await walrusClient.deleteBlobTransaction({
+      const tx = await walrusClient.walrus.deleteBlobTransaction({
         blobObjectId,
-        transaction: tx,
+        owner: currentAccount.address,
+        transaction: new Transaction(),
       });
 
       console.log("[Walrus Lifecycle] Deleting blob:", blobObjectId);
