@@ -49,9 +49,15 @@ const determineNetwork = (): "mainnet" | "testnet" | "devnet" => {
 // Network configuration
 export const NETWORK = determineNetwork();
 
-// Separate RPC and GraphQL endpoints
-export const RPC_URL =
-  process.env.NEXT_PUBLIC_RPC_URL || `https://fullnode.${NETWORK}.sui.io`;
+/**
+ * RPC URL configuration
+ * - Browser: Uses /api/edge/sui/rpc proxy by default to avoid CORS issues
+ * - Server: Uses direct fullnode URL for better performance
+ */
+const isBrowser = typeof window !== "undefined";
+export const RPC_URL = isBrowser
+  ? process.env.NEXT_PUBLIC_RPC_URL || "/api/edge/sui/rpc"
+  : process.env.SUI_RPC_URL || `https://fullnode.${NETWORK}.sui.io:443`;
 
 /**
  * Legacy GRAPHQL_URL export for backwards compatibility

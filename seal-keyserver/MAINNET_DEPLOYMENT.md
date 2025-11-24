@@ -247,6 +247,12 @@ NEXT_PUBLIC_SEAL_KEY_SERVERS=https://your-railway-url.railway.app
 # Walrus mainnet endpoints
 NEXT_PUBLIC_WALRUS_PUBLISHER_URL=https://publisher.walrus-mainnet.walrus.space
 NEXT_PUBLIC_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
+
+# Sui RPC Configuration
+# Browser uses proxy to avoid CORS
+NEXT_PUBLIC_RPC_URL=/api/edge/sui/rpc
+# Server-side RPC for proxy
+SUI_RPC_URL=https://fullnode.mainnet.sui.io:443
 ```
 
 ### 5.2 Test Frontend
