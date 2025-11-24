@@ -32,6 +32,9 @@ dependencies = [
 
     # Machine learning for feedback clustering
     "scikit-learn>=1.3.0",
+
+    # Fallback cryptography (if 'cryptography' fails or for specific legacy support)
+    "pycryptodome>=3.18.0",
 ]
 
 [project.optional-dependencies]

@@ -4,7 +4,7 @@ import testnetDeployment from "../../../contracts/deployments/testnet.json";
 import mainnetDeployment from "../../../contracts/deployments/mainnet.json";
 
 const MAINNET_PACKAGE_ID =
-  "0xb1a05bf52e569b01903aca8f92fee1e4393f085e477f198f4b72f581136b17a3";
+  "0x1084073ffefdb80fac657daae2d60895fac976ab6b85196c0ce86bcbce51edf6";
 const MAINNET_MARKETPLACE_ID =
   "0xb1c467213d96d3b2de78124cf10deebcefe7e19093cbbaac3b368b604112e5b4";
 
@@ -101,14 +101,7 @@ const STATIC_FALLBACKS: Record<string, DeploymentJson> = {
 
 const deploymentDefaultsByNetwork: Record<string, DeploymentJson> = {
   testnet: testnetDeployment as DeploymentJson,
-  mainnet: {
-    ...mainnetDeployment,
-    ...STATIC_FALLBACKS.mainnet,
-    objects: {
-      ...(mainnetDeployment.objects || {}),
-      ...(STATIC_FALLBACKS.mainnet?.objects || {}),
-    },
-  },
+  mainnet: mainnetDeployment as DeploymentJson,
 };
 
 const OBJECT_ID_REGEX = /^0x[0-9a-fA-F]{64}$/;
@@ -210,6 +203,9 @@ export const SONAR_COIN_TYPE = CHAIN_CONFIG.packageId
 // Type definitions for on-chain objects
 export const DATASET_TYPE = CHAIN_CONFIG.packageId
   ? `${CHAIN_CONFIG.packageId}::marketplace::AudioSubmission`
+  : "";
+export const DATASET_SUBMISSION_TYPE = CHAIN_CONFIG.packageId
+  ? `${CHAIN_CONFIG.packageId}::marketplace::DatasetSubmission`
   : "";
 export const PROTOCOL_STATS_TYPE = CHAIN_CONFIG.packageId
   ? `${CHAIN_CONFIG.packageId}::marketplace::QualityMarketplace`

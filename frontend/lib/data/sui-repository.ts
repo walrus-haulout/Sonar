@@ -1,7 +1,7 @@
 import type { Dataset, ProtocolStats, DatasetFilter, PaginatedResponse } from '@/types/blockchain';
 import type { LeaderboardResponse, UserRankInfo, LeaderboardFilter, LeaderboardEntry } from '@/types/leaderboard';
 import { DataRepository, parseDataset, parseProtocolStats } from './repository';
-import { suiClient, graphqlClients, DATASET_TYPE, STATS_OBJECT_ID } from '@/lib/sui/client';
+import { suiClient, graphqlClients, DATASET_TYPE, DATASET_SUBMISSION_TYPE, STATS_OBJECT_ID } from '@/lib/sui/client';
 import { GET_DATASETS, GET_DATASET, GET_PROTOCOL_STATS } from '@/lib/sui/queries';
 import { logger } from '@/lib/logger';
 import { toastInfo, toastError } from '@/lib/toast';
@@ -122,6 +122,7 @@ export class SuiRepository implements DataRepository {
   /**
    * Get a single dataset by ID
    * Uses RPC for reliable single-object reads
+   * Handles both AudioSubmission and DatasetSubmission types
    *
    * @param id - Dataset object ID
    * @returns Dataset object
@@ -135,6 +136,15 @@ export class SuiRepository implements DataRepository {
 
     if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') {
       throw new Error(`Dataset not found: ${id}`);
+    }
+
+    // Verify the object is one of our submission types
+    const objectType = obj.data.content.type;
+    const isAudioSubmission = objectType.includes('::marketplace::AudioSubmission');
+    const isDatasetSubmission = objectType.includes('::marketplace::DatasetSubmission');
+
+    if (!isAudioSubmission && !isDatasetSubmission) {
+      throw new Error(`Object ${id} is not a valid submission type`);
     }
 
     return parseDataset({
@@ -311,6 +321,7 @@ export class SuiRepository implements DataRepository {
 
   /**
    * Get datasets via GraphQL
+   * Fetches both AudioSubmission (single file) and DatasetSubmission (multi-file) types
    *
    * @param client - GraphQL client to use
    * @param filter - Optional filter criteria
@@ -320,13 +331,21 @@ export class SuiRepository implements DataRepository {
     client: typeof graphqlClients[0]['client'],
     filter?: DatasetFilter
   ): Promise<Dataset[]> {
-    const response = await client.request(GET_DATASETS, {
-      type: DATASET_TYPE,
-      cursor: null,
-    });
+    // Fetch both AudioSubmission and DatasetSubmission in parallel
+    const [audioResponse, datasetResponse] = await Promise.all([
+      client.request(GET_DATASETS, {
+        type: DATASET_TYPE,
+        cursor: null,
+      }),
+      client.request(GET_DATASETS, {
+        type: DATASET_SUBMISSION_TYPE,
+        cursor: null,
+      }),
+    ]);
 
-    const datasets = response.objects.nodes
-      .filter((node: any) => node.asMoveObject?.contents?.json) // Null check on asMoveObject
+    // Parse AudioSubmission objects
+    const audioDatasets = audioResponse.objects.nodes
+      .filter((node: any) => node.asMoveObject?.contents?.json)
       .map((node: any) => {
         const jsonData = node.asMoveObject.contents.json;
         const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -336,12 +355,28 @@ export class SuiRepository implements DataRepository {
         });
       });
 
+    // Parse DatasetSubmission objects
+    const multiFileDatasets = datasetResponse.objects.nodes
+      .filter((node: any) => node.asMoveObject?.contents?.json)
+      .map((node: any) => {
+        const jsonData = node.asMoveObject.contents.json;
+        const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+        return parseDataset({
+          id: node.address,
+          ...content,
+        });
+      });
+
+    // Merge both types of datasets
+    const allDatasets = [...audioDatasets, ...multiFileDatasets];
+
     // Apply filters client-side (Move contracts don't support complex filters yet)
-    return this.applyFilters(datasets, filter);
+    return this.applyFilters(allDatasets, filter);
   }
 
   /**
    * Get paginated datasets via GraphQL
+   * Fetches both AudioSubmission (single file) and DatasetSubmission (multi-file) types
    *
    * @param client - GraphQL client to use
    * @param filter - Optional filter criteria
@@ -353,13 +388,21 @@ export class SuiRepository implements DataRepository {
     filter?: DatasetFilter,
     cursor?: string
   ): Promise<PaginatedResponse<Dataset>> {
-    const response = await client.request(GET_DATASETS, {
-      type: DATASET_TYPE,
-      cursor: cursor || null,
-    });
+    // Fetch both AudioSubmission and DatasetSubmission in parallel
+    const [audioResponse, datasetResponse] = await Promise.all([
+      client.request(GET_DATASETS, {
+        type: DATASET_TYPE,
+        cursor: cursor || null,
+      }),
+      client.request(GET_DATASETS, {
+        type: DATASET_SUBMISSION_TYPE,
+        cursor: cursor || null,
+      }),
+    ]);
 
-    const datasets = response.objects.nodes
-      .filter((node: any) => node.asMoveObject?.contents?.json) // Null check on asMoveObject
+    // Parse AudioSubmission objects
+    const audioDatasets = audioResponse.objects.nodes
+      .filter((node: any) => node.asMoveObject?.contents?.json)
       .map((node: any) => {
         const jsonData = node.asMoveObject.contents.json;
         const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -369,12 +412,33 @@ export class SuiRepository implements DataRepository {
         });
       });
 
-    const filtered = this.applyFilters(datasets, filter);
+    // Parse DatasetSubmission objects
+    const multiFileDatasets = datasetResponse.objects.nodes
+      .filter((node: any) => node.asMoveObject?.contents?.json)
+      .map((node: any) => {
+        const jsonData = node.asMoveObject.contents.json;
+        const content = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+        return parseDataset({
+          id: node.address,
+          ...content,
+        });
+      });
+
+    // Merge both types of datasets
+    const allDatasets = [...audioDatasets, ...multiFileDatasets];
+    const filtered = this.applyFilters(allDatasets, filter);
+
+    // Determine if there are more pages (either type has more)
+    const hasMore = audioResponse.objects.pageInfo.hasNextPage ||
+                    datasetResponse.objects.pageInfo.hasNextPage;
+
+    // Use the audio cursor as primary (both should advance together)
+    const nextCursor = audioResponse.objects.pageInfo.endCursor;
 
     return {
       data: filtered,
-      cursor: response.objects.pageInfo.endCursor,
-      hasMore: response.objects.pageInfo.hasNextPage,
+      cursor: nextCursor,
+      hasMore,
     };
   }
 

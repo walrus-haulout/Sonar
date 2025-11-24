@@ -132,6 +132,39 @@ export async function registerDatasetRoutes(fastify: FastifyInstance): Promise<v
   });
 
   /**
+   * GET /api/datasets/:id/full
+   * Get dataset with on-chain data + backend metadata (seal, verification, etc.)
+   * Combines blockchain GraphQL data with PostgreSQL stored metadata
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>('/api/datasets/:id/full', async (request, reply) => {
+    try {
+      const { id } = request.params;
+
+      // Fetch backend dataset (includes seal metadata, verification, etc.)
+      const backendDataset = await repository.getDataset(id);
+
+      if (!backendDataset) {
+        return reply.code(404).send({
+          error: 'NOT_FOUND',
+          message: 'Dataset not found',
+        });
+      }
+
+      return reply.send({
+        dataset: backendDataset,
+      });
+    } catch (error) {
+      request.log.error({ error }, 'Failed to fetch full dataset');
+      return reply.code(500).send({
+        error: 'FETCH_FAILED',
+        message: 'Failed to fetch full dataset',
+      });
+    }
+  });
+
+  /**
    * GET /api/datasets/:id/similar
    * Find similar datasets using pgvector
    */
