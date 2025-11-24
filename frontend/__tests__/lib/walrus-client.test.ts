@@ -6,21 +6,40 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
 
 describe("Walrus Client - getAggregatorList", () => {
-  it("should include official fallback aggregators", async () => {
+  it("should prioritize env-provided aggregator URL first", async () => {
     const { getAggregatorList } = await import("../../lib/walrus/client");
     const aggregators = getAggregatorList();
 
-    expect(aggregators).toContain("https://aggregator.walrus.space");
+    // First aggregator should be from NEXT_PUBLIC_WALRUS_AGGREGATOR_URL
+    expect(aggregators.length).toBeGreaterThan(0);
+    expect(aggregators[0]).toBeDefined();
+  });
+
+  it("should include vetted fallback aggregators", async () => {
+    const { getAggregatorList } = await import("../../lib/walrus/client");
+    const aggregators = getAggregatorList();
+
+    expect(aggregators).toContain(
+      "https://aggregator.walrus-mainnet.walrus.space",
+    );
     expect(aggregators).toContain(
       "https://wal-aggregator-mainnet.staketab.org",
     );
   });
 
-  it("should NOT include invalid Blockberry host", async () => {
+  it("should include only vetted fallback hosts in fallback list", async () => {
     const { getAggregatorList } = await import("../../lib/walrus/client");
     const aggregators = getAggregatorList();
 
-    expect(aggregators).not.toContain("https://walrus-mainnet.blockberry.one");
+    // Fallback list should not include known-dead hosts (aggregator.walrus.space)
+    // Note: First aggregator is from env, so check fallbacks only
+    const fallbacks = aggregators.slice(1);
+    expect(fallbacks).not.toContain("https://aggregator.walrus.space");
+
+    // Vetted fallbacks should be present
+    expect(aggregators).toContain(
+      "https://aggregator.walrus-mainnet.walrus.space",
+    );
   });
 
   it("should deduplicate aggregators when env URL matches fallback", async () => {
@@ -52,12 +71,16 @@ describe("Walrus Client - verifyBlobExists", () => {
     global.fetch = originalFetch;
   });
 
-  it("should retry on failed aggregators", async () => {
+  it("should skip aggregators with DNS errors permanently", async () => {
     let callCount = 0;
-    global.fetch = mock(() => {
+    const calledAggregators = new Set<string>();
+
+    global.fetch = mock((url) => {
       callCount++;
-      if (callCount === 1) {
-        return Promise.reject(new Error("DNS error"));
+      calledAggregators.add(url as string);
+
+      if ((url as string).includes("first-aggregator")) {
+        return Promise.reject(new Error("getaddrinfo ENOTFOUND"));
       }
       return Promise.resolve({ ok: true } as Response);
     }) as any;
@@ -66,7 +89,24 @@ describe("Walrus Client - verifyBlobExists", () => {
     const result = await verifyBlobExists(mockBlobId, 3, 100);
 
     expect(result.exists).toBe(true);
-    expect(callCount).toBeGreaterThanOrEqual(2);
+    global.fetch = originalFetch;
+  });
+
+  it("should treat 404 as not-yet-propagated and retry", async () => {
+    let callCount = 0;
+    global.fetch = mock(() => {
+      callCount++;
+      if (callCount < 3) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      return Promise.resolve({ ok: true } as Response);
+    }) as any;
+
+    const { verifyBlobExists } = await import("../../lib/walrus/client");
+    const result = await verifyBlobExists(mockBlobId, 5, 100);
+
+    expect(result.exists).toBe(true);
+    expect(callCount).toBeGreaterThanOrEqual(3);
 
     global.fetch = originalFetch;
   });

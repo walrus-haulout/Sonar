@@ -69,6 +69,7 @@ sui client publish --gas-budget 500000000
 ```
 
 **Save these values:**
+
 - `PACKAGE_ID`: The published package object ID
 - `STATS_OBJECT_ID`: The QualityMarketplace shared object
 - `MARKETPLACE_ID`: The marketplace ID (if separate)
@@ -244,8 +245,8 @@ NEXT_PUBLIC_USE_BLOCKCHAIN=true
 NEXT_PUBLIC_SEAL_KEY_SERVERS=https://your-railway-url.railway.app
 
 # Walrus mainnet endpoints
-NEXT_PUBLIC_WALRUS_PUBLISHER_URL=https://publisher.walrus.space
-NEXT_PUBLIC_WALRUS_AGGREGATOR_URL=https://aggregator.walrus.space
+NEXT_PUBLIC_WALRUS_PUBLISHER_URL=https://publisher.walrus-mainnet.walrus.space
+NEXT_PUBLIC_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-mainnet.walrus.space
 ```
 
 ### 5.2 Test Frontend
@@ -274,6 +275,7 @@ vercel --prod
 ### 6.2 Update DNS (if needed)
 
 Point your custom domain to:
+
 - Frontend: Vercel/Railway deployment
 - Key Server: Railway deployment
 
@@ -296,6 +298,7 @@ curl -I https://your-keyserver.railway.app
 **Symptom:** Railway logs show "Failed to initialize key server"
 
 **Solution:**
+
 1. Check `KEY_SERVER_OBJECT_ID` exists on mainnet
 2. Verify `MASTER_KEY` is the same seed used to derive public key
 3. Confirm package ID in config matches mainnet deployment
@@ -310,6 +313,7 @@ sui client object <KEY_SERVER_OBJECT_ID> --network mainnet
 **Symptom:** "Failed to fetch encryption keys" in browser console
 
 **Solution:**
+
 1. Check `NEXT_PUBLIC_SEAL_KEY_SERVERS` URL is correct
 2. Test key server health endpoint directly
 3. Check CORS headers (Railway should allow all origins by default)
@@ -319,6 +323,7 @@ sui client object <KEY_SERVER_OBJECT_ID> --network mainnet
 **Symptom:** "Package ID not allowed" in key server logs
 
 **Solution:**
+
 1. Verify package ID in `key-server-config.yaml.example` matches deployed package
 2. Make sure you're using the mainnet package ID, not testnet
 3. Redeploy Railway after config changes
@@ -347,8 +352,8 @@ sui client object <KEY_SERVER_OBJECT_ID> --network mainnet
 - **Sui Mainnet RPC:** `https://fullnode.mainnet.sui.io`
 - **Sui Mainnet GraphQL:** `https://graphql.mainnet.sui.io/graphql`
 - **Walrus Mainnet Package:** `0xfdc88f7d7cf30afab2f82e8380d11ee8f70efb90e863d1de8616fae1bb09ea77`
-- **Walrus Mainnet Publisher:** `https://publisher.walrus.space`
-- **Walrus Mainnet Aggregator:** `https://aggregator.walrus.space`
+- **Walrus Mainnet Publisher:** `https://publisher.walrus-mainnet.walrus.space`
+- **Walrus Mainnet Aggregator:** `https://aggregator.walrus-mainnet.walrus.space`
 - **Sui Explorer:** `https://suiscan.xyz/mainnet`
 - **SEAL Docs:** `https://seal-docs.wal.app`
 

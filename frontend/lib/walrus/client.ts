@@ -22,12 +22,14 @@ export function getWalrusClient() {
 export function getAggregatorList(): string[] {
   const aggregators: string[] = [];
 
+  // Priority 1: Use env-provided aggregator URL
   if (WALRUS_AGGREGATOR_URL) {
     aggregators.push(WALRUS_AGGREGATOR_URL);
   }
 
+  // Priority 2: Add vetted fallbacks (verified to resolve)
   const fallbacks = [
-    "https://aggregator.walrus.space",
+    "https://aggregator.walrus-mainnet.walrus.space",
     "https://wal-aggregator-mainnet.staketab.org",
   ];
 
@@ -52,6 +54,7 @@ export async function verifyBlobExists(
   delayMs: number = 2000,
 ): Promise<{ exists: boolean; aggregator?: string; error?: string }> {
   const aggregators = getAggregatorList();
+  const deadAggregators = new Set<string>();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(
@@ -59,6 +62,11 @@ export async function verifyBlobExists(
     );
 
     for (const aggregator of aggregators) {
+      // Skip aggregators that failed DNS resolution
+      if (deadAggregators.has(aggregator)) {
+        continue;
+      }
+
       try {
         const url = `${aggregator}/v1/${blobId}`;
         const response = await fetch(url, {
@@ -70,11 +78,39 @@ export async function verifyBlobExists(
           console.log(`[Walrus] Blob verified on ${aggregator}`);
           return { exists: true, aggregator };
         }
-      } catch (error) {
+
+        // 404 means blob not propagated yet - retry
+        if (response.status === 404) {
+          console.log(
+            `[Walrus] Blob not found on ${aggregator} (404 - not propagated yet)`,
+          );
+          continue;
+        }
+
+        // Other non-OK statuses
         console.warn(
-          `[Walrus] Failed to check ${aggregator}:`,
-          error instanceof Error ? error.message : error,
+          `[Walrus] ${aggregator} returned ${response.status} ${response.statusText}`,
         );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        // DNS errors mean the host is unreachable - skip it permanently
+        if (
+          errorMessage.includes("ERR_NAME_NOT_RESOLVED") ||
+          errorMessage.includes("getaddrinfo") ||
+          errorMessage.includes("ENOTFOUND")
+        ) {
+          console.error(
+            `[Walrus] DNS failure for ${aggregator}, skipping permanently:`,
+            errorMessage,
+          );
+          deadAggregators.add(aggregator);
+          continue;
+        }
+
+        // Network errors or timeouts - retry
+        console.warn(`[Walrus] Failed to check ${aggregator}:`, errorMessage);
       }
     }
 
