@@ -7,7 +7,6 @@ import { ErrorCode, type AccessGrant } from "@sonar/shared";
 import type { ByteRange } from "../lib/validators";
 import { verifyUserOwnsDataset as defaultVerifyUserOwnsDataset } from "../lib/sui/queries";
 import type { RequestMetadata } from "./types";
-import { suiClient } from "../lib/sui/client";
 
 interface DatasetStreamOptions {
   datasetId: string;
@@ -144,6 +143,9 @@ function selectPrimaryBlob(blobs: BlobType[]): BlobType {
 /**
  * Fetch dataset data from blockchain if not in database
  * Returns basic on-chain fields to create dataset record
+ *
+ * Implements retry logic with exponential backoff to handle RPC indexing lag
+ * for newly created objects (they may not be immediately queryable)
  */
 async function fetchDatasetFromBlockchain(
   datasetId: string,
@@ -155,39 +157,62 @@ async function fetchDatasetFromBlockchain(
   listed: boolean;
   duration_seconds: number;
 } | null> {
-  try {
-    const { suiClient } = await import("../lib/sui/client");
-    
-    const obj = await suiClient.getObject({
-      id: datasetId,
-      options: { showContent: true, showType: true },
-    });
+  const { suiClient } = await import("../lib/sui/client");
 
-    if (!obj.data?.content || obj.data.content.dataType !== "moveObject") {
+  const maxRetries = 3;
+  const retryDelays = [1000, 2000, 4000]; // 1s, 2s, 4s
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      logger.debug({ datasetId, attempt: attempt + 1, maxRetries }, "Fetching dataset from blockchain");
+
+      const obj = await suiClient.getObject({
+        id: datasetId,
+        options: { showContent: true, showType: true, showOwner: true },
+      });
+
+      if (!obj.data?.content || obj.data.content.dataType !== "moveObject") {
+        if (attempt < maxRetries - 1) {
+          logger.debug({ datasetId, attempt: attempt + 1 }, "Object not found or not indexed yet, retrying...");
+          await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+          continue;
+        }
+        logger.warn({ datasetId }, "Dataset object not found on blockchain after retries");
+        return null;
+      }
+
+      const fields = obj.data.content.fields as any;
+
+      // Check if this is an AudioSubmission or DatasetSubmission
+      const isAudioSubmission = obj.data.type?.includes("::marketplace::AudioSubmission");
+      const isDatasetSubmission = obj.data.type?.includes("::marketplace::DatasetSubmission");
+
+      if (!isAudioSubmission && !isDatasetSubmission) {
+        logger.warn({ datasetId, objectType: obj.data.type }, "Object found but is not a valid dataset type");
+        return null;
+      }
+
+      logger.info({ datasetId, attempt: attempt + 1, objectType: obj.data.type }, "Dataset successfully fetched from blockchain");
+
+      return {
+        creator: fields.uploader || fields.creator,
+        quality_score: parseInt(fields.quality_score || "0"),
+        price: BigInt(fields.dataset_price || fields.price || "0"),
+        listed: fields.listed_for_sale !== false,
+        duration_seconds: parseInt(fields.duration_seconds || fields.total_duration || "0"),
+      };
+    } catch (error) {
+      if (attempt < maxRetries - 1) {
+        logger.debug({ error, datasetId, attempt: attempt + 1 }, "Error fetching dataset, retrying...");
+        await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+        continue;
+      }
+      logger.error({ error, datasetId }, "Failed to fetch dataset from blockchain after all retries");
       return null;
     }
-
-    const fields = obj.data.content.fields as any;
-    
-    // Check if this is an AudioSubmission or DatasetSubmission
-    const isAudioSubmission = obj.data.type?.includes("::marketplace::AudioSubmission");
-    const isDatasetSubmission = obj.data.type?.includes("::marketplace::DatasetSubmission");
-    
-    if (!isAudioSubmission && !isDatasetSubmission) {
-      return null;
-    }
-
-    return {
-      creator: fields.uploader || fields.creator,
-      quality_score: parseInt(fields.quality_score || "0"),
-      price: BigInt(fields.dataset_price || fields.price || "0"),
-      listed: fields.listed_for_sale !== false,
-      duration_seconds: parseInt(fields.duration_seconds || fields.total_duration || "0"),
-    };
-  } catch (error) {
-    logger.error({ error, datasetId }, "Failed to fetch dataset from blockchain");
-    return null;
   }
+
+  return null;
 }
 
 export async function createDatasetAccessGrant({
@@ -407,7 +432,7 @@ export async function storeSealMetadata({
       throw new HttpError(
         404,
         ErrorCode.DATASET_NOT_FOUND,
-        "Dataset not found on blockchain",
+        "Dataset not found on blockchain. This may occur if: 1) The dataset object hasn't been indexed yet (RPC lag), 2) The dataset ID is incorrect, or 3) The object is not a valid AudioSubmission/DatasetSubmission. Please try again in a few seconds.",
       );
     }
 

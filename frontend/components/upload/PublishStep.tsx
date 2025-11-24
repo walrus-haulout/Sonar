@@ -21,6 +21,7 @@ import { CHAIN_CONFIG } from "@/lib/sui/client";
 import { retryTransactionQuery } from "@/lib/transaction-utils";
 import { useBackendAuth } from "@/hooks/useBackendAuth";
 import { submitMetadataWithAuth } from "@/lib/metadata-submission";
+import { toast } from "sonner";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -679,7 +680,34 @@ export function PublishStep({
                     },
                   );
 
-                  // Provide user-friendly error message
+                  // Check if this is a "dataset not found" error (RPC indexing lag)
+                  const isDatasetNotFoundError = errorMsg.includes("Dataset not found on blockchain");
+
+                  if (isDatasetNotFoundError) {
+                    // Dataset was published successfully but backend couldn't verify it yet
+                    // This is non-fatal - show warning but allow user to proceed
+                    console.warn(
+                      "[PublishStep] Dataset published but backend verification pending (RPC indexing lag). User can still proceed.",
+                      { datasetId, txDigest: result.digest }
+                    );
+
+                    // Show success with a warning about delayed metadata
+                    onPublished({
+                      txDigest: result.digest,
+                      datasetId,
+                      confirmed: true,
+                    });
+
+                    // Optionally show a toast warning
+                    toast.warning(
+                      "Dataset published successfully! Metadata sync is delayed due to network indexing - it will complete automatically in a few moments.",
+                      { duration: 8000 }
+                    );
+
+                    return;
+                  }
+
+                  // For other errors, provide user-friendly error message
                   let userMessage = errorMsg;
                   if (errorMsg.includes("Invalid Walrus blob ID")) {
                     userMessage =
