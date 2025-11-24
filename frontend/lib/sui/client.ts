@@ -59,6 +59,14 @@ export const RPC_URL = isBrowser
   ? process.env.NEXT_PUBLIC_RPC_URL || "/api/edge/sui/rpc"
   : process.env.SUI_RPC_URL || `https://fullnode.${NETWORK}.sui.io:443`;
 
+// Warn if browser is configured to bypass CORS proxy (common misconfiguration)
+if (isBrowser && RPC_URL.includes("fullnode.") && RPC_URL.includes("sui.io")) {
+  console.warn(
+    "[SuiClient] Browser configured to bypass CORS proxy (RPC_URL points to fullnode directly). " +
+      "This may cause CORS errors. Set NEXT_PUBLIC_RPC_URL=/api/edge/sui/rpc",
+  );
+}
+
 /**
  * Legacy GRAPHQL_URL export for backwards compatibility
  * New code should use graphqlClients for multi-endpoint support

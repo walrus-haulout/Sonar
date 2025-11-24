@@ -13,14 +13,19 @@ export async function retryTransactionQuery<T>(
     } catch (error: any) {
       const isLastRetry = i === maxRetries - 1;
       const isNotFoundError = error?.message?.includes("Could not find");
+      const isNetworkError =
+        error?.message?.includes("Failed to fetch") ||
+        error?.message?.includes("NetworkError") ||
+        error?.name === "TypeError";
 
-      if (isLastRetry || !isNotFoundError) {
+      if (isLastRetry || (!isNotFoundError && !isNetworkError)) {
         throw error;
       }
 
       const delay = baseDelay * Math.pow(2, i);
+      const reason = isNotFoundError ? "not indexed yet" : "network error";
       console.log(
-        `[TransactionUtils] Transaction not found, retrying in ${delay}ms... (attempt ${i + 1}/${maxRetries})`,
+        `[TransactionUtils] Transaction ${reason}, retrying in ${delay}ms... (attempt ${i + 1}/${maxRetries})`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
