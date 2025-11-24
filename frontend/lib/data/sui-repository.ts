@@ -389,9 +389,13 @@ export class SuiRepository implements DataRepository {
    * @returns Filtered array of datasets
    */
   private applyFilters(datasets: Dataset[], filter?: DatasetFilter): Dataset[] {
-    if (!filter) return datasets;
+    // Filter out test datasets: unlisted AND price = 0
+    let filtered = datasets.filter(d => {
+      const isTestDataset = !d.listed && d.price === 0n;
+      return !isTestDataset;
+    });
 
-    let filtered = datasets;
+    if (!filter) return filtered;
 
     if (filter.media_type) {
       filtered = filtered.filter(d => d.media_type === filter.media_type);
