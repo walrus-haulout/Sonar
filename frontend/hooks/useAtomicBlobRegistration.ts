@@ -157,7 +157,7 @@ export function useAtomicBlobRegistration() {
     previewBlobId: string,
     sealPolicyId: string,
     durationSeconds: number,
-    submissionFeeMist: number = 500_000_000, // 0.5 SUI minimum (actual fee varies 0.5-10 SUI based on quality)
+    submissionFeeMist: number = 250_000_000, // 0.25 SUI minimum (actual fee varies 0.25-10 SUI based on quality)
     previewBlobHash?: Uint8Array,
   ): Promise<{ submissionId: string; digest: string }> {
     return new Promise((resolve, reject) => {
@@ -390,7 +390,7 @@ export function useAtomicBlobRegistration() {
         previewBlobId,
         sealPolicyId,
         durationSeconds,
-        500_000_000, // 0.5 SUI (contract minimum)
+        250_000_000, // 0.25 SUI (contract minimum)
         previewBlobHash,
       );
       console.log(

@@ -41,7 +41,7 @@ export interface SubmitAndRegisterBlobsParams {
  * 1. Calculates WAL cost for storage + writes
  * 2. Collects and merges WAL coins from wallet
  * 3. Builds transaction calling blob_manager::submit_and_register_blobs
- * 4. Pays 0.5 SUI fee + WAL for storage
+ * 4. Pays 0.25 SUI fee + WAL for storage
  *
  * Returns transaction ready to sign and execute
  */
@@ -109,8 +109,8 @@ export async function buildSubmitAndRegisterBlobsTransaction(
     totalWalNeeded,
   );
 
-  // Split SUI fee (0.5 SUI for Sonar protocol)
-  const [suiCoin] = tx.splitCoins(tx.gas, [500_000_000]);
+  // Split SUI fee (0.25 SUI for Sonar protocol)
+  const [suiCoin] = tx.splitCoins(tx.gas, [250_000_000]);
 
   // Get Walrus system shared object
   const walrusSystem = tx.object(WALRUS_SYSTEM_OBJECT_ID);
@@ -181,7 +181,7 @@ export function estimateTotalCost(params: {
   const previewCost = estimateWalCost(previewBlobSize, storageEpochs);
 
   const walCost = mainCost.total + previewCost.total;
-  const suiFee = 0.5; // Sonar protocol fee
+  const suiFee = 0.25; // Sonar protocol fee
   const gasEstimate = 0.2; // Gas for transaction
 
   return {

@@ -42,8 +42,9 @@ export default function HomePage() {
               Privacy by Design
             </h3>
             <p className="text-sm text-sonar-highlight-bright/70">
-              Client-side encryption with Seal encryption by Mysten Labs. Decentralized storage on
-              Walrus. Only authorized purchasers receive decryption shares
+              Client-side encryption with Seal encryption by Mysten Labs.
+              Decentralized storage on Walrus. Only authorized purchasers
+              receive decryption shares
             </p>
           </GlassCard>
 
@@ -54,7 +55,7 @@ export default function HomePage() {
             </h3>
             <p className="text-sm text-sonar-highlight-bright/70">
               Upload audio datasets of any type: music, speech, environmental
-              sounds, vocals, sound effects, and more. Upload fee: 0.5-10 SUI
+              sounds, vocals, sound effects, and more. Upload fee: 0.25-10 SUI
               per file based on quality. 60% of purchase revenue goes to you.
             </p>
           </GlassCard>
@@ -77,7 +78,9 @@ export default function HomePage() {
         {/* Footer */}
         <div className="mt-20 text-center text-sonar-highlight-bright/50 text-sm space-y-2">
           <p>Built for Walrus Haulout 2025 Hackathon</p>
-          <p className="font-mono">Powered by Sui • Walrus • Seal encryption by Mysten Labs</p>
+          <p className="font-mono">
+            Powered by Sui • Walrus • Seal encryption by Mysten Labs
+          </p>
         </div>
       </div>
     </main>

@@ -78,7 +78,7 @@ interface PublishStepProps {
   onError: (error: string) => void;
 }
 
-const FIXED_PRICE_PER_FILE_MIST = 500_000_000; // Fixed 0.5 SUI per file (contract minimum)
+const FIXED_PRICE_PER_FILE_MIST = 250_000_000; // Fixed 0.25 SUI per file (contract minimum)
 const MIST_PER_SUI = 1_000_000_000;
 
 function formatMistToSui(mist: number) {
@@ -227,7 +227,7 @@ export function PublishStep({
         const sealPolicyIds = files.map((f) => f.seal_policy_id);
         const durations = files.map((f) => Math.max(1, Math.floor(f.duration))); // Convert to u64
 
-        // Calculate total upload fee with 10% bundle discount (fixed 0.5 SUI per file)
+        // Calculate total upload fee with 10% bundle discount (fixed 0.25 SUI per file)
         const totalUploadFeeMist = calculateDatasetPriceMist(files.length);
 
         const uploadFeeCoin = tx.splitCoins(tx.gas, [totalUploadFeeMist])[0];
@@ -1042,7 +1042,7 @@ export function PublishStep({
                   Final Step: Upload Fee
                 </h4>
                 <p className="text-sm text-sonar-highlight/80 mb-3">
-                  Fixed upload fee of 0.5 SUI per file. This helps prevent spam
+                  Fixed upload fee of 0.25 SUI per file. This helps prevent spam
                   while keeping the platform accessible to all creators.
                 </p>
 
@@ -1108,7 +1108,7 @@ export function PublishStep({
                         </div>
                       </div>
                       <p className="text-xs text-sonar-highlight/60 italic">
-                        Fixed fee: 0.5 SUI per file
+                        Fixed fee: 0.25 SUI per file
                         {fileCount > 1 && " • Bundle: 10% discount applied"}
                       </p>
                     </div>

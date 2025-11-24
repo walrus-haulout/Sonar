@@ -637,8 +637,8 @@ export function useWalrusUpload() {
 
       console.log("[Walrus] Building batch registration transaction...");
 
-      // 0.5-10 SUI for submission fee (varies based on quality)
-      const SUI_PAYMENT_AMOUNT = 500_000_000n; // Minimum fee
+      // 0.25-10 SUI for submission fee (varies based on quality)
+      const SUI_PAYMENT_AMOUNT = 250_000_000n; // Minimum fee
 
       // We need to find a SUI coin for the submission fee
       // This is a bit tricky since we can't easily "pick" a coin in the frontend without more helpers

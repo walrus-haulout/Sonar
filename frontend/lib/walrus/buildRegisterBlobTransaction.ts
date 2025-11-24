@@ -173,7 +173,7 @@ export function buildBatchRegisterAndSubmitTransaction(
   // NOTE: Blobs are assumed to be registered by the Publisher.
   // We only submit to the marketplace here.
 
-  // Submit to marketplace (collect 0.5-10 SUI fee based on quality)
+  // Submit to marketplace (collect 0.25-10 SUI fee based on quality)
   // Build SUI payment coin
   let suiPaymentCoin;
   if (
@@ -183,7 +183,7 @@ export function buildBatchRegisterAndSubmitTransaction(
     suiPaymentCoin = tx.object(submission.suiPaymentCoinId);
   } else {
     // Split from gas (minimum fee)
-    const [coin] = tx.splitCoins(tx.gas, [500_000_000]); // 0.5 SUI minimum
+    const [coin] = tx.splitCoins(tx.gas, [250_000_000]); // 0.25 SUI minimum
     suiPaymentCoin = coin;
   }
 
@@ -203,10 +203,10 @@ export function buildBatchRegisterAndSubmitTransaction(
 }
 
 /**
- * Single-transaction blob submission with static 0.5 SUI fee
+ * Single-transaction blob submission with static 0.25 SUI fee
  *
  * Calls blob_manager::submit_blobs() which:
- * - Validates fee >= 0.5 SUI (MIN_SUBMISSION_FEE_SUI = 500_000_000 MIST)
+ * - Validates fee >= 0.25 SUI (MIN_SUBMISSION_FEE_SUI = 250_000_000 MIST)
  * - Transfers fee to protocol recipient (0xca79369...)
  * - Emits BlobsSubmitted event for backend tracking
  *
@@ -252,11 +252,11 @@ export function buildSubmitBlobsTransaction(
   // Use higher gas budget for mainnet safety (0.1-0.15 SUI)
   tx.setGasBudget(150_000_000); // 0.15 SUI gas budget
 
-  // Static 0.5 SUI fee (contract minimum)
-  const STATIC_FEE_MIST = 500_000_000; // 0.5 SUI
+  // Static 0.25 SUI fee (contract minimum)
+  const STATIC_FEE_MIST = 250_000_000; // 0.25 SUI
 
   // Split fee from gas coin
-  // Important: gas coin must have at least (fee + gas) = ~0.65 SUI
+  // Important: gas coin must have at least (fee + gas) = ~0.4 SUI
   const [suiPaymentCoin] = tx.splitCoins(tx.gas, [STATIC_FEE_MIST]);
 
   // Call blob_manager::submit_blobs
@@ -280,7 +280,7 @@ export function buildSubmitBlobsTransaction(
     sealPolicyId: sealPolicyId.substring(0, 20) + "...",
     durationSeconds,
     feeMist: STATIC_FEE_MIST,
-    feeSui: "0.5",
+    feeSui: "0.25",
     gasBudget: "0.15 SUI",
   });
 
