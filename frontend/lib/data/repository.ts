@@ -86,6 +86,11 @@ export function parseDataset(raw: any): Dataset {
     seal_policy_id: raw.seal_policy_id,
     mime_type: raw.mime_type || raw.original_mime_type || 'audio/mpeg',
     preview_mime_type: raw.preview_mime_type ?? raw.mime_type ?? null,
+    // AI-generated metadata (from backend database)
+    transcript: raw.transcript,
+    transcript_length: raw.transcript_length,
+    analysis: raw.analysis,
+    tags: raw.tags || [],
   };
 }
 

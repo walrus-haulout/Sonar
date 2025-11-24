@@ -2,18 +2,21 @@
 
 import { createContext, useContext, useMemo } from 'react';
 import type { DataRepository } from '@/lib/data/repository';
-import { SuiRepository } from '@/lib/data/sui-repository';
+import { HybridRepository } from '@/lib/data/hybrid-repository';
 
 const RepositoryContext = createContext<DataRepository | null>(null);
 
 /**
  * Repository Provider
  * Provides data repository to the entire app
- * Uses blockchain (Sui) for all data
+ *
+ * Uses HybridRepository:
+ * - Blockchain for core data (audio, metadata, price) - source of truth
+ * - Backend for enrichment (transcript, AI analysis, tags)
  */
 export function RepositoryProvider({ children }: { children: React.ReactNode }) {
   const repository = useMemo(() => {
-    return new SuiRepository();
+    return new HybridRepository();
   }, []);
 
   return (

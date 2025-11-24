@@ -144,6 +144,64 @@ export default function DatasetDetailPage() {
                 <AudioPlayer dataset={dataset} />
               </GlassCard>
 
+              {/* AI Analysis Section */}
+              {(dataset.transcript || dataset.analysis) && (
+                <GlassCard>
+                  <h3 className="text-xl font-mono text-sonar-highlight mb-4">AI Analysis</h3>
+
+                  {/* AI Suggested Price */}
+                  {dataset.analysis?.suggestedPrice && (
+                    <div className="mb-6 p-4 bg-sonar-signal/10 rounded-lg border border-sonar-signal/30">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sonar-highlight-bright/70">AI Suggested Price</span>
+                        <span className="text-2xl font-mono text-sonar-signal font-bold">
+                          {dataset.analysis.suggestedPrice.toFixed(2)} SUI
+                        </span>
+                      </div>
+                      {dataset.analysis.priceAnalysis?.breakdown && (
+                        <p className="text-xs text-sonar-highlight-bright/50 mt-2">
+                          {dataset.analysis.priceAnalysis.breakdown}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Quality Insights */}
+                  {dataset.analysis?.insights && dataset.analysis.insights.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-mono text-sonar-highlight mb-3">Quality Insights</h4>
+                      <ul className="space-y-2">
+                        {dataset.analysis.insights.map((insight, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-sonar-highlight-bright/80">
+                            <span className="text-sonar-signal mt-0.5">•</span>
+                            <span>{insight}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Transcript */}
+                  {dataset.transcript && (
+                    <div>
+                      <h4 className="text-sm font-mono text-sonar-highlight mb-3">
+                        Transcript
+                        {dataset.transcript_length && (
+                          <span className="text-sonar-highlight-bright/50 ml-2">
+                            ({dataset.transcript_length.toLocaleString()} chars)
+                          </span>
+                        )}
+                      </h4>
+                      <div className="bg-sonar-abyss/50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                        <p className="text-sm text-sonar-highlight-bright/80 whitespace-pre-wrap font-mono leading-relaxed">
+                          {dataset.transcript}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </GlassCard>
+              )}
+
               {/* Full Metadata */}
               <DatasetMetadata dataset={dataset} />
 

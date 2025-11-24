@@ -37,6 +37,28 @@ export interface Dataset {
   seal_policy_id?: string;
   mime_type?: string;
   preview_mime_type?: string | null;
+  // AI-generated metadata (from backend database)
+  transcript?: string;
+  transcript_length?: number;
+  analysis?: DatasetAnalysis;
+  tags?: string[];
+}
+
+// AI analysis output stored in database
+export interface DatasetAnalysis {
+  qualityScore?: number;
+  suggestedPrice?: number;
+  safetyPassed?: boolean;
+  overallSummary?: string;
+  insights?: string[];
+  concerns?: string[];
+  priceAnalysis?: {
+    basePrice: number;
+    qualityMultiplier: number;
+    rarityMultiplier: number;
+    finalPrice: number;
+    breakdown: string;
+  };
 }
 
 // Server-side only type (includes blob IDs for backend API routes)
