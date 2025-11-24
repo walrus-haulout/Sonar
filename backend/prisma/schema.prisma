@@ -327,3 +327,30 @@ model VerificationSession {
   @@index([rarity_score(sort: Desc)])
   @@map("verification_sessions")
 }
+
+// ============================================================================
+// Metadata Queue (for handling RPC indexing lag)
+// ============================================================================
+
+model PendingMetadata {
+  id                String   @id @default(uuid())
+  dataset_id        String   @unique  // On-chain dataset object ID
+  user_address      String
+  files             Json     // FileSealMetadata[]
+  verification      Json?    // Verification data (transcript, analysis, etc.)
+  metadata          Json?    // User-provided metadata (title, description, tags)
+  tx_digest         String?  // Transaction digest for reference
+
+  status            String   @default("pending")  // pending, processing, completed, failed
+  attempts          Int      @default(0)
+  last_error        String?
+  next_retry_at     DateTime @default(now())
+
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  completed_at      DateTime?
+
+  @@index([status, next_retry_at])
+  @@index([dataset_id])
+  @@map("pending_metadata")
+}

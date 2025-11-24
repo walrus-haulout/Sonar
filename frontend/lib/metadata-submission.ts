@@ -123,7 +123,9 @@ export async function submitMetadataWithAuth(
           body: JSON.stringify(metadata),
         });
 
-        if (!response.ok) {
+        // 202 Accepted = queued for background processing (success)
+        // 200 OK = processed immediately (success)
+        if (!response.ok && response.status !== 202) {
           let errorMessage = "Metadata submission failed";
           try {
             const error = await response.json();
@@ -135,7 +137,8 @@ export async function submitMetadataWithAuth(
         }
 
         const result = await response.json();
-        console.log("[MetadataSubmission] Success:", result);
+        const isQueued = response.status === 202 || result.queued;
+        console.log("[MetadataSubmission] Success:", { ...result, isQueued });
         return result;
       },
       RETRY_CONFIG.maxRetries,
@@ -145,7 +148,7 @@ export async function submitMetadataWithAuth(
     if (toastId !== undefined) dismissToast(toastId);
     toastSuccess(
       "Metadata saved!",
-      "Your dataset is now searchable on the marketplace",
+      "Your dataset will be searchable on the marketplace shortly",
     );
   } catch (error: any) {
     if (toastId !== undefined) dismissToast(toastId);

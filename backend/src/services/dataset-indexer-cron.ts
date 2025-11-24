@@ -11,15 +11,19 @@
 
 import { CronJob } from 'cron';
 import { BlockchainIndexer } from './blockchain-indexer';
+import { MetadataProcessor } from './metadata-processor';
 import { logger } from '../lib/logger';
 
 export class DatasetIndexerCron {
   private recentSyncJob: CronJob | null = null;
   private backfillJob: CronJob | null = null;
+  private metadataQueueJob: CronJob | null = null;
   private indexer: BlockchainIndexer;
+  private metadataProcessor: MetadataProcessor;
 
   constructor() {
     this.indexer = new BlockchainIndexer();
+    this.metadataProcessor = new MetadataProcessor();
   }
 
   /**
@@ -60,7 +64,26 @@ export class DatasetIndexerCron {
       'UTC'
     );
 
-    logger.info('Dataset indexer cron jobs started');
+    // Process metadata queue every minute
+    // Handles RPC indexing lag by retrying with exponential backoff
+    this.metadataQueueJob = new CronJob(
+      '* * * * *', // Every minute
+      async () => {
+        try {
+          const result = await this.metadataProcessor.processQueue();
+          if (result.processed > 0 || result.failed > 0) {
+            logger.info(result, 'Metadata queue processed');
+          }
+        } catch (error) {
+          logger.error({ error }, 'Metadata queue processing failed');
+        }
+      },
+      null,
+      true,
+      'UTC'
+    );
+
+    logger.info('Dataset indexer cron jobs started (including metadata queue)');
   }
 
   /**
@@ -75,6 +98,11 @@ export class DatasetIndexerCron {
     if (this.backfillJob) {
       this.backfillJob.stop();
       this.backfillJob = null;
+    }
+
+    if (this.metadataQueueJob) {
+      this.metadataQueueJob.stop();
+      this.metadataQueueJob = null;
     }
 
     logger.info('Dataset indexer cron jobs stopped');

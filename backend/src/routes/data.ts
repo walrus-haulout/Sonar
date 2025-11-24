@@ -12,13 +12,14 @@ import {
   createDatasetAccessGrant,
   getDatasetAudioStream,
   getDatasetPreviewStream,
-  storeSealMetadata,
   type FileSealMetadata,
 } from "../services/dataset-service";
+import { queueMetadataForProcessing } from "../services/metadata-processor";
 import { isHttpError, toErrorResponse } from "../lib/errors";
 
 interface SealMetadataBody {
   files: FileSealMetadata[];
+  tx_digest?: string;
   verification?: {
     verification_id: string;
     quality_score?: number;
@@ -170,19 +171,29 @@ export async function registerDataRoutes(
           });
         }
 
-        await storeSealMetadata({
+        // Queue for background processing instead of blocking
+        // This handles RPC indexing lag gracefully
+        await queueMetadataForProcessing({
           datasetId,
           userAddress,
           files,
           verification,
           metadata,
-          logger: request.log,
+          txDigest: request.body.tx_digest,
         });
 
-        return reply.send({
+        request.log.info(
+          { datasetId, userAddress, fileCount: files.length },
+          "Metadata queued for background processing"
+        );
+
+        // Return 202 Accepted - metadata will be processed asynchronously
+        return reply.code(202).send({
           success: true,
+          queued: true,
           datasetId,
           fileCount: files.length,
+          message: "Metadata queued for processing. Dataset will be available shortly.",
         });
       } catch (error) {
         if (!isHttpError(error)) {

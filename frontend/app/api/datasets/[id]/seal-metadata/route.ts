@@ -76,7 +76,9 @@ export async function POST(
 
     const data = await response.json();
 
-    if (!response.ok) {
+    // 202 Accepted = queued for background processing (success)
+    // 200 OK = processed immediately (success)
+    if (!response.ok && response.status !== 202) {
       console.error("[seal-metadata] Backend error:", {
         status: response.status,
         statusText: response.statusText,
@@ -86,14 +88,17 @@ export async function POST(
       return NextResponse.json(data, { status: response.status });
     }
 
+    const isQueued = response.status === 202 || data.queued;
     console.log(
-      `[seal-metadata] ✅ Successfully stored metadata for ${datasetId}`,
+      `[seal-metadata] ✅ Metadata ${isQueued ? "queued" : "stored"} for ${datasetId}`,
       {
         fileCount: body.files.length,
+        isQueued,
       },
     );
 
-    return NextResponse.json(data);
+    // Forward the status code (202 for queued, 200 for immediate)
+    return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error("[seal-metadata] Proxy error:", {
       error: error instanceof Error ? error.message : String(error),
