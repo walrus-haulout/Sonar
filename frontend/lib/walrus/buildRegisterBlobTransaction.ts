@@ -134,17 +134,19 @@ export interface BatchRegisterAndSubmitParams {
 /**
  * Build a transaction to submit already-registered blobs to the Sonar marketplace
  *
- * NOTE: The Walrus HTTP API (Publisher) typically handles the on-chain registration 
- * and payment for the blob storage. This function builds the transaction to 
+ * NOTE: The Walrus HTTP API (Publisher) typically handles the on-chain registration
+ * and payment for the blob storage. This function builds the transaction to
  * submit the blob metadata to the Sonar marketplace.
- * 
- * If the user wants to pay for storage themselves (User-Pays model), 
+ *
+ * If the user wants to pay for storage themselves (User-Pays model),
  * we would need to add a `register_blob` call here, but that requires a WAL coin input.
  */
 export async function buildBatchRegisterAndSubmitTransactionAsync(
   params: BatchRegisterAndSubmitParams,
 ): Promise<Transaction> {
-  console.log("[Sonar] Building batch registration and submission transaction...");
+  console.log(
+    "[Sonar] Building batch registration and submission transaction...",
+  );
   // We can perform async checks here if needed in the future
   return buildBatchRegisterAndSubmitTransaction(params);
 }
@@ -197,5 +199,90 @@ export function buildBatchRegisterAndSubmitTransaction(
   });
 
   console.log("[Sonar] Marketplace submission transaction built successfully");
+  return tx;
+}
+
+/**
+ * Single-transaction blob submission with static 0.5 SUI fee
+ *
+ * Calls blob_manager::submit_blobs() which:
+ * - Validates fee >= 0.5 SUI (MIN_SUBMISSION_FEE_SUI = 500_000_000 MIST)
+ * - Transfers fee to protocol recipient (0xca79369...)
+ * - Emits BlobsSubmitted event for backend tracking
+ *
+ * Move signature:
+ *   public fun submit_blobs(
+ *     main_blob_id: String,
+ *     preview_blob_id: String,
+ *     seal_policy_id: String,
+ *     duration_seconds: u64,
+ *     sui_payment: Coin<SUI>,
+ *     ctx: &mut TxContext
+ *   )
+ */
+export interface SubmitBlobsParams {
+  mainBlobId: string;
+  previewBlobId: string;
+  sealPolicyId: string;
+  durationSeconds: number;
+}
+
+export function buildSubmitBlobsTransaction(
+  params: SubmitBlobsParams,
+): Transaction {
+  const { mainBlobId, previewBlobId, sealPolicyId, durationSeconds } = params;
+  const sonarPackageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
+
+  if (!sonarPackageId) {
+    throw new Error("NEXT_PUBLIC_PACKAGE_ID is not defined");
+  }
+
+  // Validate blob IDs are non-empty (preview_blob_id is required by Move)
+  if (!mainBlobId || mainBlobId.length === 0) {
+    throw new Error("main_blob_id cannot be empty");
+  }
+  if (!previewBlobId || previewBlobId.length === 0) {
+    throw new Error(
+      "preview_blob_id cannot be empty (required by Move contract)",
+    );
+  }
+
+  const tx = new Transaction();
+
+  // Use higher gas budget for mainnet safety (0.1-0.15 SUI)
+  tx.setGasBudget(150_000_000); // 0.15 SUI gas budget
+
+  // Static 0.5 SUI fee (contract minimum)
+  const STATIC_FEE_MIST = 500_000_000; // 0.5 SUI
+
+  // Split fee from gas coin
+  // Important: gas coin must have at least (fee + gas) = ~0.65 SUI
+  const [suiPaymentCoin] = tx.splitCoins(tx.gas, [STATIC_FEE_MIST]);
+
+  // Call blob_manager::submit_blobs
+  // Arguments MUST match Move signature order:
+  // (String, String, String, u64, Coin<SUI>)
+  tx.moveCall({
+    target: `${sonarPackageId}::blob_manager::submit_blobs`,
+    arguments: [
+      tx.pure.string(mainBlobId), // main_blob_id: String
+      tx.pure.string(previewBlobId), // preview_blob_id: String
+      tx.pure.string(sealPolicyId), // seal_policy_id: String
+      tx.pure.u64(durationSeconds), // duration_seconds: u64
+      suiPaymentCoin, // sui_payment: Coin<SUI>
+    ],
+  });
+
+  console.log("[Sonar] Built submit_blobs transaction:", {
+    packageId: sonarPackageId.substring(0, 20) + "...",
+    mainBlobId: mainBlobId.substring(0, 20) + "...",
+    previewBlobId: previewBlobId.substring(0, 20) + "...",
+    sealPolicyId: sealPolicyId.substring(0, 20) + "...",
+    durationSeconds,
+    feeMist: STATIC_FEE_MIST,
+    feeSui: "0.5",
+    gasBudget: "0.15 SUI",
+  });
+
   return tx;
 }

@@ -22,7 +22,6 @@ import {
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
-import { useAtomicBlobRegistration } from "@/hooks/useAtomicBlobRegistration";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -107,13 +106,10 @@ export function PublishStep({
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
-  const { submitWithAtomicRegistration, isSubmitting: isAtomicSubmitting } =
-    useAtomicBlobRegistration();
   const [publishState, setPublishState] = useState<
     "idle" | "signing" | "broadcasting" | "confirming"
   >("idle");
-  const publishDisabled =
-    isPending || isAtomicSubmitting || publishState !== "idle";
+  const publishDisabled = isPending || publishState !== "idle";
 
   // Debug: Log verification data structure
   console.log("[PublishStep] Verification data received:", {
@@ -242,166 +238,40 @@ export function PublishStep({
           ],
         });
       } else {
-        // Single file: Use atomic blob registration for true atomicity
-        // This replaces the old submit_audio call with a two-phase atomic transaction:
-        // Phase 1: register_blob_intent() creates BlobRegistration on-chain
-        // Phase 2: finalize_submission_with_blob() atomically creates AudioSubmission
-        setPublishState("signing");
-
-        try {
-          console.log("[PublishStep] Starting atomic blob registration flow");
-
-          // Validate Walrus upload data before proceeding
-          console.log("[PublishStep] Validating Walrus upload data:", {
-            blobId: walrusUpload.blobId,
-            blobIdLength: walrusUpload.blobId.length,
-            blobIdSample: walrusUpload.blobId.substring(0, 30) + "...",
-            previewBlobId: walrusUpload.previewBlobId,
-            sealPolicyId: walrusUpload.seal_policy_id,
-            sealPolicyIdLength: walrusUpload.seal_policy_id?.length,
-            hasEncryptedObjectHex: !!walrusUpload.encryptedObjectBcsHex,
-            encryptedObjectHexLength:
-              walrusUpload.encryptedObjectBcsHex?.length,
-          });
-
-          // Validate blob ID format
-          if (!walrusUpload.blobId || walrusUpload.blobId.length < 16) {
-            onError(
-              `Invalid Walrus blob ID: "${walrusUpload.blobId}". ` +
-                `Upload may have failed. Please try re-uploading.`,
-            );
-            setPublishState("idle");
-            return;
-          }
-
-          // Validate seal policy ID
-          if (
-            !walrusUpload.seal_policy_id ||
-            !walrusUpload.seal_policy_id.startsWith("0x")
-          ) {
-            onError(
-              `Invalid Seal policy ID: "${walrusUpload.seal_policy_id}". ` +
-                `Encryption may have failed. Please try re-encrypting.`,
-            );
-            setPublishState("idle");
-            return;
-          }
-
-          // Check for existing registration ID in pending uploads (Recovery Flow)
-          let existingRegistrationId: string | undefined;
-          try {
-            const pending = JSON.parse(
-              localStorage.getItem("pending_uploads") || "{}",
-            );
-            const fileId = Object.keys(pending).find(
-              (k) => pending[k].walrusBlobId === walrusUpload.blobId,
-            );
-            if (fileId && pending[fileId].registrationId) {
-              existingRegistrationId = pending[fileId].registrationId;
-              console.log(
-                "[PublishStep] Found existing registration ID:",
-                existingRegistrationId,
-              );
-            }
-          } catch (e) {
-            console.warn("Failed to check pending uploads:", e);
-          }
-
-          const result = await submitWithAtomicRegistration(
-            walrusUpload.blobId,
-            walrusUpload.previewBlobId || "",
-            walrusUpload.seal_policy_id,
-            3600, // duration_seconds (placeholder - should come from audioFile)
-            undefined, // previewBlobHash
-            {
-              existingRegistrationId,
-              onPhase1Complete: (regId) => {
-                // Save registration ID to pending uploads
-                try {
-                  const pending = JSON.parse(
-                    localStorage.getItem("pending_uploads") || "{}",
-                  );
-                  const fileId = Object.keys(pending).find(
-                    (k) => pending[k].walrusBlobId === walrusUpload.blobId,
-                  );
-                  if (fileId) {
-                    pending[fileId] = {
-                      ...pending[fileId],
-                      registrationId: regId,
-                    };
-                    localStorage.setItem(
-                      "pending_uploads",
-                      JSON.stringify(pending),
-                    );
-                    console.log(
-                      "[PublishStep] Saved registration ID to pending uploads:",
-                      regId,
-                    );
-                  }
-                } catch (e) {
-                  console.warn("Failed to save registration ID:", e);
-                }
-              },
-            },
+        // Single file: Validate blob IDs
+        if (!walrusUpload.blobId || walrusUpload.blobId.length < 16) {
+          onError(
+            `Invalid Walrus blob ID: "${walrusUpload.blobId}". Upload may have failed. Please try re-uploading.`,
           );
-
-          console.log("[PublishStep] Atomic registration successful:", result);
-          setPublishState("confirming");
-
-          // Clear pending upload
-          clearPendingUpload(walrusUpload.blobId);
-
-          // Proceed with successful publication
-          onPublished({
-            txDigest: result.digest,
-            datasetId: result.submissionId,
-            confirmed: true,
-          });
-
-          return;
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error
-              ? error.message
-              : "Atomic registration failed";
-
-          // Enhanced error logging
-          console.error(
-            "[PublishStep] Atomic registration failed with details:",
-            {
-              error: errorMsg,
-              errorStack: error instanceof Error ? error.stack : undefined,
-              walrusUpload: {
-                blobId: walrusUpload.blobId?.substring(0, 30) + "...",
-                blobIdLength: walrusUpload.blobId?.length,
-                previewBlobId:
-                  walrusUpload.previewBlobId?.substring(0, 30) + "...",
-                sealPolicyId:
-                  walrusUpload.seal_policy_id?.substring(0, 30) + "...",
-                hasStrategy: !!walrusUpload.strategy,
-                strategy: walrusUpload.strategy,
-              },
-            },
-          );
-
-          // Provide user-friendly error message
-          let userMessage = errorMsg;
-          if (errorMsg.includes("Invalid Walrus blob ID")) {
-            userMessage =
-              "The Walrus upload appears incomplete. Please try uploading again.";
-          } else if (errorMsg.includes("Invalid Seal policy ID")) {
-            userMessage =
-              "The encryption step appears incomplete. Please try encrypting again.";
-          } else if (errorMsg.includes("encoding")) {
-            userMessage =
-              "Blockchain validation failed. This may be a network issue. Please try again.";
-          }
-
-          console.error("[PublishStep] Atomic registration failed:", errorMsg);
-          onError(userMessage);
           setPublishState("idle");
           return;
         }
+
+        if (
+          !walrusUpload.seal_policy_id ||
+          !walrusUpload.seal_policy_id.startsWith("0x")
+        ) {
+          onError(
+            `Invalid Seal policy ID: "${walrusUpload.seal_policy_id}". Encryption may have failed. Please try re-encrypting.`,
+          );
+          setPublishState("idle");
+          return;
+        }
+
+        // Build single-transaction blob submission with static 0.5 SUI fee
+        const SUBMISSION_FEE_MIST = 500_000_000n; // 0.5 SUI
+        const feeCoin = tx.splitCoins(tx.gas, [SUBMISSION_FEE_MIST])[0];
+
+        tx.moveCall({
+          target: `${CHAIN_CONFIG.packageId}::blob_manager::submit_blobs`,
+          arguments: [
+            tx.pure.string(walrusUpload.blobId),
+            tx.pure.string(walrusUpload.previewBlobId || ""),
+            tx.pure.string(walrusUpload.seal_policy_id),
+            tx.pure.u64(3600), // duration_seconds
+            feeCoin,
+          ],
+        });
       }
 
       setPublishState("broadcasting");
@@ -486,9 +356,19 @@ export function PublishStep({
               // 2. Check events
               if (!datasetId && txDetails.events && CHAIN_CONFIG.packageId) {
                 for (const event of txDetails.events) {
-                  const parsedJson = event.parsedJson as
-                    | SuiEventParsedJson
-                    | undefined;
+                  const parsedJson = event.parsedJson as any;
+
+                  // Check for BlobsSubmitted event (single-file via submit_blobs)
+                  if (
+                    event.type ===
+                      `${CHAIN_CONFIG.packageId}::blob_manager::BlobsSubmitted` &&
+                    parsedJson?.main_blob_id
+                  ) {
+                    datasetId = parsedJson.main_blob_id;
+                    break;
+                  }
+
+                  // Check for legacy submission events (multi-file datasets)
                   if (
                     (event.type.includes("SubmissionCreated") ||
                       event.type.includes("DatasetSubmissionCreated")) &&
