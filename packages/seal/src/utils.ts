@@ -86,8 +86,9 @@ export function isValidSuiAddress(address: string): boolean {
 
 /**
  * Generate random identity bytes
+ * Default 32 bytes = 64 hex chars for Sui object ID format
  */
-export function generateRandomIdentity(length: number = 16): Uint8Array {
+export function generateRandomIdentity(length: number = 32): Uint8Array {
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     return crypto.getRandomValues(new Uint8Array(length));
   } else if (typeof require !== "undefined") {
