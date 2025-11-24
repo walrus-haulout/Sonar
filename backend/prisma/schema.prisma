@@ -103,3 +103,203 @@ model AccessLog {
   @@index([dataset_id])
   @@index([timestamp])
 }
+
+// ============================================================================
+// Points System & Leaderboard Models
+// ============================================================================
+
+model User {
+  wallet_address            String   @id @db.VarChar(66)
+  username                  String?  @db.VarChar(100)
+  total_points              BigInt   @default(0)
+  total_submissions         Int      @default(0)
+  average_rarity_score      Decimal? @db.Decimal(5,2)
+  tier                      String   @default("Contributor") @db.VarChar(20)
+  rank                      Int?
+  first_bulk_contributions  Int      @default(0)
+  rare_subject_contributions Int     @default(0)
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  submissions               UserSubmission[]
+  achievements              UserAchievement[]
+  airdrop_eligibility       AirdropEligibility?
+  
+  @@index([total_points(sort: Desc)])
+  @@index([tier])
+  @@index([rank])
+  @@map("users")
+}
+
+model UserSubmission {
+  id                          String   @id @default(uuid()) @db.Uuid
+  wallet_address              String   @db.VarChar(66)
+  verification_session_id     String   @db.Uuid
+  points_earned               BigInt
+  rarity_score                Int
+  subject                     String?
+  sample_count                Int      @default(1)
+  subject_rarity_tier         String?  @db.VarChar(20)
+  bulk_contributor_status     String?  @db.VarChar(20)
+  is_first_bulk_contributor   Boolean  @default(false)
+  quality_multiplier          Decimal? @db.Decimal(3,2)
+  bulk_bonus_multiplier       Decimal? @db.Decimal(3,2)
+  subject_rarity_multiplier   Decimal? @db.Decimal(3,2)
+  specificity_multiplier      Decimal? @db.Decimal(3,2)
+  verification_multiplier     Decimal? @db.Decimal(3,2)
+  early_contributor_multiplier Decimal? @db.Decimal(3,2)
+  total_multiplier            Decimal? @db.Decimal(5,2)
+  submitted_at                DateTime @default(now())
+  
+  user                        User     @relation(fields: [wallet_address], references: [wallet_address], onDelete: Cascade)
+  
+  @@unique([verification_session_id])
+  @@index([wallet_address])
+  @@index([points_earned(sort: Desc)])
+  @@index([submitted_at(sort: Desc)])
+  @@index([subject])
+  @@map("user_submissions")
+}
+
+model UserAchievement {
+  id                      Int      @id @default(autoincrement())
+  wallet_address          String   @db.VarChar(66)
+  achievement_key         String   @db.VarChar(50)
+  achievement_name        String   @db.VarChar(100)
+  achievement_description String?
+  badge_icon              String?
+  unlocked_at             DateTime @default(now())
+  
+  user                    User     @relation(fields: [wallet_address], references: [wallet_address], onDelete: Cascade)
+  
+  @@unique([wallet_address, achievement_key])
+  @@index([wallet_address])
+  @@index([achievement_key])
+  @@map("user_achievements")
+}
+
+model LeaderboardSnapshot {
+  id                Int      @id @default(autoincrement())
+  wallet_address    String   @db.VarChar(66)
+  rank              Int
+  total_points      BigInt
+  tier              String   @db.VarChar(20)
+  total_submissions Int?
+  snapshot_date     DateTime @db.Date
+  created_at        DateTime @default(now())
+  
+  @@unique([wallet_address, snapshot_date])
+  @@index([snapshot_date(sort: Desc)])
+  @@index([snapshot_date, rank])
+  @@index([wallet_address])
+  @@map("leaderboard_snapshot")
+}
+
+model AirdropEligibility {
+  wallet_address      String   @id @db.VarChar(66)
+  total_points        BigInt
+  tier                String   @db.VarChar(20)
+  submissions_count   Int
+  first_bulk_count    Int      @default(0)
+  rare_subjects_count Int      @default(0)
+  subject_diversity   Int      @default(0)
+  consistency_score   Decimal  @default(0) @db.Decimal(5,2)
+  eligibility_score   Decimal  @db.Decimal(10,2)
+  allocation_percentage Decimal @default(0) @db.Decimal(5,4)
+  last_calculated     DateTime @default(now())
+  
+  user                User     @relation(fields: [wallet_address], references: [wallet_address], onDelete: Cascade)
+  
+  @@index([eligibility_score(sort: Desc)])
+  @@index([allocation_percentage(sort: Desc)])
+  @@map("airdrop_eligibility")
+}
+
+model SubjectRarityCache {
+  subject             String   @id
+  rarity_tier         String   @db.VarChar(20)
+  rarity_multiplier   Decimal  @db.Decimal(3,2)
+  dynamic_threshold   Int
+  web_research_summary String?
+  researched_at       DateTime @default(now())
+  total_samples       Int      @default(0)
+  updated_at          DateTime @updatedAt
+  
+  @@map("subject_rarity_cache")
+}
+
+model AntiAbuseFlag {
+  id              Int      @id @default(autoincrement())
+  wallet_address  String?  @db.VarChar(66)
+  flag_type       String   @db.VarChar(50)
+  severity        String   @default("medium") @db.VarChar(20)
+  description     String?
+  details         Json?
+  flagged_at      DateTime @default(now())
+  resolved        Boolean  @default(false)
+  resolved_at     DateTime?
+  
+  @@index([wallet_address])
+  @@index([resolved])
+  @@map("anti_abuse_flags")
+}
+
+// ============================================================================
+// Verification Sessions (managed by audio-verifier, read-only for backend)
+// ============================================================================
+
+model VerificationSession {
+  id                          String   @id @db.Uuid
+  verification_id             String   @db.VarChar(255)
+  status                      String   @default("processing") @db.VarChar(50)
+  stage                       String   @default("queued") @db.VarChar(50)
+  progress                    Float    @default(0.0)
+  created_at                  DateTime @default(now())
+  updated_at                  DateTime @default(now()) @updatedAt
+  initial_data                Json?
+  results                     Json?
+  error                       String?
+  
+  // Points and rarity fields
+  wallet_address              String?  @db.VarChar(66)
+  sample_count                Int?     @default(1)
+  subject                     String?
+  subject_rarity_tier         String?  @db.VarChar(20)
+  subject_rarity_multiplier   Decimal? @db.Decimal(3,2)
+  rarity_score                Int?
+  points_awarded              BigInt?  @default(0)
+  points_breakdown            Json?
+  quality_multiplier          Decimal? @default(1.0) @db.Decimal(3,2)
+  total_multiplier            Decimal? @default(1.0) @db.Decimal(5,2)
+  
+  // Saturation tracking
+  dynamic_saturation_threshold Int?
+  total_subject_samples       Int?
+  similar_count               Int?
+  saturation_penalty_applied  Boolean? @default(false)
+  saturation_status           String?  @db.VarChar(20)
+  
+  // Bulk contributor tracking
+  bulk_contributor_status     String?  @db.VarChar(20)
+  is_first_bulk_contributor   Boolean? @default(false)
+  
+  // Additional metadata
+  audio_type_hint             String?
+  specificity_details         String?
+  context_tags                String[]
+  specificity_grade           String?  @db.VarChar(2)
+  
+  // Vector embedding for similarity search
+  embedding                   Unsupported("vector(1536)")?
+  
+  // Warnings array
+  warnings                    String[]
+  
+  @@index([verification_id])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+  @@index([wallet_address])
+  @@index([subject])
+  @@index([rarity_score(sort: Desc)])
+  @@map("verification_sessions")
+}

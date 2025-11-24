@@ -42,6 +42,7 @@ def _json_safe_default(obj):
 
     return str(obj)
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +67,7 @@ async def _retry_db_operation(operation, max_retries=2, initial_delay=0.5):
 class SessionStore:
     """
     PostgreSQL-based session storage for verification sessions.
-    
+
     Uses asyncpg for async database operations. Stores sessions in the same
     Railway Postgres database used by the backend.
     """
@@ -105,7 +106,9 @@ class SessionStore:
                     await self._pool.close()
                 except (RuntimeError, asyncio.InvalidStateError) as e:
                     # Expected when closing pool from different event loop
-                    logger.debug(f"Expected error closing old pool from different loop: {type(e).__name__}")
+                    logger.debug(
+                        f"Expected error closing old pool from different loop: {type(e).__name__}"
+                    )
                 except Exception as e:
                     logger.warning(f"Error closing old pool: {e}")
                 self._pool = None
@@ -117,7 +120,7 @@ class SessionStore:
                 min_size=1,
                 max_size=5,
                 command_timeout=30,
-                statement_cache_size=0  # Required for Railway's PgBouncer
+                statement_cache_size=0,  # Required for Railway's PgBouncer
             )
             self._pool_loop = current_loop
             # Create table schema on first connection
@@ -155,16 +158,16 @@ class SessionStore:
                             ON verification_sessions ((array_length(warnings, 1) > 0))
                         """)
                     except Exception as e:
-                        logger.debug(f"Index already exists or could not be created: {e}")
+                        logger.debug(
+                            f"Index already exists or could not be created: {e}"
+                        )
 
                     logger.info("Verified pgvector extension and warnings schema")
         except asyncio.TimeoutError:
             logger.error("Timeout verifying schema")
 
     async def create_session(
-        self,
-        verification_id: str,
-        initial_data: Dict[str, Any]
+        self, verification_id: str, initial_data: Dict[str, Any]
     ) -> str:
         """
         Create a new verification session in PostgreSQL.
@@ -187,7 +190,8 @@ class SessionStore:
             pool = await self._get_pool()
             async with asyncio.timeout(10):
                 async with pool.acquire() as conn:
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         INSERT INTO verification_sessions
                         (id, verification_id, status, stage, progress, created_at, updated_at, initial_data)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -199,7 +203,7 @@ class SessionStore:
                         0.0,
                         now,
                         now,
-                        json.dumps(initial_data, default=_json_safe_default)
+                        json.dumps(initial_data, default=_json_safe_default),
                     )
 
             logger.info(f"Created session {session_id[:8]}... in PostgreSQL")
@@ -212,11 +216,7 @@ class SessionStore:
             logger.error(f"Failed to create session in PostgreSQL: {e}", exc_info=True)
             raise RuntimeError(f"Failed to create session: {str(e)}")
 
-    async def update_session(
-        self,
-        session_id: str,
-        updates: Dict[str, Any]
-    ) -> bool:
+    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
         """
         Update verification session data in PostgreSQL.
 
@@ -254,7 +254,9 @@ class SessionStore:
 
         if "results" in updates:
             update_fields.append(f"results = ${param_num}")
-            update_values.append(json.dumps(updates["results"], default=_json_safe_default))
+            update_values.append(
+                json.dumps(updates["results"], default=_json_safe_default)
+            )
             param_num += 1
 
         if "error" in updates:
@@ -279,7 +281,7 @@ class SessionStore:
 
         query = f"""
             UPDATE verification_sessions
-            SET {', '.join(update_fields)}
+            SET {", ".join(update_fields)}
             WHERE id = ${param_num}
         """
 
@@ -291,14 +293,18 @@ class SessionStore:
 
                     # Check if any rows were updated
                     if "0" in result:  # asyncpg returns "UPDATE 0" if no rows affected
-                        logger.warning(f"Session {session_id[:8]}... not found for update")
+                        logger.warning(
+                            f"Session {session_id[:8]}... not found for update"
+                        )
                         return False
             return True
 
         try:
             success = await _retry_db_operation(_do_update)
             if success:
-                logger.debug(f"Updated session {session_id[:8]}... stage={updates.get('stage')} progress={updates.get('progress')}")
+                logger.debug(
+                    f"Updated session {session_id[:8]}... stage={updates.get('stage')} progress={updates.get('progress')}"
+                )
             return success
 
         except Exception as e:
@@ -306,13 +312,11 @@ class SessionStore:
             return False
 
     async def mark_completed(
-        self,
-        session_id: str,
-        result_data: Dict[str, Any]
+        self, session_id: str, result_data: Dict[str, Any]
     ) -> bool:
         """
         Mark verification as completed in PostgreSQL.
-        
+
         Args:
             session_id: Session ID
             result_data: Final verification results containing:
@@ -323,7 +327,7 @@ class SessionStore:
                 - transcriptPreview: string
                 - analysis: dict
                 - safetyPassed: bool
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -332,44 +336,42 @@ class SessionStore:
                 "status": "completed",
                 "stage": "completed",
                 "progress": 1.0,
-                "results": result_data
+                "results": result_data,
             }
             return await self.update_session(session_id, updates)
-            
+
         except Exception as e:
             logger.error(f"Failed to mark session completed: {e}", exc_info=True)
             return False
 
-    async def mark_failed(
-        self,
-        session_id: str,
-        error_data: Dict[str, Any]
-    ) -> bool:
+    async def mark_failed(self, session_id: str, error_data: Dict[str, Any]) -> bool:
         """
         Mark verification as failed in PostgreSQL.
-        
+
         Args:
             session_id: Session ID
             error_data: Error information containing:
                 - errors: List of error messages
                 - stage_failed: Stage where failure occurred
                 - cancelled: Optional bool if cancelled
-        
+
         Returns:
             True if successful, False otherwise
         """
         try:
             status = "cancelled" if error_data.get("cancelled") else "failed"
-            error_value = error_data.get("errors", [error_data.get("stage_failed", "unknown")])
-            
+            error_value = error_data.get(
+                "errors", [error_data.get("stage_failed", "unknown")]
+            )
+
             updates = {
                 "status": status,
                 "stage": "failed",
                 "progress": 0.0,
-                "error": error_value
+                "error": error_value,
             }
             return await self.update_session(session_id, updates)
-            
+
         except Exception as e:
             logger.error(f"Failed to mark session failed: {e}", exc_info=True)
             return False
@@ -388,15 +390,20 @@ class SessionStore:
             pool = await self._get_pool()
             async with asyncio.timeout(10):
                 async with pool.acquire() as conn:
-                    row = await conn.fetchrow("""
+                    row = await conn.fetchrow(
+                        """
                         SELECT id, verification_id, status, stage, progress,
                                created_at, updated_at, initial_data, results, error, warnings
                         FROM verification_sessions
                         WHERE id = $1
-                    """, session_id)
+                    """,
+                        session_id,
+                    )
 
                     if not row:
-                        logger.warning(f"Session {session_id[:8]}... not found in PostgreSQL")
+                        logger.warning(
+                            f"Session {session_id[:8]}... not found in PostgreSQL"
+                        )
                         return None
 
                     try:
@@ -411,15 +418,25 @@ class SessionStore:
                         "status": row["status"],
                         "stage": row["stage"],
                         "progress": float(row["progress"]),
-                        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-                        "initial_data": json.loads(row["initial_data"]) if row["initial_data"] else None,
-                        "results": json.loads(row["results"]) if row["results"] else None,
+                        "created_at": row["created_at"].isoformat()
+                        if row["created_at"]
+                        else None,
+                        "updated_at": row["updated_at"].isoformat()
+                        if row["updated_at"]
+                        else None,
+                        "initial_data": json.loads(row["initial_data"])
+                        if row["initial_data"]
+                        else None,
+                        "results": json.loads(row["results"])
+                        if row["results"]
+                        else None,
                         "error": row["error"],
-                        "warnings": warnings
+                        "warnings": warnings,
                     }
 
-                    logger.debug(f"Retrieved session {session_id[:8]}... from PostgreSQL")
+                    logger.debug(
+                        f"Retrieved session {session_id[:8]}... from PostgreSQL"
+                    )
                     return session_data
 
         except asyncio.TimeoutError:
@@ -430,10 +447,7 @@ class SessionStore:
             return None
 
     async def update_stage(
-        self,
-        session_id: str,
-        stage_name: str,
-        progress: float
+        self, session_id: str, stage_name: str, progress: float
     ) -> bool:
         """
         Update verification stage and progress.
@@ -448,16 +462,11 @@ class SessionStore:
         Returns:
             True if successful, False otherwise
         """
-        return await self.update_session(session_id, {
-            "stage": stage_name,
-            "progress": progress
-        })
+        return await self.update_session(
+            session_id, {"stage": stage_name, "progress": progress}
+        )
 
-    async def add_warnings(
-        self,
-        session_id: str,
-        new_warnings: list[str]
-    ) -> bool:
+    async def add_warnings(self, session_id: str, new_warnings: list[str]) -> bool:
         """
         Append warnings to a session's warnings array.
 
@@ -475,7 +484,8 @@ class SessionStore:
             pool = await self._get_pool()
             async with asyncio.timeout(10):
                 async with pool.acquire() as conn:
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         UPDATE verification_sessions
                         SET
                             warnings = warnings || $1::TEXT[],
@@ -483,11 +493,65 @@ class SessionStore:
                         WHERE id = $2
                     """,
                         new_warnings,
-                        session_id
+                        session_id,
                     )
             return True
         except Exception as e:
             logger.error(f"Failed to add warnings to session {session_id[:8]}...: {e}")
+            return False
+
+    async def update_session_points(
+        self, session_id: str, points_awarded: int, breakdown: Dict[str, Any]
+    ) -> bool:
+        """
+        Update session with points information.
+
+        Args:
+            session_id: Session UUID
+            points_awarded: Total points awarded
+            breakdown: Full points calculation breakdown for audit trail
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE verification_sessions
+                    SET points_awarded = $1,
+                        points_breakdown = $2::JSONB,
+                        quality_multiplier = $3,
+                        total_multiplier = $4,
+                        rarity_score = $5,
+                        updated_at = NOW()
+                    WHERE id = $6
+                    """,
+                    points_awarded,
+                    json.dumps(breakdown, default=_json_safe_default),
+                    breakdown.get("quality_multiplier", 1.0),
+                    breakdown.get("total_multiplier", 1.0),
+                    breakdown.get("rarity_score", 0),
+                    session_id,
+                )
+
+                logger.info(
+                    f"Updated session {session_id[:8]}... with {points_awarded} points",
+                    extra={
+                        "session_id": session_id,
+                        "points_awarded": points_awarded,
+                        "quality_multiplier": breakdown.get("quality_multiplier"),
+                        "total_multiplier": breakdown.get("total_multiplier"),
+                    },
+                )
+                return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to update session points for {session_id[:8]}...: {e}",
+                exc_info=True,
+            )
             return False
 
     async def close(self):

@@ -14,20 +14,10 @@ import type {
   VerificationResult,
   PublishResult,
 } from "@/lib/types/upload";
-import {
-  extractObjectId,
-  isSuiCreatedObject,
-  type SuiEventParsedJson,
-} from "@/lib/types/sui";
+import { extractObjectId } from "@/lib/types/sui";
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
-import { buildSubmitBlobsTransaction } from "@/lib/walrus/buildRegisterBlobTransaction";
-import {
-  buildSubmitAndRegisterBlobsTransaction,
-  estimateTotalCost,
-} from "@/lib/walrus/buildSubmitAndRegisterBlobsTransaction";
-import { getWalBalance } from "@/lib/sui/wal-coin-utils";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -38,6 +28,26 @@ function _uint8ArrayToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+/**
+ * Convert hex string (with or without 0x prefix) to byte array
+ * Returns empty array if the input is invalid
+ */
+function hexToBytes(hex?: string | null): number[] {
+  if (!hex) return [];
+  const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (normalized.length === 0 || normalized.length % 2 !== 0) return [];
+
+  const bytes: number[] = [];
+  for (let i = 0; i < normalized.length; i += 2) {
+    const byte = Number.parseInt(normalized.slice(i, i + 2), 16);
+    if (Number.isNaN(byte)) {
+      return [];
+    }
+    bytes.push(byte);
+  }
+  return bytes;
 }
 
 /**
@@ -270,53 +280,52 @@ export function PublishStep({
           ? Math.max(1, Math.floor(walrusUpload.files[0].duration))
           : 3600;
 
-        // Check if we have on-chain registration metadata (rootHash + size)
-        const hasOnChainMetadata =
-          walrusUpload.rootHash &&
-          walrusUpload.size &&
-          walrusUpload.previewRootHash &&
-          walrusUpload.previewSize;
+        const previewBlobId =
+          walrusUpload.previewBlobId ||
+          walrusUpload.files?.[0]?.previewBlobId ||
+          "";
 
-        if (hasOnChainMetadata) {
-          // NEW: Full on-chain registration with WAL payment
-          console.log(
-            "[PublishStep] Using on-chain blob registration with WAL",
+        if (!previewBlobId) {
+          onError(
+            "Preview blob ID missing from Walrus upload. Please re-upload.",
           );
-
-          tx = await buildSubmitAndRegisterBlobsTransaction({
-            client: suiClient,
-            walletAddress: account.address,
-            mainBlobId: walrusUpload.blobId,
-            mainBlobRootHash: walrusUpload.rootHash!,
-            mainBlobSize: walrusUpload.size!,
-            previewBlobId: walrusUpload.previewBlobId || "",
-            previewBlobRootHash: walrusUpload.previewRootHash!,
-            previewBlobSize: walrusUpload.previewSize!,
-            sealPolicyId: walrusUpload.seal_policy_id,
-            durationSeconds: actualDuration,
-          });
-        } else {
-          // LEGACY: SUI-only submission (no WAL, no on-chain registration)
-          console.log(
-            "[PublishStep] Using legacy submission (no on-chain registration)",
-          );
-          console.warn(
-            "[PublishStep] Missing Walrus metadata for on-chain registration:",
-            {
-              hasRootHash: !!walrusUpload.rootHash,
-              hasSize: !!walrusUpload.size,
-              hasPreviewRootHash: !!walrusUpload.previewRootHash,
-              hasPreviewSize: !!walrusUpload.previewSize,
-            },
-          );
-
-          tx = buildSubmitBlobsTransaction({
-            mainBlobId: walrusUpload.blobId,
-            previewBlobId: walrusUpload.previewBlobId || "",
-            sealPolicyId: walrusUpload.seal_policy_id,
-            durationSeconds: actualDuration,
-          });
+          setPublishState("idle");
+          return;
         }
+
+        const previewHashBytes = hexToBytes(walrusUpload.previewRootHash);
+
+        console.log(
+          "[PublishStep] Using marketplace::submit_audio to mint dataset object",
+          {
+            previewBlobId,
+            hasPreviewHash: previewHashBytes.length > 0,
+            durationSeconds: actualDuration,
+          },
+        );
+
+        tx = new Transaction();
+        tx.setGasBudget(80_000_000); // Buffer for mainnet
+
+        const marketplaceSharedRef = tx.object(CHAIN_CONFIG.marketplaceId);
+        const submissionFeeCoin = tx.splitCoins(tx.gas, [
+          FIXED_PRICE_PER_FILE_MIST,
+        ])[0];
+
+        tx.moveCall({
+          target: `${CHAIN_CONFIG.packageId}::marketplace::submit_audio`,
+          arguments: [
+            marketplaceSharedRef,
+            submissionFeeCoin,
+            tx.pure.string(walrusUpload.blobId),
+            tx.pure.string(previewBlobId),
+            tx.pure.string(walrusUpload.seal_policy_id),
+            previewHashBytes.length > 0
+              ? tx.pure.option("vector<u8>", previewHashBytes)
+              : tx.pure.option("vector<u8>", null),
+            tx.pure.u64(actualDuration),
+          ],
+        });
       }
 
       setPublishState("broadcasting");

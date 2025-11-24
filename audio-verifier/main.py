@@ -149,6 +149,9 @@ async def validate_environment():
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
+    # Run database migrations to ensure schema is up-to-date
+    await run_database_migrations()
+
     # Validate Seal configuration for encrypted blob verification
     seal_key_server_urls = os.getenv("SEAL_KEY_SERVER_URLS", "{}")
     try:
@@ -180,6 +183,74 @@ _feedback_indexer: Optional[FeedbackIndexer] = None
 _feedback_clusterer: Optional[FeedbackClusterer] = None
 _quality_checker = AudioQualityChecker()
 _copyright_detector = CopyrightDetector(ACOUSTID_API_KEY)
+
+
+async def run_database_migrations():
+    """
+    Run database migrations on startup to ensure schema is up-to-date.
+
+    Applies all pending SQL migrations from the migrations directory.
+    """
+    import asyncpg
+    from pathlib import Path
+
+    if not DATABASE_URL:
+        logger.warning("DATABASE_URL not set - skipping migrations")
+        return
+
+    logger.info("Running database migrations...")
+
+    try:
+        # Get migration files in order
+        migrations_dir = Path(__file__).parent / "migrations"
+        if not migrations_dir.exists():
+            logger.warning(f"Migrations directory not found: {migrations_dir}")
+            return
+
+        migration_files = sorted(migrations_dir.glob("*.sql"))
+
+        if not migration_files:
+            logger.info("No migration files found")
+            return
+
+        logger.info(f"Found {len(migration_files)} migration files")
+
+        # Connect to database
+        pool = await asyncpg.create_pool(
+            DATABASE_URL, min_size=1, max_size=5, command_timeout=60
+        )
+
+        try:
+            async with pool.acquire() as conn:
+                for migration_file in migration_files:
+                    logger.info(f"Applying migration: {migration_file.name}")
+
+                    # Read migration file
+                    with open(migration_file, "r") as f:
+                        migration_sql = f.read()
+
+                    # Execute migration (idempotent with CREATE IF NOT EXISTS)
+                    try:
+                        await conn.execute(migration_sql)
+                        logger.info(f"✓ Completed: {migration_file.name}")
+                    except Exception as e:
+                        # Log but don't fail startup - tables might already exist
+                        logger.warning(
+                            f"Migration {migration_file.name} had warnings: {e}"
+                        )
+                        # If it's a critical error (not "already exists"), raise
+                        if "already exists" not in str(e).lower():
+                            raise
+
+            logger.info("All migrations completed successfully!")
+
+        finally:
+            await pool.close()
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}", exc_info=True)
+        # Don't prevent startup - tables might already exist
+        logger.warning("Continuing startup despite migration issues...")
 
 
 def get_session_store() -> SessionStore:

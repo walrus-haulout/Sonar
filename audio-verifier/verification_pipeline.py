@@ -22,6 +22,8 @@ from openai import OpenAI
 from audio_checker import AudioQualityChecker
 from fingerprint import CopyrightDetector
 from session_store import SessionStore
+from points_calculator import PointsCalculator
+from user_manager import UserManager
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,12 @@ class VerificationPipeline:
         # Initialize quality and copyright checkers
         self.quality_checker = AudioQualityChecker()
         self.copyright_detector = CopyrightDetector(acoustid_api_key)
+
+        # Initialize points system
+        self.points_calculator = PointsCalculator()
+        self.user_manager = UserManager()
+        self._dataset_count_cache: Optional[int] = None
+        self._dataset_count_cache_time: Optional[float] = None
 
     @asynccontextmanager
     async def _temp_audio_file(self, audio_bytes: bytes, extension: str = ".wav"):
@@ -372,6 +380,12 @@ class VerificationPipeline:
                 raise RuntimeError("Failed to finalize verification")
 
             logger.info(f"[{session_object_id}] Pipeline completed approved={approved}")
+
+            # AWARD POINTS if submission was approved
+            if approved:
+                await self._award_points(
+                    session_object_id, metadata, quality_result, analysis_result
+                )
 
         except Exception as e:
             logger.error(f"[{session_object_id}] Pipeline failed: {e}", exc_info=True)
@@ -1369,3 +1383,272 @@ Respond ONLY with the JSON object, no additional text."""
             score -= 15
 
         return max(0, min(100, int(score)))
+
+    async def _award_points(
+        self,
+        session_object_id: str,
+        metadata: Dict[str, Any],
+        quality_result: Dict[str, Any],
+        analysis_result: Dict[str, Any],
+    ) -> None:
+        """
+        Calculate and award points for approved submission with robust data extraction.
+
+        Args:
+            session_object_id: Session UUID
+            metadata: User-provided metadata
+            quality_result: Quality check results
+            analysis_result: AI analysis results
+        """
+        try:
+            # 1. EXTRACT WALLET ADDRESS - bail early if missing
+            wallet_address = metadata.get("walletAddress") or metadata.get(
+                "wallet_address"
+            )
+            if not wallet_address:
+                logger.warning(
+                    f"[{session_object_id[:8]}...] No wallet address - skipping points",
+                    extra={
+                        "session_id": session_object_id,
+                        "metadata_keys": list(metadata.keys()),
+                    },
+                )
+                return
+
+            # 2. EXTRACT RARITY SCORE - use actual analysis output, no hardcoded defaults
+            rarity_score = analysis_result.get("rarityScore") or analysis_result.get(
+                "rarity_score"
+            )
+            if rarity_score is None:
+                logger.warning(
+                    f"[{session_object_id[:8]}...] Missing rarity_score from analysis - skipping points",
+                    extra={
+                        "session_id": session_object_id,
+                        "analysis_keys": list(analysis_result.keys()),
+                    },
+                )
+                return
+
+            try:
+                rarity_score = int(rarity_score)
+                if not (0 <= rarity_score <= 100):
+                    logger.warning(
+                        f"[{session_object_id[:8]}...] Invalid rarity_score {rarity_score}, clamping to 0-100"
+                    )
+                    rarity_score = max(0, min(100, rarity_score))
+            except (TypeError, ValueError):
+                logger.error(
+                    f"[{session_object_id[:8]}...] Cannot convert rarity_score to int: {rarity_score}"
+                )
+                return
+
+            # 3. EXTRACT QUALITY SCORE - use AI analysis score (0-1 scale)
+            quality_score = analysis_result.get("qualityScore")
+            if quality_score is None:
+                logger.warning(
+                    f"[{session_object_id[:8]}...] Missing qualityScore from analysis - skipping points",
+                    extra={"session_id": session_object_id},
+                )
+                return
+
+            try:
+                quality_score = float(quality_score)
+                # Normalize to 0-1 if it's 0-100 scale
+                if quality_score > 1.0:
+                    quality_score = quality_score / 100.0
+                quality_score = max(0.0, min(1.0, quality_score))
+            except (TypeError, ValueError):
+                logger.error(
+                    f"[{session_object_id[:8]}...] Cannot convert qualityScore to float: {quality_score}"
+                )
+                return
+
+            # 4. EXTRACT SAMPLE COUNT
+            sample_count = metadata.get("sampleCount", 1)
+            try:
+                sample_count = int(sample_count)
+                sample_count = max(1, sample_count)  # At least 1
+            except (TypeError, ValueError):
+                logger.warning(
+                    f"[{session_object_id[:8]}...] Invalid sampleCount, defaulting to 1"
+                )
+                sample_count = 1
+
+            # 5. EXTRACT SUBJECT RARITY TIER - from analysis or session
+            subject_rarity_tier = analysis_result.get(
+                "subjectRarityTier"
+            ) or analysis_result.get("subject_rarity_tier")
+            if not subject_rarity_tier:
+                logger.info(
+                    f"[{session_object_id[:8]}...] No subject_rarity_tier from analysis, using Standard",
+                    extra={"session_id": session_object_id},
+                )
+                subject_rarity_tier = "Standard"  # Explicit fallback
+
+            # 6. EXTRACT SPECIFICITY GRADE - from analysis
+            specificity_grade = analysis_result.get(
+                "specificityGrade"
+            ) or analysis_result.get("specificity_grade")
+            if not specificity_grade:
+                logger.info(
+                    f"[{session_object_id[:8]}...] No specificity_grade from analysis, using D",
+                    extra={"session_id": session_object_id},
+                )
+                specificity_grade = "D"  # Explicit fallback
+
+            # 7. DETERMINE BULK CONTRIBUTOR STATUS
+            # TODO: Query database to check if this is first bulk submission for this subject
+            is_first_bulk = (
+                False  # Conservative default - will be computed from DB in future
+            )
+            if sample_count >= 100:
+                logger.info(
+                    f"[{session_object_id[:8]}...] Large sample count ({sample_count}), checking first bulk status (TODO)",
+                    extra={
+                        "session_id": session_object_id,
+                        "sample_count": sample_count,
+                    },
+                )
+
+            # 8. GET DATASET COUNT FOR EARLY CONTRIBUTOR MULTIPLIER
+            total_datasets = await self._get_total_dataset_count()
+            self.points_calculator.set_total_datasets(total_datasets)
+
+            # 9. CALCULATE POINTS WITH ALL MULTIPLIERS
+            logger.info(
+                f"[{session_object_id[:8]}...] Calculating points: "
+                f"rarity={rarity_score}, quality={quality_score:.2f}, samples={sample_count}, "
+                f"rarity_tier={subject_rarity_tier}, grade={specificity_grade}",
+                extra={
+                    "session_id": session_object_id,
+                    "rarity_score": rarity_score,
+                    "quality_score": quality_score,
+                    "sample_count": sample_count,
+                    "subject_rarity_tier": subject_rarity_tier,
+                    "specificity_grade": specificity_grade,
+                    "total_datasets": total_datasets,
+                },
+            )
+
+            points_result = self.points_calculator.calculate_points(
+                rarity_score=rarity_score,
+                quality_score=quality_score,
+                sample_count=sample_count,
+                is_first_bulk=is_first_bulk,
+                subject_rarity_tier=subject_rarity_tier,
+                specificity_grade=specificity_grade,
+                verification_status="verified",  # Approved = verified
+            )
+
+            points_awarded = points_result["points"]
+
+            # 10. UPDATE USER POINTS AND CREATE SUBMISSION RECORD
+            user_update = await self.user_manager.add_points(
+                wallet_address=wallet_address,
+                points=points_awarded,
+                rarity_score=rarity_score,
+                sample_count=sample_count,
+                is_first_bulk=is_first_bulk,
+                subject_rarity_tier=subject_rarity_tier,
+            )
+
+            # 11. UPDATE SESSION WITH POINTS INFO AND FULL BREAKDOWN
+            success = await self.session_store.update_session_points(
+                session_object_id, points_awarded, points_result
+            )
+
+            if not success:
+                logger.error(
+                    f"[{session_object_id[:8]}...] Failed to update session with points, but user points were awarded",
+                    extra={
+                        "session_id": session_object_id,
+                        "wallet_address": wallet_address,
+                        "points_awarded": points_awarded,
+                    },
+                )
+                # NOTE: Don't raise - user already got points, this is just audit trail
+
+            logger.info(
+                f"[{session_object_id[:8]}...] Successfully awarded {points_awarded} points to {wallet_address[:8]}... "
+                f"(total: {user_update['total_points']}, tier: {user_update['tier']})",
+                extra={
+                    "session_id": session_object_id,
+                    "wallet_address": wallet_address,
+                    "points_awarded": points_awarded,
+                    "user_total_points": user_update["total_points"],
+                    "user_tier": user_update["tier"],
+                    "multipliers": {
+                        "quality": points_result["quality_multiplier"],
+                        "bulk": points_result["bulk_multiplier"],
+                        "subject_rarity": points_result["subject_rarity_multiplier"],
+                        "specificity": points_result["specificity_multiplier"],
+                        "verification": points_result["verification_multiplier"],
+                        "early_contributor": points_result[
+                            "early_contributor_multiplier"
+                        ],
+                        "total": points_result["total_multiplier"],
+                    },
+                },
+            )
+
+        except Exception as e:
+            # CRITICAL: Log to Sentry or monitoring system for retry
+            logger.error(
+                f"[{session_object_id[:8]}...] Points calculation failed - flagging for retry",
+                extra={
+                    "session_id": session_object_id,
+                    "wallet_address": metadata.get("walletAddress")
+                    or metadata.get("wallet_address"),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+                exc_info=True,
+            )
+            # Don't raise - verification succeeded, points can be retroactively awarded
+
+    async def _get_total_dataset_count(self) -> int:
+        """
+        Get total approved dataset count for early contributor multiplier.
+
+        Caches result for 5 minutes to avoid repeated queries.
+        """
+        import time
+
+        # Check cache (5 minute TTL)
+        if (
+            self._dataset_count_cache is not None
+            and self._dataset_count_cache_time is not None
+        ):
+            age = time.time() - self._dataset_count_cache_time
+            if age < 300:  # 5 minutes
+                logger.debug(
+                    f"Using cached dataset count: {self._dataset_count_cache} (age: {age:.1f}s)"
+                )
+                return self._dataset_count_cache
+
+        try:
+            pool = await self.session_store._get_pool()
+            async with pool.acquire() as conn:
+                # Query with indexed column for performance
+                count = await conn.fetchval(
+                    """
+                    SELECT COUNT(*) 
+                    FROM verification_sessions 
+                    WHERE status = 'completed' 
+                    AND (results->>'approved')::boolean = true
+                    """
+                )
+
+                result = count or 0
+
+                # Update cache
+                self._dataset_count_cache = result
+                self._dataset_count_cache_time = time.time()
+
+                logger.debug(f"Fetched dataset count from DB: {result}")
+                return result
+
+        except Exception as e:
+            logger.warning(f"Failed to get dataset count: {e}")
+            # Return conservative fallback - assume no early bonus
+            return 1000
