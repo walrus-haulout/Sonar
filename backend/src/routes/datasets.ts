@@ -12,7 +12,7 @@
  * - GET /api/datasets/stats - Repository statistics
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { DatasetRepository } from '../services/dataset-repository';
 
 const repository = new DatasetRepository();

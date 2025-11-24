@@ -79,7 +79,6 @@ export async function getGlobalLeaderboard(
     throw new Error('Failed to fetch leaderboard');
   }
 }
-}
 
 /**
  * Get user's ranking and tier progression info

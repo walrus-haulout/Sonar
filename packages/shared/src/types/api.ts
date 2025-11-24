@@ -64,12 +64,15 @@ export enum ErrorCode {
   DATASET_NOT_FOUND = 'DATASET_NOT_FOUND',
   BLOB_NOT_FOUND = 'BLOB_NOT_FOUND',
   INVALID_REQUEST = 'INVALID_REQUEST',
+  CONFLICT = 'CONFLICT',
+  FORBIDDEN = 'FORBIDDEN',
 
   // Server errors
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   DATABASE_ERROR = 'DATABASE_ERROR',
   WALRUS_ERROR = 'WALRUS_ERROR',
+  SERVER_ERROR = 'SERVER_ERROR',
 
   // Rate limiting
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
@@ -90,7 +93,10 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.DATASET_NOT_FOUND]: 'Dataset not found.',
   [ErrorCode.BLOB_NOT_FOUND]: 'Audio file not found in storage.',
   [ErrorCode.INVALID_REQUEST]: 'Invalid request. Please check your parameters.',
+  [ErrorCode.CONFLICT]: 'Request conflicts with the current state.',
+  [ErrorCode.FORBIDDEN]: 'Access forbidden.',
   [ErrorCode.INTERNAL_ERROR]: 'An error occurred on the server. Please try again later.',
+  [ErrorCode.SERVER_ERROR]: 'An error occurred on the server. Please try again later.',
   [ErrorCode.SERVICE_UNAVAILABLE]: 'Service temporarily unavailable. Please try again later.',
   [ErrorCode.DATABASE_ERROR]: 'Database error. Please try again later.',
   [ErrorCode.WALRUS_ERROR]: 'Storage service error. Please try again later.',

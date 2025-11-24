@@ -183,7 +183,6 @@ export async function registerMonitoringRoutes(fastify: FastifyInstance) {
     "/api/monitoring/vector-db",
     {
       schema: {
-        description: "Get vector database performance metrics",
         response: {
           200: {
             type: "object",
@@ -208,9 +207,6 @@ export async function registerMonitoringRoutes(fastify: FastifyInstance) {
     "/api/monitoring/alerts/clear",
     {
       onRequest: adminAuthMiddleware,
-      schema: {
-        description: "Clear all alerts (admin only)",
-      },
     },
     clearAlerts,
   );
@@ -219,9 +215,6 @@ export async function registerMonitoringRoutes(fastify: FastifyInstance) {
     "/api/monitoring/cache/clear",
     {
       onRequest: adminAuthMiddleware,
-      schema: {
-        description: "Clear cache (admin only)",
-      },
     },
     clearCache,
   );

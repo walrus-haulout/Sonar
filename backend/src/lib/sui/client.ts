@@ -11,6 +11,9 @@ import { config } from '../config';
 export const SUI_RPC_URL = config.sui.rpcUrl;
 export const SONAR_PACKAGE_ID = config.sui.packageId;
 export const SONAR_MARKETPLACE_ID = config.sui.marketplaceId;
+export const DATASET_TYPE = SONAR_PACKAGE_ID
+  ? `${SONAR_PACKAGE_ID}::marketplace::AudioSubmission`
+  : '';
 
 // Initialize standard SuiClient
 logger.info({ rpcUrl: SUI_RPC_URL }, 'Initializing Sui client');
