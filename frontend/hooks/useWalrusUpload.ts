@@ -76,7 +76,7 @@ class WalletSigner extends Signer {
       try {
         // Use the experimental getTransaction API with retry logic
         // to handle mainnet indexing lag
-        const txResponse = await retryTransactionQuery(() =>
+        const txResponse: any = await retryTransactionQuery(() =>
           options.client.core.getTransaction({
             digest: result.digest,
           }),
