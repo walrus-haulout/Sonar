@@ -431,16 +431,29 @@ export function useWalrusParallelUpload() {
       console.log("[Upload] Main blob uploaded via Blockberry:", {
         blobId,
         blobObjectId,
+        storageId,
         size: encryptedBlob.size,
         attempt,
       });
 
-      // Verify blob exists on storage network with extended retries and exponential backoff
+      // Verify blob exists on storage network
+      // Use storageId from upload response as preferred aggregator (it tells us exactly where the blob was stored)
+      // Use 20 retries with 5s initial delay and exponential backoff for mainnet certification lag (~2-3 min max)
       console.log("[Upload] Verifying blob availability on storage network...");
-      let verification = await verifyBlobExists(blobId, 15, 3000);
+      const preferredAggregators = storageId ? [storageId] : undefined;
+      let verification = await verifyBlobExists(
+        blobId,
+        20,
+        5000,
+        preferredAggregators,
+      );
 
       if (!verification.exists) {
-        console.error("[Upload] Blob verification failed after upload");
+        console.error("[Upload] Blob verification failed after upload", {
+          blobId,
+          storageId,
+          preferredAggregators,
+        });
         const errorMessage = formatUploadErrorForUser({
           type: "walrus_error",
           code: "WALRUS_BLOB_NOT_AVAILABLE",
@@ -516,10 +529,14 @@ export function useWalrusParallelUpload() {
           // Verify preview blob exists on storage network
           if (finalPreviewBlobId) {
             console.log("[Upload] Verifying preview blob availability...");
+            const previewPreferredAggregators = previewStorageId
+              ? [previewStorageId]
+              : undefined;
             const previewVerification = await verifyBlobExists(
               finalPreviewBlobId,
-              15,
-              3000,
+              20,
+              5000,
+              previewPreferredAggregators,
             );
             if (!previewVerification.exists) {
               console.warn(

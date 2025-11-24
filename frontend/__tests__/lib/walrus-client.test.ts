@@ -71,6 +71,25 @@ describe("Walrus Client - verifyBlobExists", () => {
     global.fetch = originalFetch;
   });
 
+  it("should prioritize preferred aggregators from storageId", async () => {
+    const storageAggregator = "https://storage.example.com";
+    let firstCallUrl: string | undefined;
+
+    global.fetch = mock((url) => {
+      if (!firstCallUrl) {
+        firstCallUrl = url as string;
+      }
+      return Promise.resolve({ ok: true } as Response);
+    }) as any;
+
+    const { verifyBlobExists } = await import("../../lib/walrus/client");
+    await verifyBlobExists(mockBlobId, 1, 100, [storageAggregator]);
+
+    expect(firstCallUrl).toContain(storageAggregator);
+
+    global.fetch = originalFetch;
+  });
+
   it("should skip aggregators with DNS errors permanently", async () => {
     let callCount = 0;
     const calledAggregators = new Set<string>();
@@ -92,21 +111,25 @@ describe("Walrus Client - verifyBlobExists", () => {
     global.fetch = originalFetch;
   });
 
-  it("should treat 404 as not-yet-propagated and retry", async () => {
-    let callCount = 0;
-    global.fetch = mock(() => {
-      callCount++;
-      if (callCount < 3) {
+  it("should fallback to GET when HEAD returns 404", async () => {
+    let methodSequence: string[] = [];
+    global.fetch = mock((url, options) => {
+      const method = options?.method || "GET";
+      methodSequence.push(method);
+
+      // HEAD returns 404, GET succeeds
+      if (method === "HEAD") {
         return Promise.resolve({ ok: false, status: 404 } as Response);
       }
-      return Promise.resolve({ ok: true } as Response);
+      return Promise.resolve({ ok: true, status: 206 } as Response);
     }) as any;
 
     const { verifyBlobExists } = await import("../../lib/walrus/client");
-    const result = await verifyBlobExists(mockBlobId, 5, 100);
+    const result = await verifyBlobExists(mockBlobId, 1, 100);
 
     expect(result.exists).toBe(true);
-    expect(callCount).toBeGreaterThanOrEqual(3);
+    expect(methodSequence).toContain("HEAD");
+    expect(methodSequence).toContain("GET");
 
     global.fetch = originalFetch;
   });

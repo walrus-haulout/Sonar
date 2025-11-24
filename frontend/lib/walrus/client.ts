@@ -52,14 +52,31 @@ export async function verifyBlobExists(
   blobId: string,
   maxRetries: number = 3,
   delayMs: number = 2000,
+  preferredAggregators?: string[],
 ): Promise<{ exists: boolean; aggregator?: string; error?: string }> {
-  const aggregators = getAggregatorList();
+  // Build aggregator list: preferred (from storageId) first, then env + fallbacks
+  let aggregators: string[] = [];
+  if (preferredAggregators && preferredAggregators.length > 0) {
+    aggregators = [...preferredAggregators];
+  }
+
+  // Add env-configured and fallback aggregators, deduplicating
+  const envAggregators = getAggregatorList();
+  for (const agg of envAggregators) {
+    if (!aggregators.includes(agg)) {
+      aggregators.push(agg);
+    }
+  }
+
   const deadAggregators = new Set<string>();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(
       `[Walrus] Verifying blob ${blobId} (attempt ${attempt}/${maxRetries})`,
     );
+
+    // Use exponential backoff for retries
+    const currentDelay = delayMs * Math.pow(1.5, attempt - 1);
 
     for (const aggregator of aggregators) {
       // Skip aggregators that failed DNS resolution
@@ -69,18 +86,35 @@ export async function verifyBlobExists(
 
       try {
         const url = `${aggregator}/v1/${blobId}`;
-        const response = await fetch(url, {
+
+        // Try HEAD first
+        let response = await fetch(url, {
           method: "HEAD",
           signal: AbortSignal.timeout(10000),
         });
 
         if (response.ok) {
-          console.log(`[Walrus] Blob verified on ${aggregator}`);
+          console.log(`[Walrus] Blob verified on ${aggregator} (HEAD)`);
           return { exists: true, aggregator };
         }
 
-        // 404 means blob not propagated yet - retry
+        // If HEAD returns 404, try GET with range header as fallback
         if (response.status === 404) {
+          console.log(
+            `[Walrus] HEAD returned 404 on ${aggregator}, trying GET with range...`,
+          );
+
+          response = await fetch(url, {
+            method: "GET",
+            headers: { Range: "bytes=0-0" },
+            signal: AbortSignal.timeout(10000),
+          });
+
+          if (response.ok || response.status === 206) {
+            console.log(`[Walrus] Blob verified on ${aggregator} (GET)`);
+            return { exists: true, aggregator };
+          }
+
           console.log(
             `[Walrus] Blob not found on ${aggregator} (404 - not propagated yet)`,
           );
@@ -115,8 +149,10 @@ export async function verifyBlobExists(
     }
 
     if (attempt < maxRetries) {
-      console.log(`[Walrus] Blob not found, retrying in ${delayMs}ms...`);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      console.log(
+        `[Walrus] Blob not found, retrying in ${Math.round(currentDelay)}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, currentDelay));
     }
   }
 
