@@ -8,6 +8,8 @@ import {
   AudioFile,
   EncryptionResult,
   FileUploadResult,
+  HexString,
+  isValidHexString,
 } from "@/lib/types/upload";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useSealEncryption } from "@/hooks/useSeal";
@@ -146,15 +148,15 @@ export function EncryptionStep({
           // Validate that all pending files have encryptedObjectBcsHex
           // If missing, this is from an old session - force re-encryption
           const allHaveEncryptedHex = filesToProcess.every(
-            (f) => pending[f.id!]?.encryptedObjectBcsHex
+            (f) => pending[f.id!]?.encryptedObjectBcsHex,
           );
-          
+
           if (!allHaveEncryptedHex) {
             console.warn(
-              "[EncryptionStep] Pending uploads missing encryptedObjectBcsHex - forcing re-encryption"
+              "[EncryptionStep] Pending uploads missing encryptedObjectBcsHex - forcing re-encryption",
             );
             addLog(
-              "Pending uploads are incomplete (missing encryption data). Re-encrypting..."
+              "Pending uploads are incomplete (missing encryption data). Re-encrypting...",
             );
             // Clear stale pending uploads
             localStorage.removeItem("pending_uploads");
@@ -353,7 +355,7 @@ export function EncryptionStep({
         try {
           const walrusResult = await uploadBlob(
             encryptedBlob,
-            encryptionResult.identity,
+            encryptionResult.identity as HexString,
             metadataWithMime,
             {
               previewBlob,
@@ -400,13 +402,28 @@ export function EncryptionStep({
           const completedProgress = ((index + 1) / totalFiles) * 40; // 40-80% for upload
           setProgress(40 + completedProgress);
 
+          // Validate and type-assert hex strings
+          // Validate and type-assert hex strings
+          const sealPolicyId = encryptionResult.identity;
+          if (!isValidHexString(sealPolicyId)) {
+            throw new Error(`Invalid seal_policy_id hex format`);
+          }
+          if (
+            encryptedObjectBcsHex &&
+            !isValidHexString(encryptedObjectBcsHex)
+          ) {
+            throw new Error(`Invalid encryptedObjectBcsHex format`);
+          }
+
           return {
             file_index: index,
             fileId: file.id!,
             blobId: walrusResult.blobId,
             previewBlobId: walrusResult.previewBlobId,
-            seal_policy_id: encryptionResult.identity,
-            encryptedObjectBcsHex, // BCS-serialized encrypted object for verifier
+            seal_policy_id: sealPolicyId as HexString,
+            encryptedObjectBcsHex: (encryptedObjectBcsHex || undefined) as
+              | HexString
+              | undefined, // BCS-serialized encrypted object for verifier
             duration: file.duration,
             metadata: metadataWithMime,
             encryptedData: encryptionResult.encryptedData,

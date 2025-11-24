@@ -18,8 +18,13 @@ import { Signer } from "@mysten/sui/cryptography";
 import type { Transaction } from "@mysten/sui/transactions";
 import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
-import type { WalrusUploadResult } from "@/lib/types/upload";
-import { getWalrusClient } from "@/lib/walrus/client";
+import type { WalrusUploadResult, HexString } from "@/lib/types/upload";
+import { formatUploadErrorForUser } from "@/lib/types/upload-errors";
+import {
+  getWalrusClient,
+  verifyBlobExists,
+  retryBlobUpload,
+} from "@/lib/walrus/client";
 
 /**
  * Wallet Signer Adapter
@@ -347,7 +352,7 @@ export function useWalrusParallelUpload() {
   const uploadToPublisher = useCallback(
     async (
       encryptedBlob: Blob,
-      seal_policy_id: string,
+      seal_policy_id: HexString,
       metadata: WalrusUploadMetadata,
       options: UploadBlobOptions = {},
     ): Promise<{
@@ -441,6 +446,64 @@ export function useWalrusParallelUpload() {
         size: encryptedBlob.size,
       });
 
+      // Verify blob exists on storage network
+      console.log("[Upload] Verifying blob availability on storage network...");
+      let verification = await verifyBlobExists(blobId, 5, 3000);
+
+      if (!verification.exists) {
+        console.warn(
+          "[Upload] Initial verification failed, attempting direct upload to storage nodes",
+        );
+        console.log(
+          "[Upload] Blob object already registered on-chain:",
+          blobObjectId,
+        );
+
+        // Retry uploading blob data directly to storage nodes
+        // This keeps the existing on-chain blob object
+        const retryResult = await retryBlobUpload(encryptedBlob, 26, 3);
+
+        if (retryResult.success) {
+          console.log(
+            "[Upload] Blob data uploaded successfully on retry:",
+            retryResult.blobId,
+          );
+
+          // Verify again after retry
+          verification = await verifyBlobExists(blobId, 3, 2000);
+          if (!verification.exists) {
+            console.error("[Upload] Blob still not available after retry");
+            const errorMessage = formatUploadErrorForUser({
+              type: "walrus_error",
+              code: "WALRUS_BLOB_NOT_AVAILABLE",
+              message:
+                "Blob uploaded but not yet available. Try again in a few minutes.",
+              retryable: true,
+            });
+            throw new Error(errorMessage);
+          }
+          console.log(
+            "[Upload] Blob verified after retry:",
+            verification.aggregator,
+          );
+        } else {
+          console.error("[Upload] Retry upload failed:", retryResult.error);
+          const errorMessage = formatUploadErrorForUser({
+            type: "walrus_error",
+            code: "WALRUS_BLOB_NOT_AVAILABLE",
+            message:
+              retryResult.error || "Failed to upload blob to storage network",
+            retryable: true,
+          });
+          throw new Error(errorMessage);
+        }
+      } else {
+        console.log(
+          "[Upload] Blob verified on storage network:",
+          verification.aggregator,
+        );
+      }
+
       // Upload preview blob if provided
       let finalPreviewBlobId: string | undefined;
       let previewStorageId: string | undefined;
@@ -498,6 +561,26 @@ export function useWalrusParallelUpload() {
               size: previewSize,
             },
           );
+
+          // Verify preview blob exists on storage network
+          console.log("[Upload] Verifying preview blob availability...");
+          const previewVerification = await verifyBlobExists(
+            finalPreviewBlobId,
+            5,
+            3000,
+          );
+          if (!previewVerification.exists) {
+            console.warn(
+              "[Upload] Preview blob verification failed:",
+              previewVerification.error,
+            );
+            // Don't fail the upload, just log warning
+          } else {
+            console.log(
+              "[Upload] Preview blob verified:",
+              previewVerification.aggregator,
+            );
+          }
         } catch (previewError) {
           // Log error but don't fail the entire upload
           console.warn(
@@ -654,7 +737,7 @@ export function useWalrusParallelUpload() {
   const uploadBlob = useCallback(
     async (
       encryptedBlob: Blob,
-      seal_policy_id: string,
+      seal_policy_id: HexString,
       metadata: WalrusUploadMetadata,
       options: UploadBlobOptions = {},
     ): Promise<WalrusUploadResult> => {
@@ -724,7 +807,7 @@ export function useWalrusParallelUpload() {
     async (
       files: Array<{
         encryptedBlob: Blob;
-        seal_policy_id: string;
+        seal_policy_id: HexString;
         metadata: WalrusUploadMetadata;
         previewBlob?: Blob;
         mimeType?: string;

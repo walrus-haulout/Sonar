@@ -342,7 +342,7 @@ def get_verification_pipeline() -> VerificationPipeline:
 async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -> str:
     """
     Upload plaintext audio to Walrus and return the resulting blob ID.
-    
+
     Uses the official Walrus HTTP API: PUT /v1/blobs?epochs={N}
     with raw binary data in the request body.
 
@@ -356,7 +356,7 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
 
     # Default to 26 epochs (1 year) if not specified in metadata
     epochs = metadata.get("epochs", 26)
-    
+
     # Build Walrus URL - WALRUS_UPLOAD_URL should be the publisher base URL
     # Append /v1/blobs if not already present
     base_url = WALRUS_UPLOAD_URL.rstrip("/")
@@ -384,7 +384,7 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
                 )
         response.raise_for_status()
         payload = response.json()
-        
+
         # Handle Walrus HTTP API response format
         # Response can be either:
         # { "newlyCreated": { "blobObject": { "blobId": "...", ... } } }
@@ -394,14 +394,20 @@ async def upload_plaintext_to_walrus(file_path: str, metadata: Dict[str, Any]) -
             blob_object = payload["newlyCreated"].get("blobObject", {})
             blob_id = blob_object.get("blobId") or blob_object.get("blob_id")
         elif "alreadyCertified" in payload:
-            blob_id = payload["alreadyCertified"].get("blobId") or payload["alreadyCertified"].get("blob_id")
-        
+            blob_id = payload["alreadyCertified"].get("blobId") or payload[
+                "alreadyCertified"
+            ].get("blob_id")
+
         # Fallback to legacy format for backwards compatibility
         if not blob_id:
-            blob_id = payload.get("blob_id") or payload.get("blobId") or payload.get("id")
-        
+            blob_id = (
+                payload.get("blob_id") or payload.get("blobId") or payload.get("id")
+            )
+
         if not blob_id:
-            raise ValueError(f"Walrus response missing blob identifier. Response: {payload}")
+            raise ValueError(
+                f"Walrus response missing blob identifier. Response: {payload}"
+            )
         return str(blob_id)
     except HTTPException:
         raise
@@ -629,10 +635,25 @@ async def create_verification(
 
             # Decrypt encrypted blob to temp file
             try:
-                # Convert hex to bytes for decryptor
-                encrypted_object_bytes = bytes.fromhex(
-                    encrypted_request.encryptedObjectBcsHex
-                )
+                # Convert hex to bytes for decryptor - strip 0x prefix if present
+                hex_str = encrypted_request.encryptedObjectBcsHex
+                if hex_str.startswith("0x") or hex_str.startswith("0X"):
+                    hex_str = hex_str[2:]
+
+                # Validate hex string format
+                if not hex_str:
+                    raise ValueError("Empty hex string after removing prefix")
+                if len(hex_str) % 2 != 0:
+                    raise ValueError(
+                        f"Hex string has odd length ({len(hex_str)} chars) - must be even"
+                    )
+
+                try:
+                    encrypted_object_bytes = bytes.fromhex(hex_str)
+                except ValueError as e:
+                    raise ValueError(
+                        f"Invalid hex string format: {str(e)}. Preview: {hex_str[:40]}..."
+                    )
 
                 # Decrypt blob (runs in thread pool to avoid blocking)
                 plaintext_bytes = await decrypt_encrypted_blob(

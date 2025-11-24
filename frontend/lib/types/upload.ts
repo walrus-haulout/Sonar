@@ -3,6 +3,30 @@
  * Type definitions for the dataset upload flow
  */
 
+/**
+ * Hex string type - represents a hexadecimal string with 0x prefix
+ */
+export type HexString = `0x${string}`;
+
+/**
+ * Validate hex string format
+ */
+export function isValidHexString(value: unknown): value is HexString {
+  if (typeof value !== "string") return false;
+  if (!value.startsWith("0x")) return false;
+  const hex = value.slice(2);
+  if (hex.length === 0) return false;
+  if (hex.length % 2 !== 0) return false;
+  return /^[0-9a-fA-F]*$/.test(hex);
+}
+
+/**
+ * Strip 0x prefix from hex string (for compatibility with Python bytes.fromhex)
+ */
+export function stripHexPrefix(hex: HexString): string {
+  return hex.slice(2);
+}
+
 export type UploadStep =
   | "file-upload"
   | "metadata"
@@ -75,8 +99,8 @@ export interface DatasetMetadata {
 
 export interface EncryptionResult {
   encryptedBlob: Blob;
-  seal_policy_id: string; // Seal identity (hex string) for decryption
-  encryptedObjectBcsHex?: string; // BCS-serialized encrypted object (hex) for verifier
+  seal_policy_id: HexString; // Seal identity (hex string) for decryption
+  encryptedObjectBcsHex?: HexString; // BCS-serialized encrypted object (hex) for verifier
   previewBlob?: Blob;
   mimeType?: string;
   previewMimeType?: string;
@@ -98,8 +122,8 @@ export interface FileUploadResult {
   fileId: string; // Matches AudioFile.id
   blobId: string;
   previewBlobId?: string;
-  seal_policy_id: string;
-  encryptedObjectBcsHex?: string; // BCS-serialized encrypted object (hex) for verifier
+  seal_policy_id: HexString;
+  encryptedObjectBcsHex?: HexString; // BCS-serialized encrypted object (hex) for verifier
   duration: number;
   mimeType?: string;
   previewMimeType?: string;
@@ -109,8 +133,8 @@ export interface FileUploadResult {
 export interface WalrusUploadResult {
   blobId: string;
   previewBlobId?: string;
-  seal_policy_id: string; // Seal identity for decryption
-  encryptedObjectBcsHex?: string; // BCS-serialized encrypted object (hex) for verifier
+  seal_policy_id: HexString; // Seal identity for decryption
+  encryptedObjectBcsHex?: HexString; // BCS-serialized encrypted object (hex) for verifier
   // Multi-file dataset support
   files?: FileUploadResult[]; // For multi-file datasets
   bundleDiscountBps?: number; // Basis points (e.g., 2000 = 20%)

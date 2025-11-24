@@ -125,10 +125,14 @@ export function useReencryption() {
         // I will use the `uploadBlob` from the hook which I will add to `useReencryption`.
 
         const blob = new Blob([reencryptedBlob as any]);
-        const uploadResult = await uploadBlob(blob, request.newSealPolicyId, {
-          originalMimeType: "application/octet-stream", // We might lose mime type here if not passed
-          originalFileName: "reencrypted.bin",
-        });
+        const uploadResult = await uploadBlob(
+          blob,
+          request.newSealPolicyId as `0x${string}`,
+          {
+            originalMimeType: "application/octet-stream", // We might lose mime type here if not passed
+            originalFileName: "reencrypted.bin",
+          },
+        );
 
         const newBlobId = uploadResult.blobId;
 

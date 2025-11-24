@@ -24,6 +24,7 @@ import {
   AudioFile,
   WalrusUploadResult,
   AISuggestions,
+  isValidHexString,
 } from "@/lib/types/upload";
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -56,50 +57,53 @@ function generateAISuggestions(
 ): AISuggestions {
   // Generate title from transcript or insights
   let title = "Audio Dataset";
-  
+
   if (transcript) {
     // Extract first meaningful content line (not speaker label)
-    const lines = transcript.split('\n').filter(line => line.trim().length > 0);
+    const lines = transcript
+      .split("\n")
+      .filter((line) => line.trim().length > 0);
     for (const line of lines) {
       // Skip speaker labels like "Speaker 1:", "John:", etc.
       if (/^[A-Z][a-zA-Z0-9\s]*\d*:\s*/.test(line)) {
         // Extract the content after the speaker label
-        const content = line.replace(/^[A-Z][a-zA-Z0-9\s]*\d*:\s*/, '').trim();
+        const content = line.replace(/^[A-Z][a-zA-Z0-9\s]*\d*:\s*/, "").trim();
         if (content.length >= 20) {
           // Use first substantial content as title (max 80 chars)
           title = content.slice(0, 80).trim();
-          if (content.length > 80) title += '...';
+          if (content.length > 80) title += "...";
           break;
         }
       } else if (line.length >= 20) {
         // Use first substantial line as title
         title = line.slice(0, 80).trim();
-        if (line.length > 80) title += '...';
+        if (line.length > 80) title += "...";
         break;
       }
     }
   } else if (insights && insights.length > 0) {
     // Fallback: use first insight as title
     title = insights[0].slice(0, 80);
-    if (insights[0].length > 80) title += '...';
+    if (insights[0].length > 80) title += "...";
   }
-  
+
   // Generate description from overallSummary or insights
   let description = "An audio dataset verified by AI.";
-  
+
   if (overallSummary) {
     description = overallSummary;
   } else if (insights && insights.length > 0) {
-    description = insights.slice(0, 3).join('. ') + '.';
+    description = insights.slice(0, 3).join(". ") + ".";
   }
-  
+
   // Extract keywords from insights
-  const keywords = insights?.slice(0, 5).map(insight => {
-    // Take first 2-3 words from each insight as a keyword
-    const words = insight.split(' ').filter(w => w.length > 3);
-    return words.slice(0, 2).join(' ');
-  }) || [];
-  
+  const keywords =
+    insights?.slice(0, 5).map((insight) => {
+      // Take first 2-3 words from each insight as a keyword
+      const words = insight.split(" ").filter((w) => w.length > 3);
+      return words.slice(0, 2).join(" ");
+    }) || [];
+
   return {
     title,
     description,
@@ -546,9 +550,13 @@ export function VerificationStep({
       // Wait for session to be confirmed on-chain before starting verification
       // Extended timeout to handle slow blockchain confirmations
       console.log("[VerificationStep] Waiting 15s for session confirmation...");
-      addLog("AUTH", "Waiting for blockchain confirmation (15s)...", "progress");
+      addLog(
+        "AUTH",
+        "Waiting for blockchain confirmation (15s)...",
+        "progress",
+      );
       await new Promise((resolve) => setTimeout(resolve, 15000));
-      
+
       console.log(
         "[VerificationStep] ✅ Session confirmed on blockchain, starting verification",
       );
@@ -593,16 +601,19 @@ export function VerificationStep({
    */
   const startVerificationWithSession = async (sessionExport?: any) => {
     const exportToUse = sessionExport || sessionKeyExport;
-    
-    console.log("[VerificationStep] 🔍 DEBUG - startVerificationWithSession called:", {
-      isVerifyingRefValue: isVerifyingRef.current,
-      verificationState,
-      hasExistingVerification: !!existingVerification,
-      existingVerificationState: existingVerification?.state,
-      hasSessionKeyExport: !!exportToUse,
-      sessionExportProvided: !!sessionExport,
-      timestamp: new Date().toISOString(),
-    });
+
+    console.log(
+      "[VerificationStep] 🔍 DEBUG - startVerificationWithSession called:",
+      {
+        isVerifyingRefValue: isVerifyingRef.current,
+        verificationState,
+        hasExistingVerification: !!existingVerification,
+        existingVerificationState: existingVerification?.state,
+        hasSessionKeyExport: !!exportToUse,
+        sessionExportProvided: !!sessionExport,
+        timestamp: new Date().toISOString(),
+      },
+    );
 
     // Guard against duplicate verification attempts
     if (isVerifyingRef.current) {
@@ -655,9 +666,15 @@ export function VerificationStep({
       isVerifyingRef.current = false;
       return;
     }
-    
-    console.log("[VerificationStep] ✅ Session key export validated, proceeding with verification");
-    addLog("VERIFY", "Session validated, preparing verification request", "progress");
+
+    console.log(
+      "[VerificationStep] ✅ Session key export validated, proceeding with verification",
+    );
+    addLog(
+      "VERIFY",
+      "Session validated, preparing verification request",
+      "progress",
+    );
 
     // Continue with existing verification logic using exportToUse instead of sessionKeyExport
     await verifyWithSession(exportToUse);
@@ -675,7 +692,7 @@ export function VerificationStep({
       hasSessionKeyExport: !!sessionKeyExport,
       timestamp: new Date().toISOString(),
     });
-    
+
     return startVerificationWithSession(sessionKeyExport);
   };
 
@@ -683,7 +700,6 @@ export function VerificationStep({
    * Core verification logic extracted from startVerification
    */
   const verifyWithSession = async (sessionExport: any) => {
-
     // Determine if we're using encrypted blob flow or legacy file flow
     const useEncryptedFlow = !!(
       walrusUpload ||
@@ -714,7 +730,8 @@ export function VerificationStep({
 
       // Validate that we have the encrypted blob hex
       if (!encryptedObjectHex || encryptedObjectHex.length === 0) {
-        const error = "Missing encrypted blob data. Please go back and re-encrypt your audio file.";
+        const error =
+          "Missing encrypted blob data. Please go back and re-encrypt your audio file.";
         console.error("[VerificationStep]", error);
         setErrorMessage(error);
         setVerificationState("failed");
@@ -846,7 +863,9 @@ export function VerificationStep({
         );
       }
 
-      console.log("[VerificationStep] 📤 Sending verification request to backend");
+      console.log(
+        "[VerificationStep] 📤 Sending verification request to backend",
+      );
       console.log("[VerificationStep] Request params:", {
         walrusBlobId,
         sealIdentity: sealIdentity?.slice(0, 20) + "...",
@@ -926,23 +945,34 @@ export function VerificationStep({
 
       console.log("[VerificationStep] 🌐 Fetching /api/verify endpoint...");
       addLog("API", "Sending request to verification service", "progress");
-      
+
       // Extract and validate encryptedObjectBcsHex before sending
-      const encryptedHexToSend = walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
+      const encryptedHexToSend =
+        walrusUpload?.encryptedObjectBcsHex || encryptedObjectBcsHex;
       console.log("[VerificationStep] 🔍 Pre-fetch validation:", {
         walrusUploadHasHex: !!walrusUpload?.encryptedObjectBcsHex,
         propHasHex: !!encryptedObjectBcsHex,
         finalHexPresent: !!encryptedHexToSend,
         finalHexLength: encryptedHexToSend?.length ?? 0,
-        finalHexPreview: encryptedHexToSend ? encryptedHexToSend.slice(0, 20) + "..." : "MISSING",
+        finalHexPreview: encryptedHexToSend
+          ? encryptedHexToSend.slice(0, 20) + "..."
+          : "MISSING",
       });
 
       if (!encryptedHexToSend || encryptedHexToSend.length === 0) {
-        const error = "encryptedObjectBcsHex is missing or empty before API call!";
+        const error =
+          "encryptedObjectBcsHex is missing or empty before API call!";
         console.error("[VerificationStep]", error);
         throw new Error(error);
       }
-      
+
+      // Validate hex string format
+      if (!isValidHexString(encryptedHexToSend)) {
+        const error = `Invalid hex string format: ${encryptedHexToSend.slice(0, 40)}...`;
+        console.error("[VerificationStep]", error);
+        throw new Error(error);
+      }
+
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
@@ -1139,7 +1169,13 @@ export function VerificationStep({
         // Track stage start times and log transitions
         if (currentStage && !stageStartTimes[currentStage]) {
           // Mark previous stage as completed
-          const stageOrder = ["quality", "copyright", "transcription", "analysis", "finalizing"];
+          const stageOrder = [
+            "quality",
+            "copyright",
+            "transcription",
+            "analysis",
+            "finalizing",
+          ];
           const currentIndex = stageOrder.indexOf(currentStage);
           if (currentIndex > 0) {
             const previousStage = stageOrder[currentIndex - 1];
@@ -1148,7 +1184,7 @@ export function VerificationStep({
               addLog(
                 previousStage.toUpperCase(),
                 stageCompletionMessages[previousStage],
-                "success"
+                "success",
               );
             }
           }
@@ -1198,7 +1234,13 @@ export function VerificationStep({
           }
 
           // Verification passed - mark all remaining stages as completed
-          const allStages = ["quality", "copyright", "transcription", "analysis", "finalizing"];
+          const allStages = [
+            "quality",
+            "copyright",
+            "transcription",
+            "analysis",
+            "finalizing",
+          ];
           const stageCompletionMessages: Record<string, string> = {
             quality: "✓ Audio quality check passed",
             copyright: "✓ Copyright detection completed",
@@ -1206,11 +1248,12 @@ export function VerificationStep({
             analysis: "✓ AI analysis completed",
             finalizing: "✓ Results finalized",
           };
-          
-          allStages.forEach(stage => {
+
+          allStages.forEach((stage) => {
             if (!completedStagesRef.current.has(stage)) {
               completedStagesRef.current.add(stage);
-              const completionMessage = stageCompletionMessages[stage] || `✓ ${stage} completed`;
+              const completionMessage =
+                stageCompletionMessages[stage] || `✓ ${stage} completed`;
               addLog(stage.toUpperCase(), completionMessage, "success");
             }
           });
