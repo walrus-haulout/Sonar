@@ -435,9 +435,9 @@ export function useWalrusParallelUpload() {
         attempt,
       });
 
-      // Verify blob exists on storage network
+      // Verify blob exists on storage network with extended retries and exponential backoff
       console.log("[Upload] Verifying blob availability on storage network...");
-      let verification = await verifyBlobExists(blobId, 10, 3000);
+      let verification = await verifyBlobExists(blobId, 15, 3000);
 
       if (!verification.exists) {
         console.error("[Upload] Blob verification failed after upload");
@@ -518,7 +518,7 @@ export function useWalrusParallelUpload() {
             console.log("[Upload] Verifying preview blob availability...");
             const previewVerification = await verifyBlobExists(
               finalPreviewBlobId,
-              10,
+              15,
               3000,
             );
             if (!previewVerification.exists) {

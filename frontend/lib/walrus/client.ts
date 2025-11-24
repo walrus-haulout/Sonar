@@ -1,5 +1,6 @@
 import { walrus } from "@mysten/walrus";
 import { suiClient as defaultSuiClient, NETWORK } from "@/lib/sui/client";
+import { WALRUS_AGGREGATOR_URL } from "./config";
 
 let walrusClientInstance: ReturnType<typeof createWalrusClient> | null = null;
 
@@ -18,28 +19,51 @@ export function getWalrusClient() {
   return walrusClientInstance;
 }
 
-const WALRUS_AGGREGATORS = [
-  "https://walrus-mainnet.blockberry.one",
-  "https://wal-aggregator-mainnet.staketab.org",
-  "https://aggregator-mainnet.walrus.space",
-];
+export function getAggregatorList(): string[] {
+  const aggregators: string[] = [];
+
+  if (WALRUS_AGGREGATOR_URL) {
+    aggregators.push(WALRUS_AGGREGATOR_URL);
+  }
+
+  const fallbacks = [
+    "https://aggregator.walrus.space",
+    "https://wal-aggregator-mainnet.staketab.org",
+  ];
+
+  for (const fallback of fallbacks) {
+    if (!aggregators.includes(fallback)) {
+      aggregators.push(fallback);
+    }
+  }
+
+  if (aggregators.length === 0) {
+    throw new Error(
+      "No Walrus aggregator URLs configured. Set NEXT_PUBLIC_WALRUS_AGGREGATOR_URL.",
+    );
+  }
+
+  return aggregators;
+}
 
 export async function verifyBlobExists(
   blobId: string,
   maxRetries: number = 3,
   delayMs: number = 2000,
 ): Promise<{ exists: boolean; aggregator?: string; error?: string }> {
+  const aggregators = getAggregatorList();
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(
       `[Walrus] Verifying blob ${blobId} (attempt ${attempt}/${maxRetries})`,
     );
 
-    for (const aggregator of WALRUS_AGGREGATORS) {
+    for (const aggregator of aggregators) {
       try {
         const url = `${aggregator}/v1/${blobId}`;
         const response = await fetch(url, {
           method: "HEAD",
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (response.ok) {
