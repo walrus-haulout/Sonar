@@ -176,7 +176,7 @@ export function SuccessStep({
             <li className="flex items-start space-x-2">
               <span className="text-sonar-signal mt-0.5">•</span>
               <span>
-                Buyers can purchase access using SONAR tokens
+                Buyers can purchase access using SNR or SUI (SNR coming soon)
               </span>
             </li>
             <li className="flex items-start space-x-2">
