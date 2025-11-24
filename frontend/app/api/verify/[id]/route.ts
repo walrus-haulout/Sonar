@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { buildVerifierUrl } from '@/lib/config/verifier';
+import { NextRequest, NextResponse } from "next/server";
+import { buildVerifierUrl } from "@/lib/config/verifier";
 
 /**
  * Server-side proxy for audio-verifier service polling
@@ -8,49 +8,43 @@ import { buildVerifierUrl } from '@/lib/config/verifier';
  */
 
 // Explicitly set Node.js runtime for server-side operations
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 // Force dynamic rendering to ensure route is always treated as a serverless function
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const VERIFIER_AUTH_TOKEN = process.env.VERIFIER_AUTH_TOKEN;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const startTime = Date.now();
   const requestId = crypto.randomUUID();
-  
+
   try {
     console.log(`[${requestId}] [GET] /api/verify/[id] - Request received`, {
       url: request.url,
       method: request.method,
-      headers: {
-        'user-agent': request.headers.get('user-agent'),
-        'origin': request.headers.get('origin'),
-        'referer': request.headers.get('referer'),
-      },
       timestamp: new Date().toISOString(),
-      runtime: 'nodejs',
-      hasVerifierToken: !!VERIFIER_AUTH_TOKEN,
-      verifierUrl: process.env.AUDIO_VERIFIER_URL || 'default',
     });
 
     if (!VERIFIER_AUTH_TOKEN) {
       console.error(`[${requestId}] VERIFIER_AUTH_TOKEN not configured`, {
         nodeEnv: process.env.NODE_ENV,
-        envKeys: Object.keys(process.env).filter(k => k.includes('VERIFIER') || k.includes('AUDIO')),
+        envKeys: Object.keys(process.env).filter(
+          (k) => k.includes("VERIFIER") || k.includes("AUDIO"),
+        ),
       });
 
       return NextResponse.json(
-        { 
-          error: 'VERIFIER_AUTH_TOKEN not configured on server',
+        {
+          error: "VERIFIER_AUTH_TOKEN not configured on server",
           requestId,
           timestamp: new Date().toISOString(),
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -61,37 +55,32 @@ export async function GET(
     if (!id) {
       console.error(`[${requestId}] Missing verification ID in params`);
       return NextResponse.json(
-        { 
-          error: 'Missing verification ID',
+        {
+          error: "Missing verification ID",
           requestId,
           timestamp: new Date().toISOString(),
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const verifierUrl = buildVerifierUrl(`verify/${id}`);
     console.log(`[${requestId}] Fetching from verifier service`, {
-      url: verifierUrl,
       id,
-      hasAuthToken: !!VERIFIER_AUTH_TOKEN,
-      authTokenLength: VERIFIER_AUTH_TOKEN?.length || 0,
     });
 
     // Forward to audio-verifier service with server-side auth token
     const fetchStartTime = Date.now();
     const response = await fetch(verifierUrl, {
       headers: {
-        'Authorization': `Bearer ${VERIFIER_AUTH_TOKEN}`,
+        Authorization: `Bearer ${VERIFIER_AUTH_TOKEN}`,
       },
     });
 
     const fetchDuration = Date.now() - fetchStartTime;
     console.log(`[${requestId}] Verifier service response received`, {
       status: response.status,
-      statusText: response.statusText,
       ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries()),
       fetchDuration,
     });
 
@@ -103,9 +92,13 @@ export async function GET(
         errorData = JSON.parse(text);
       } catch (parseError) {
         console.error(`[${requestId}] Failed to parse error response`, {
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown',
+          parseError:
+            parseError instanceof Error ? parseError.message : "Unknown",
         });
-        errorData = { detail: 'Unknown error', rawResponse: await response.text().catch(() => '') };
+        errorData = {
+          detail: "Unknown error",
+          rawResponse: await response.text().catch(() => ""),
+        };
       }
 
       console.error(`[${requestId}] Verifier service returned error`, {
@@ -115,13 +108,16 @@ export async function GET(
       });
 
       return NextResponse.json(
-        { 
-          error: errorData.detail || errorData.error || 'Failed to get verification status',
+        {
+          error:
+            errorData.detail ||
+            errorData.error ||
+            "Failed to get verification status",
           requestId,
           status: response.status,
           timestamp: new Date().toISOString(),
         },
-        { status: response.status }
+        { status: response.status },
       );
     }
 
@@ -135,13 +131,12 @@ export async function GET(
     });
 
     return NextResponse.json(data);
-
   } catch (error: any) {
     const errorDetails = {
       requestId,
       error: {
-        message: error.message || 'Unknown error',
-        name: error.name || 'Error',
+        message: error.message || "Unknown error",
+        name: error.name || "Error",
         stack: error.stack,
         cause: error.cause,
       },
@@ -151,29 +146,32 @@ export async function GET(
       },
       environment: {
         nodeEnv: process.env.NODE_ENV,
-        hasVerifierToken: !!VERIFIER_AUTH_TOKEN,
-        verifierUrl: process.env.AUDIO_VERIFIER_URL || 'default',
       },
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
     };
 
-    console.error(`[${requestId}] [GET] /api/verify/[id] - Request failed`, errorDetails);
-    
+    console.error(
+      `[${requestId}] [GET] /api/verify/[id] - Request failed`,
+      errorDetails,
+    );
+
     // Provide more detailed error information
-    const errorMessage = error.message || 'Failed to get verification status';
-    const errorResponse = { 
+    const errorMessage = error.message || "Failed to get verification status";
+    const errorResponse = {
       error: errorMessage,
       detail: errorMessage,
       requestId,
       timestamp: new Date().toISOString(),
-      ...(process.env.NODE_ENV === 'development' ? {
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause,
-      } : {}),
+      ...(process.env.NODE_ENV === "development"
+        ? {
+            stack: error.stack,
+            name: error.name,
+            cause: error.cause,
+          }
+        : {}),
     };
-    
+
     return NextResponse.json(errorResponse, { status: 500 });
   }
 }

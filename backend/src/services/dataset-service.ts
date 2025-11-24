@@ -1,12 +1,12 @@
-import type { PrismaClient } from '@prisma/client';
-import type { FastifyBaseLogger } from 'fastify';
-import { prisma as defaultPrisma } from '../lib/db';
-import { streamBlobFromWalrus } from '../lib/walrus/client';
-import { HttpError } from '../lib/errors';
-import { ErrorCode, type AccessGrant } from '@sonar/shared';
-import type { ByteRange } from '../lib/validators';
-import { verifyUserOwnsDataset as defaultVerifyUserOwnsDataset } from '../lib/sui/queries';
-import type { RequestMetadata } from './types';
+import type { PrismaClient } from "@prisma/client";
+import type { FastifyBaseLogger } from "fastify";
+import { prisma as defaultPrisma } from "../lib/db";
+import { streamBlobFromWalrus } from "../lib/walrus/client";
+import { HttpError } from "../lib/errors";
+import { ErrorCode, type AccessGrant } from "@sonar/shared";
+import type { ByteRange } from "../lib/validators";
+import { verifyUserOwnsDataset as defaultVerifyUserOwnsDataset } from "../lib/sui/queries";
+import type { RequestMetadata } from "./types";
 
 interface DatasetStreamOptions {
   datasetId: string;
@@ -44,6 +44,7 @@ export interface FileSealMetadata {
 
 interface StoreSealMetadataOptions {
   datasetId: string;
+  userAddress: string;
   files: FileSealMetadata[];
   verification?: {
     verification_id: string;
@@ -72,15 +73,11 @@ interface StoreSealMetadataOptions {
 
 type DatasetPrismaClient = Pick<
   PrismaClient,
-  'dataset' | 'datasetBlob' | 'purchase' | 'accessLog'
+  "dataset" | "datasetBlob" | "purchase" | "accessLog"
 >;
 
 type DatasetQueryResult = NonNullable<
-  Awaited<
-    ReturnType<
-      DatasetPrismaClient['dataset']['findUnique']
-    >
-  >
+  Awaited<ReturnType<DatasetPrismaClient["dataset"]["findUnique"]>>
 >;
 
 type BlobType = {
@@ -114,7 +111,7 @@ function getPrismaClient(prismaClient?: DatasetPrismaClient | PrismaClient) {
 async function fetchDatasetWithBlobs(
   prismaClient: PrismaClient,
   datasetId: string,
-  logger: FastifyBaseLogger
+  logger: FastifyBaseLogger,
 ): Promise<DatasetWithBlob> {
   const dataset = await prismaClient.dataset.findUnique({
     where: { id: datasetId },
@@ -122,13 +119,13 @@ async function fetchDatasetWithBlobs(
   });
 
   if (!dataset) {
-    logger.warn({ datasetId }, 'Dataset not found');
-    throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, 'Dataset not found.');
+    logger.warn({ datasetId }, "Dataset not found");
+    throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, "Dataset not found.");
   }
 
   if (!dataset.blobs || dataset.blobs.length === 0) {
-    logger.error({ datasetId }, 'Dataset blob mapping not found');
-    throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, 'Audio file not found.');
+    logger.error({ datasetId }, "Dataset blob mapping not found");
+    throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, "Audio file not found.");
   }
 
   return { dataset, blobs: dataset.blobs as BlobType[] };
@@ -140,7 +137,7 @@ function selectPrimaryBlob(blobs: BlobType[]): BlobType {
     return primary ?? blobs[0];
   }
 
-  throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, 'Audio file not found.');
+  throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, "Audio file not found.");
 }
 
 export async function createDatasetAccessGrant({
@@ -166,17 +163,17 @@ export async function createDatasetAccessGrant({
         },
       });
       return Boolean(purchase);
-    }
+    },
   );
 
   if (!ownsDataset) {
-    logger.warn({ userAddress, datasetId }, 'Access denied: purchase required');
+    logger.warn({ userAddress, datasetId }, "Access denied: purchase required");
 
     await prisma.accessLog.create({
       data: {
         user_address: userAddress,
         dataset_id: datasetId,
-        action: 'ACCESS_DENIED',
+        action: "ACCESS_DENIED",
         ip_address: ip,
         user_agent: userAgent,
       },
@@ -185,29 +182,33 @@ export async function createDatasetAccessGrant({
     throw new HttpError(
       403,
       ErrorCode.PURCHASE_REQUIRED,
-      'This dataset requires a purchase to access.'
+      "This dataset requires a purchase to access.",
     );
   }
 
-  const { dataset, blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
+  const { dataset, blobs } = await fetchDatasetWithBlobs(
+    prisma,
+    datasetId,
+    logger,
+  );
   const blob = selectPrimaryBlob(blobs);
 
   await prisma.accessLog.create({
     data: {
       user_address: userAddress,
       dataset_id: datasetId,
-      action: 'ACCESS_GRANTED',
+      action: "ACCESS_GRANTED",
       ip_address: ip,
       user_agent: userAgent,
     },
   });
 
-  logger.info({ userAddress, datasetId }, 'Access grant issued');
+  logger.info({ userAddress, datasetId }, "Access grant issued");
 
   const downloadUrl = `/api/datasets/${datasetId}/stream`;
 
   return {
-    seal_policy_id: dataset.seal_policy_id || '',
+    seal_policy_id: dataset.seal_policy_id || "",
     download_url: downloadUrl,
     blob_id: blob.full_blob_id,
     expires_at: Date.now() + 24 * 60 * 60 * 1000,
@@ -233,8 +234,12 @@ export async function getDatasetPreviewStream({
       mimeType: blob.preview_mime_type ?? blob.mime_type ?? null,
     };
   } catch (error) {
-    logger.error({ error, datasetId }, 'Failed to stream preview from Walrus');
-    throw new HttpError(500, ErrorCode.WALRUS_ERROR, 'Failed to stream preview');
+    logger.error({ error, datasetId }, "Failed to stream preview from Walrus");
+    throw new HttpError(
+      500,
+      ErrorCode.WALRUS_ERROR,
+      "Failed to stream preview",
+    );
   }
 }
 
@@ -262,23 +267,30 @@ export async function getDatasetAudioStream({
         },
       });
       return Boolean(purchase);
-    }
+    },
   );
 
   if (!ownsDataset) {
-    logger.warn({ userAddress, datasetId }, 'Streaming access denied: purchase required');
+    logger.warn(
+      { userAddress, datasetId },
+      "Streaming access denied: purchase required",
+    );
 
     await prisma.accessLog.create({
       data: {
         user_address: userAddress,
         dataset_id: datasetId,
-        action: 'ACCESS_DENIED',
+        action: "ACCESS_DENIED",
         ip_address: ip,
         user_agent: userAgent,
       },
     });
 
-    throw new HttpError(403, ErrorCode.PURCHASE_REQUIRED, 'Purchase required to stream this dataset');
+    throw new HttpError(
+      403,
+      ErrorCode.PURCHASE_REQUIRED,
+      "Purchase required to stream this dataset",
+    );
   }
 
   const { blobs } = await fetchDatasetWithBlobs(prisma, datasetId, logger);
@@ -288,27 +300,30 @@ export async function getDatasetAudioStream({
     data: {
       user_address: userAddress,
       dataset_id: datasetId,
-      action: 'STREAM_STARTED',
+      action: "STREAM_STARTED",
       ip_address: ip,
       user_agent: userAgent,
     },
   });
 
-  logger.info({ userAddress, datasetId, range }, 'Starting Walrus audio stream');
+  logger.info(
+    { userAddress, datasetId, range },
+    "Starting Walrus audio stream",
+  );
 
   try {
     const response = await streamBlobFromWalrus(blob.full_blob_id, {
       range,
-      mimeType: blob.mime_type ?? 'audio/mpeg',
+      mimeType: blob.mime_type ?? "audio/mpeg",
     });
 
     return {
       response,
-      mimeType: blob.mime_type ?? 'audio/mpeg',
+      mimeType: blob.mime_type ?? "audio/mpeg",
     };
   } catch (error) {
-    logger.error({ error, datasetId }, 'Failed to stream audio from Walrus');
-    throw new HttpError(500, ErrorCode.WALRUS_ERROR, 'Failed to stream audio');
+    logger.error({ error, datasetId }, "Failed to stream audio from Walrus");
+    throw new HttpError(500, ErrorCode.WALRUS_ERROR, "Failed to stream audio");
   }
 }
 
@@ -316,9 +331,11 @@ export async function getDatasetAudioStream({
  * Store Seal encryption metadata for a dataset
  * Called after successful blockchain publish to link backup keys to dataset
  * Supports multi-file datasets
+ * Requires ownership verification
  */
 export async function storeSealMetadata({
   datasetId,
+  userAddress,
   files,
   verification,
   metadata,
@@ -333,15 +350,45 @@ export async function storeSealMetadata({
   });
 
   if (!dataset) {
-    logger.warn({ datasetId }, 'Cannot store seal metadata: dataset not found');
-    throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, 'Dataset not found.');
+    logger.warn({ datasetId }, "Cannot store seal metadata: dataset not found");
+    throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, "Dataset not found.");
+  }
+
+  // Verify ownership
+  if (dataset.wallet_address !== userAddress) {
+    logger.warn(
+      { datasetId, userAddress, owner: dataset.wallet_address },
+      "Cannot store seal metadata: user is not the dataset owner",
+    );
+    throw new HttpError(
+      403,
+      ErrorCode.FORBIDDEN,
+      "Only the dataset owner can update seal metadata.",
+    );
+  }
+
+  // Prevent overwriting existing seal metadata (except by owner)
+  const existingBlobs = await prisma.datasetBlob.count({
+    where: { dataset_id: datasetId },
+  });
+
+  if (existingBlobs > 0) {
+    logger.warn(
+      { datasetId, userAddress, existingBlobs },
+      "Seal metadata already exists for this dataset",
+    );
+    throw new HttpError(
+      409,
+      ErrorCode.CONFLICT,
+      "Seal metadata already exists for this dataset.",
+    );
   }
 
   // Log verification data (will be stored in DB once schema is updated)
   if (verification) {
     logger.info(
-      { 
-        datasetId, 
+      {
+        datasetId,
         verificationId: verification.verification_id,
         qualityScore: verification.quality_score,
         safetyPassed: verification.safety_passed,
@@ -349,7 +396,7 @@ export async function storeSealMetadata({
         transcriptLength: verification.transcript?.length,
         detectedLanguages: verification.detected_languages,
       },
-      'Verification metadata received (pending schema update for storage)'
+      "Verification metadata received (pending schema update for storage)",
     );
   }
 
@@ -362,13 +409,13 @@ export async function storeSealMetadata({
         languages: metadata.languages,
         tags: metadata.tags,
       },
-      'Dataset metadata received'
+      "Dataset metadata received",
     );
   }
 
   // Store Seal metadata for each file
   for (const fileMetadata of files) {
-    const mimeType = fileMetadata.mime_type?.trim() || 'audio/mpeg';
+    const mimeType = fileMetadata.mime_type?.trim() || "audio/mpeg";
     const previewMimeType = fileMetadata.preview_mime_type?.trim() || null;
 
     await prisma.datasetBlob.upsert({
@@ -380,7 +427,7 @@ export async function storeSealMetadata({
       },
       update: {
         full_blob_id: fileMetadata.blob_id,
-        preview_blob_id: fileMetadata.preview_blob_id || '',
+        preview_blob_id: fileMetadata.preview_blob_id || "",
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
         mime_type: mimeType,
@@ -390,7 +437,7 @@ export async function storeSealMetadata({
         dataset_id: datasetId,
         file_index: fileMetadata.file_index,
         full_blob_id: fileMetadata.blob_id,
-        preview_blob_id: fileMetadata.preview_blob_id || '',
+        preview_blob_id: fileMetadata.preview_blob_id || "",
         seal_policy_id: fileMetadata.seal_policy_id,
         duration_seconds: fileMetadata.duration_seconds,
         mime_type: mimeType,
@@ -411,6 +458,6 @@ export async function storeSealMetadata({
 
   logger.info(
     { datasetId, fileCount: files.length },
-    'Seal metadata stored successfully for all files'
+    "Seal metadata stored successfully for all files",
   );
 }

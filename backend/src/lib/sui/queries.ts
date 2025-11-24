@@ -3,18 +3,27 @@
  * Verifies if a user owns/purchased a dataset
  */
 
-import { logger } from '../logger';
-import { SONAR_PACKAGE_ID, SUI_RPC_URL, suiClient } from './client';
+import { logger } from "../logger";
+import { SONAR_PACKAGE_ID, SUI_RPC_URL, suiClient } from "./client";
 
-if (!SONAR_PACKAGE_ID || SONAR_PACKAGE_ID === '0x0') {
-  logger.warn('SONAR_PACKAGE_ID not configured. Purchase verification will use mock data.');
+if (!SONAR_PACKAGE_ID || SONAR_PACKAGE_ID === "0x0") {
+  const isDevelopment = process.env.NODE_ENV === "development";
+  if (isDevelopment) {
+    logger.warn(
+      "SONAR_PACKAGE_ID not configured. Running in DEVELOPMENT MODE with mock purchases.",
+    );
+  } else {
+    logger.error(
+      "SONAR_PACKAGE_ID not configured in production. Purchase verification will FAIL CLOSED.",
+    );
+    throw new Error(
+      "SONAR_PACKAGE_ID must be configured in production environment",
+    );
+  }
 }
 
 // In-memory cache for purchase verification (5 min TTL)
-const purchaseCache = new Map<
-  string,
-  { result: boolean; expiresAt: number }
->();
+const purchaseCache = new Map<string, { result: boolean; expiresAt: number }>();
 
 /**
  * Verify if a user owns/purchased a dataset
@@ -23,7 +32,7 @@ const purchaseCache = new Map<
 export async function verifyUserOwnsDataset(
   userAddress: string,
   datasetId: string,
-  checkPrisma?: (address: string, id: string) => Promise<boolean>
+  checkPrisma?: (address: string, id: string) => Promise<boolean>,
 ): Promise<boolean> {
   const cacheKey = `${userAddress}-${datasetId}`;
 
@@ -51,7 +60,7 @@ export async function verifyUserOwnsDataset(
   } catch (error) {
     logger.error(
       { error, userAddress, datasetId },
-      'Purchase verification failed'
+      "Purchase verification failed",
     );
     // Default to false on error (deny access)
     return false;
@@ -64,15 +73,24 @@ export async function verifyUserOwnsDataset(
  */
 async function queryPurchaseEvents(
   userAddress: string,
-  datasetId: string
+  datasetId: string,
 ): Promise<boolean> {
-  // If package ID not configured, use mock data
-  if (!SONAR_PACKAGE_ID || SONAR_PACKAGE_ID === '0x0') {
-    logger.debug(
+  // If package ID not configured, fail closed unless in development mode
+  if (!SONAR_PACKAGE_ID || SONAR_PACKAGE_ID === "0x0") {
+    const isDevelopment = process.env.NODE_ENV === "development";
+    if (isDevelopment) {
+      logger.debug(
+        { userAddress, datasetId },
+        "DEV MODE: Mock purchase verification (allowing access)",
+      );
+      return true;
+    }
+
+    logger.error(
       { userAddress, datasetId },
-      'Mock: User owns dataset (SONAR_PACKAGE_ID not configured)'
+      "SONAR_PACKAGE_ID not configured - denying access (fail closed)",
     );
-    return true; // Allow all purchases in dev
+    return false;
   }
 
   try {
@@ -89,8 +107,8 @@ async function queryPurchaseEvents(
     for (const event of events.data) {
       if (event.parsedJson) {
         const json = event.parsedJson as Record<string, unknown>;
-        const buyer = json['buyer'] as string | undefined;
-        const submissionId = json['submission_id'] as string | undefined;
+        const buyer = json["buyer"] as string | undefined;
+        const submissionId = json["submission_id"] as string | undefined;
 
         if (
           buyer?.toLowerCase() === userAddress.toLowerCase() &&
@@ -98,7 +116,7 @@ async function queryPurchaseEvents(
         ) {
           logger.debug(
             { userAddress, datasetId },
-            'Purchase verified on blockchain'
+            "Purchase verified on blockchain",
           );
           return true;
         }
@@ -107,13 +125,13 @@ async function queryPurchaseEvents(
 
     logger.debug(
       { userAddress, datasetId },
-      'No purchase event found on blockchain'
+      "No purchase event found on blockchain",
     );
     return false;
   } catch (error) {
     logger.error(
       { error, userAddress, datasetId },
-      'Failed to query purchase events'
+      "Failed to query purchase events",
     );
     throw error;
   }
@@ -122,7 +140,11 @@ async function queryPurchaseEvents(
 /**
  * Set cache result with 5-minute TTL
  */
-function setCacheResult(key: string, result: boolean, ttlMs = 5 * 60 * 1000): void {
+function setCacheResult(
+  key: string,
+  result: boolean,
+  ttlMs = 5 * 60 * 1000,
+): void {
   purchaseCache.set(key, {
     result,
     expiresAt: Date.now() + ttlMs,
@@ -138,7 +160,10 @@ function setCacheResult(key: string, result: boolean, ttlMs = 5 * 60 * 1000): vo
  * Clear cache for a user-dataset pair
  * Used after purchase to invalidate cache
  */
-export function invalidatePurchaseCache(userAddress: string, datasetId: string): void {
+export function invalidatePurchaseCache(
+  userAddress: string,
+  datasetId: string,
+): void {
   const cacheKey = `${userAddress}-${datasetId}`;
   purchaseCache.delete(cacheKey);
 }

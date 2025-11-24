@@ -3,19 +3,17 @@
  * Exposes vector database monitoring metrics and alerts
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logger } from '../lib/logger';
-import { vectorMonitor } from '../lib/monitoring/vector-monitor';
-import { redisCache } from '../lib/cache/redis-cache';
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { logger } from "../lib/logger";
+import { vectorMonitor } from "../lib/monitoring/vector-monitor";
+import { redisCache } from "../lib/cache/redis-cache";
+import { adminAuthMiddleware } from "../middleware/auth";
 
 /**
  * GET /api/monitoring/vector-db
  * Get vector database performance metrics
  */
-async function getVectorMetrics(
-  _request: FastifyRequest,
-  reply: FastifyReply
-) {
+async function getVectorMetrics(_request: FastifyRequest, reply: FastifyReply) {
   try {
     const metrics = vectorMonitor.getMetrics();
     const alerts = vectorMonitor.getAlerts();
@@ -24,13 +22,13 @@ async function getVectorMetrics(
       timestamp: new Date().toISOString(),
       metrics,
       alerts,
-      status: metrics.success_rate >= 95 ? 'healthy' : 'degraded',
+      status: metrics.success_rate >= 95 ? "healthy" : "degraded",
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to get vector metrics');
+    logger.error({ error }, "Failed to get vector metrics");
     return reply.code(500).send({
-      error: 'METRICS_FAILED',
-      message: 'Failed to retrieve metrics',
+      error: "METRICS_FAILED",
+      message: "Failed to retrieve metrics",
     });
   }
 }
@@ -39,10 +37,7 @@ async function getVectorMetrics(
  * GET /api/monitoring/cache
  * Get cache performance metrics
  */
-async function getCacheMetrics(
-  _request: FastifyRequest,
-  reply: FastifyReply
-) {
+async function getCacheMetrics(_request: FastifyRequest, reply: FastifyReply) {
   try {
     const stats = redisCache.getStats();
 
@@ -52,14 +47,18 @@ async function getCacheMetrics(
         ...stats,
         hit_rate_percent: (stats.hit_rate * 100).toFixed(2),
         status:
-          stats.hit_rate > 0.3 ? 'healthy' : stats.size > 0 ? 'warming' : 'empty',
+          stats.hit_rate > 0.3
+            ? "healthy"
+            : stats.size > 0
+              ? "warming"
+              : "empty",
       },
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to get cache metrics');
+    logger.error({ error }, "Failed to get cache metrics");
     return reply.code(500).send({
-      error: 'METRICS_FAILED',
-      message: 'Failed to retrieve cache metrics',
+      error: "METRICS_FAILED",
+      message: "Failed to retrieve cache metrics",
     });
   }
 }
@@ -76,13 +75,13 @@ async function getAlerts(_request: FastifyRequest, reply: FastifyReply) {
       timestamp: new Date().toISOString(),
       alerts,
       count: alerts.length,
-      critical_count: alerts.filter((a) => a.severity === 'critical').length,
+      critical_count: alerts.filter((a) => a.severity === "critical").length,
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to get alerts');
+    logger.error({ error }, "Failed to get alerts");
     return reply.code(500).send({
-      error: 'ALERTS_FAILED',
-      message: 'Failed to retrieve alerts',
+      error: "ALERTS_FAILED",
+      message: "Failed to retrieve alerts",
     });
   }
 }
@@ -97,13 +96,13 @@ async function clearAlerts(_request: FastifyRequest, reply: FastifyReply) {
 
     return reply.send({
       timestamp: new Date().toISOString(),
-      message: 'Alerts cleared',
+      message: "Alerts cleared",
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to clear alerts');
+    logger.error({ error }, "Failed to clear alerts");
     return reply.code(500).send({
-      error: 'CLEAR_FAILED',
-      message: 'Failed to clear alerts',
+      error: "CLEAR_FAILED",
+      message: "Failed to clear alerts",
     });
   }
 }
@@ -118,13 +117,13 @@ async function clearCache(_request: FastifyRequest, reply: FastifyReply) {
 
     return reply.send({
       timestamp: new Date().toISOString(),
-      message: 'Cache cleared',
+      message: "Cache cleared",
     });
   } catch (error) {
-    logger.error({ error }, 'Failed to clear cache');
+    logger.error({ error }, "Failed to clear cache");
     return reply.code(500).send({
-      error: 'CLEAR_FAILED',
-      message: 'Failed to clear cache',
+      error: "CLEAR_FAILED",
+      message: "Failed to clear cache",
     });
   }
 }
@@ -140,25 +139,25 @@ async function getHealth(_request: FastifyRequest, reply: FastifyReply) {
     const alerts = vectorMonitor.getAlerts();
 
     const criticalAlerts = alerts.filter(
-      (a) => a.severity === 'critical'
+      (a) => a.severity === "critical",
     ).length;
 
     const health = {
       timestamp: new Date().toISOString(),
       status:
         criticalAlerts > 0
-          ? 'critical'
+          ? "critical"
           : vectorMetrics.success_rate < 90
-            ? 'degraded'
-            : 'healthy',
+            ? "degraded"
+            : "healthy",
       components: {
         vector_db: {
-          status: vectorMetrics.success_rate >= 95 ? 'healthy' : 'degraded',
+          status: vectorMetrics.success_rate >= 95 ? "healthy" : "degraded",
           success_rate: vectorMetrics.success_rate,
           avg_latency_ms: vectorMetrics.avg_latency_ms,
         },
         cache: {
-          status: cacheStats.hit_rate > 0.3 ? 'healthy' : 'warming',
+          status: cacheStats.hit_rate > 0.3 ? "healthy" : "warming",
           hit_rate: (cacheStats.hit_rate * 100).toFixed(2),
           size: cacheStats.size,
         },
@@ -171,65 +170,63 @@ async function getHealth(_request: FastifyRequest, reply: FastifyReply) {
 
     return reply.send(health);
   } catch (error) {
-    logger.error({ error }, 'Failed to get health status');
+    logger.error({ error }, "Failed to get health status");
     return reply.code(500).send({
-      error: 'HEALTH_CHECK_FAILED',
-      message: 'Failed to check system health',
+      error: "HEALTH_CHECK_FAILED",
+      message: "Failed to check system health",
     });
   }
 }
 
 export async function registerMonitoringRoutes(fastify: FastifyInstance) {
   fastify.get(
-    '/api/monitoring/vector-db',
+    "/api/monitoring/vector-db",
     {
       schema: {
-        description: 'Get vector database performance metrics',
+        description: "Get vector database performance metrics",
         response: {
           200: {
-            type: 'object',
+            type: "object",
             properties: {
-              timestamp: { type: 'string' },
-              metrics: { type: 'object' },
-              alerts: { type: 'array' },
-              status: { type: 'string' },
+              timestamp: { type: "string" },
+              metrics: { type: "object" },
+              alerts: { type: "array" },
+              status: { type: "string" },
             },
           },
         },
       },
     },
-    getVectorMetrics
+    getVectorMetrics,
   );
 
-  fastify.get(
-    '/api/monitoring/cache',
-    {},
-    getCacheMetrics
-  );
+  fastify.get("/api/monitoring/cache", {}, getCacheMetrics);
 
-  fastify.get(
-    '/api/monitoring/alerts',
-    {},
-    getAlerts
+  fastify.get("/api/monitoring/alerts", {}, getAlerts);
+
+  fastify.post(
+    "/api/monitoring/alerts/clear",
+    {
+      onRequest: adminAuthMiddleware,
+      schema: {
+        description: "Clear all alerts (admin only)",
+      },
+    },
+    clearAlerts,
   );
 
   fastify.post(
-    '/api/monitoring/alerts/clear',
-    {},
-    clearAlerts
+    "/api/monitoring/cache/clear",
+    {
+      onRequest: adminAuthMiddleware,
+      schema: {
+        description: "Clear cache (admin only)",
+      },
+    },
+    clearCache,
   );
 
-  fastify.post(
-    '/api/monitoring/cache/clear',
-    {},
-    clearCache
-  );
+  fastify.get("/api/monitoring/health", {}, getHealth);
 
-  fastify.get(
-    '/api/monitoring/health',
-    {},
-    getHealth
-  );
-
-  logger.info('Monitoring routes registered');
+  logger.info("Monitoring routes registered");
 }

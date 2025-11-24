@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
+import { NextRequest, NextResponse } from "next/server";
+import { proxyVerifyRequest } from "@/lib/server/verifyProxy";
 
 /**
  * Server-side proxy for audio-verifier service
@@ -10,10 +10,10 @@ import { proxyVerifyRequest } from '@/lib/server/verifyProxy';
  */
 
 // Explicitly set Node.js runtime for server-side operations
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 // Force dynamic rendering to ensure route is always treated as a serverless function
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // Health check endpoint
@@ -25,18 +25,17 @@ export async function GET(request: NextRequest) {
     console.log(`[${requestId}] [GET] /api/verify - Health check requested`, {
       url: request.url,
       method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
       timestamp: new Date().toISOString(),
     });
 
     const response = NextResponse.json(
       {
-        status: 'ok',
-        route: '/api/verify',
+        status: "ok",
+        route: "/api/verify",
         requestId,
         timestamp: new Date().toISOString(),
       },
-      { status: 200 }
+      { status: 200 },
     );
 
     console.log(`[${requestId}] [GET] /api/verify - Health check completed`, {
@@ -56,11 +55,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error: 'Health check failed',
+        error: "Health check failed",
         detail: error.message,
         requestId,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -73,23 +72,15 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}] [POST] /api/verify - Request received`, {
       url: request.url,
       method: request.method,
-      headers: {
-        'content-type': request.headers.get('content-type'),
-        'user-agent': request.headers.get('user-agent'),
-        'origin': request.headers.get('origin'),
-        'referer': request.headers.get('referer'),
-      },
+      contentType: request.headers.get("content-type"),
       timestamp: new Date().toISOString(),
-      runtime: 'nodejs',
-      hasVerifierToken: !!process.env.VERIFIER_AUTH_TOKEN,
-      verifierUrl: process.env.AUDIO_VERIFIER_URL || 'default',
     });
 
-    const contentType = request.headers.get('content-type') || '';
+    const contentType = request.headers.get("content-type") || "";
     console.log(`[${requestId}] Content-Type: ${contentType}`);
 
     // Check if request is JSON (encrypted blob flow) or FormData (legacy flow)
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       console.log(`[${requestId}] Processing JSON payload flow`);
 
       try {
@@ -105,7 +96,7 @@ export async function POST(request: NextRequest) {
         console.log(`[${requestId}] Calling proxyVerifyRequest with JSON mode`);
         const result = await proxyVerifyRequest({
           body: {
-            mode: 'json',
+            mode: "json",
             payload,
           },
         });
@@ -118,14 +109,15 @@ export async function POST(request: NextRequest) {
           duration: Date.now() - startTime,
         });
 
-        const response = NextResponse.json(result.data, { status: result.status });
+        const response = NextResponse.json(result.data, {
+          status: result.status,
+        });
         console.log(`[${requestId}] [POST] /api/verify - Response sent`, {
           status: result.status,
           duration: Date.now() - startTime,
         });
 
         return response;
-
       } catch (jsonError: any) {
         console.error(`[${requestId}] JSON parsing/proxy error`, {
           error: jsonError.message,
@@ -136,7 +128,6 @@ export async function POST(request: NextRequest) {
         });
         throw jsonError;
       }
-
     } else {
       console.log(`[${requestId}] Processing FormData payload flow`);
 
@@ -145,14 +136,16 @@ export async function POST(request: NextRequest) {
         const formDataKeys = Array.from(formData.keys());
         console.log(`[${requestId}] FormData parsed successfully`, {
           keys: formDataKeys,
-          hasFile: formData.has('file'),
-          hasMetadata: formData.has('metadata'),
+          hasFile: formData.has("file"),
+          hasMetadata: formData.has("metadata"),
         });
 
-        console.log(`[${requestId}] Calling proxyVerifyRequest with FormData mode`);
+        console.log(
+          `[${requestId}] Calling proxyVerifyRequest with FormData mode`,
+        );
         const result = await proxyVerifyRequest({
           body: {
-            mode: 'formData',
+            mode: "formData",
             payload: formData,
           },
         });
@@ -164,14 +157,15 @@ export async function POST(request: NextRequest) {
           duration: Date.now() - startTime,
         });
 
-        const response = NextResponse.json(result.data, { status: result.status });
+        const response = NextResponse.json(result.data, {
+          status: result.status,
+        });
         console.log(`[${requestId}] [POST] /api/verify - Response sent`, {
           status: result.status,
           duration: Date.now() - startTime,
         });
 
         return response;
-
       } catch (formDataError: any) {
         console.error(`[${requestId}] FormData parsing/proxy error`, {
           error: formDataError.message,
@@ -183,44 +177,46 @@ export async function POST(request: NextRequest) {
         throw formDataError;
       }
     }
-
   } catch (error: any) {
     const errorDetails = {
       requestId,
       error: {
-        message: error.message || 'Unknown error',
-        name: error.name || 'Error',
+        message: error.message || "Unknown error",
+        name: error.name || "Error",
         stack: error.stack,
         cause: error.cause,
       },
       request: {
         url: request.url,
         method: request.method,
-        contentType: request.headers.get('content-type'),
+        contentType: request.headers.get("content-type"),
       },
       environment: {
         nodeEnv: process.env.NODE_ENV,
-        hasVerifierToken: !!process.env.VERIFIER_AUTH_TOKEN,
-        verifierUrl: process.env.AUDIO_VERIFIER_URL || 'default',
       },
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
     };
 
-    console.error(`[${requestId}] [POST] /api/verify - Request failed`, errorDetails);
+    console.error(
+      `[${requestId}] [POST] /api/verify - Request failed`,
+      errorDetails,
+    );
 
     // Provide more detailed error information
-    const errorMessage = error.message || 'Failed to start verification';
+    const errorMessage = error.message || "Failed to start verification";
     const errorResponse = {
       error: errorMessage,
       detail: errorMessage,
       requestId,
       timestamp: new Date().toISOString(),
-      ...(process.env.NODE_ENV === 'development' ? {
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause,
-      } : {}),
+      ...(process.env.NODE_ENV === "development"
+        ? {
+            stack: error.stack,
+            name: error.name,
+            cause: error.cause,
+          }
+        : {}),
     };
 
     return NextResponse.json(errorResponse, { status: 500 });

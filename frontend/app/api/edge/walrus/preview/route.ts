@@ -9,13 +9,6 @@ export const runtime = "edge";
 
 const BLOCKBERRY_API_KEY = process.env.BLOCKBERRY_API_KEY || "";
 
-// CRITICAL: Log API key status on module load
-console.log("[Walrus Preview API] Module initialized:", {
-  hasBlockberryKey: !!BLOCKBERRY_API_KEY,
-  keyLength: BLOCKBERRY_API_KEY ? BLOCKBERRY_API_KEY.length : 0,
-  publisherUrl: WALRUS_PUBLISHER_URL,
-});
-
 /**
  * Edge Function: Walrus Preview Upload
  * Uploads a smaller preview blob (public, unencrypted)
@@ -80,7 +73,6 @@ export async function POST(request: NextRequest) {
     console.log("[Walrus Preview] Uploading to:", {
       url: walrusUrl,
       size: file.size,
-      hasApiKey: !!headers["X-API-Key"],
     });
 
     const uploadResponse = await fetch(walrusUrl, {
@@ -169,7 +161,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const walrusUrl = `${WALRUS_AGGREGATOR_URL}/v1/${blobId}`;
+    const walrusUrl = `${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`;
     const response = await fetch(walrusUrl);
 
     if (!response.ok || !response.body) {
