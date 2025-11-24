@@ -14,7 +14,7 @@ The Frontend application serves as the user interface for the Sonar Marketplace.
 ## Key Files
 - `app/`: Contains the application routes and page components (Next.js App Router structure).
 - `components/`: Reusable UI components.
-- `hooks/`: Custom React hooks, including `useWalrusParallelUpload.ts` for handling file uploads to Walrus.
+- `hooks/`: Custom React hooks, including `useWalrusUpload.ts` for handling file uploads to Walrus.
 - `lib/`: Utility functions and shared logic.
 - `package.json`: Dependencies and scripts.
 

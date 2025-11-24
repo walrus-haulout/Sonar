@@ -1,6 +1,6 @@
 /**
- * Tests for useWalrusParallelUpload hook
- * Verifies upload strategy selection, parallel uploads, and error handling
+ * Tests for useWalrusUpload hook
+ * Verifies upload strategy selection, sequential uploads, and error handling
  */
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, mock } from 'bun:test';
@@ -27,13 +27,13 @@ mock.module('@mysten/dapp-kit', () => ({
   useSuiClient: () => ({}),
 }));
 
-let useWalrusParallelUpload: typeof import('../useWalrusParallelUpload').useWalrusParallelUpload;
+let useWalrusUpload: typeof import('../useWalrusUpload').useWalrusUpload;
 
 beforeAll(async () => {
-  ({ useWalrusParallelUpload } = await import('../useWalrusParallelUpload'));
+  ({ useWalrusUpload } = await import('../useWalrusUpload'));
 });
 
-describe('useWalrusParallelUpload', () => {
+describe('useWalrusUpload', () => {
   beforeEach(() => {
     mockFetch.mockClear();
   });
@@ -44,7 +44,7 @@ describe('useWalrusParallelUpload', () => {
 
   describe('Strategy Selection', () => {
     it('should select blockberry strategy for all files', async () => {
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const fileSize = 500 * 1024 * 1024; // 500 MB
       const strategy = result.current.getUploadStrategy(fileSize);
@@ -53,7 +53,7 @@ describe('useWalrusParallelUpload', () => {
     });
 
     it('should reject files larger than 1GB', async () => {
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const encryptedBlob = new Blob(['test data'], { type: 'application/octet-stream' });
       // Mock a blob larger than 1GB
@@ -70,7 +70,7 @@ describe('useWalrusParallelUpload', () => {
   describe('Single File Upload', () => {
     it('should upload a single file via Blockberry', async () => {
       delete process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE;
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const encryptedBlob = new Blob(['test data'], { type: 'application/octet-stream' });
       const seal_policy_id = 'test-policy-id';
@@ -93,7 +93,7 @@ describe('useWalrusParallelUpload', () => {
     });
 
     it('should include preview blob if provided', async () => {
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const encryptedBlob = new Blob(['test data'], { type: 'application/octet-stream' });
       const previewBlob = new Blob(['preview data'], { type: 'audio/mp3' });
@@ -149,7 +149,7 @@ describe('useWalrusParallelUpload', () => {
   describe('Error Handling', () => {
     it('should handle upload failure gracefully', async () => {
       delete process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE;
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       mockFetch.mockImplementationOnce(() =>
         Promise.resolve({
@@ -174,7 +174,7 @@ describe('useWalrusParallelUpload', () => {
   describe('Progress Tracking', () => {
     it('should track upload progress', async () => {
       delete process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE;
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       expect(result.current.progress.stage).toBe('encrypting');
       expect(result.current.progress.totalProgress).toBe(0);
@@ -201,7 +201,7 @@ describe('useWalrusParallelUpload', () => {
 
   describe('Orchestrator Integration', () => {
     it('should expose orchestrator for wallet management', () => {
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       expect(result.current.orchestrator).toBeDefined();
       expect(result.current.orchestrator.calculateWalletCount).toBeDefined();
@@ -209,7 +209,7 @@ describe('useWalrusParallelUpload', () => {
     });
 
     it('should calculate optimal wallet count based on file size', () => {
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const fileSize1GB = 1 * 1024 * 1024 * 1024;
       const walletCount = result.current.orchestrator.calculateWalletCount(fileSize1GB);
@@ -221,7 +221,7 @@ describe('useWalrusParallelUpload', () => {
     it('should execute sponsored prototype flow when threshold lowered', async () => {
       process.env.NEXT_PUBLIC_SPONSORED_PROTOTYPE_MIN_SIZE = '0';
 
-      const { result } = renderHook(() => useWalrusParallelUpload());
+      const { result } = renderHook(() => useWalrusUpload());
 
       const encryptedBlob = new Blob(['prototype data'], { type: 'application/octet-stream' });
       const seal_policy_id = 'prototype-policy-id';

@@ -1,5 +1,5 @@
 /**
- * useWalrusParallelUpload
+ * useWalrusUpload
  *
  * Handles Walrus uploads via Blockberry edge proxy:
  * 1. Uploads encrypted file to /api/edge/walrus/upload (proxies to Blockberry publisher)
@@ -217,7 +217,7 @@ async function checkWalBalance(
   }
 }
 
-export function useWalrusParallelUpload() {
+export function useWalrusUpload() {
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
@@ -771,7 +771,7 @@ export function useWalrusParallelUpload() {
   );
 
   /**
-   * Upload multiple files in parallel
+   * Upload multiple files sequentially
    */
   const uploadMultipleBlobs = useCallback(
     async (

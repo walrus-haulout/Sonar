@@ -13,7 +13,7 @@ import {
 } from "@/lib/types/upload";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useSealEncryption } from "@/hooks/useSeal";
-import { useWalrusParallelUpload } from "@/hooks/useWalrusParallelUpload";
+import { useWalrusUpload } from "@/hooks/useWalrusUpload";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
 import { bytesToHex } from "@sonar/seal";
 
@@ -75,7 +75,7 @@ export function EncryptionStep({
   const [logs, setLogs] = useState<string[]>([]);
 
   const { isReady, encrypt, error: sealError } = useSealEncryption();
-  const { uploadBlob, progress: uploadProgress } = useWalrusParallelUpload();
+  const { uploadBlob, progress: uploadProgress } = useWalrusUpload();
 
   const addLog = (message: string) => {
     console.log("[EncryptionStep]", message);
@@ -219,7 +219,7 @@ export function EncryptionStep({
       addLog(`Total file size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
       addLog(`Upload strategy: ${strategy}`);
 
-      // Step 2: Process files in parallel
+      // Step 2: Process files sequentially
       const filePromises = filesToProcess.map(async (file, index) => {
         addLog(
           `[File ${index + 1}/${totalFiles}] Starting encryption: ${file.file.name}`,
@@ -625,7 +625,7 @@ export function EncryptionStep({
             animate={{ opacity: 1 }}
             className="mt-2 text-sm font-mono text-sonar-highlight/70"
           >
-            Processing {filesToProcess.length} files in parallel
+            Processing {filesToProcess.length} files
           </motion.p>
         )}
       </div>
@@ -710,7 +710,7 @@ export function EncryptionStep({
               encrypted data is then uploaded to Walrus decentralized storage.
               Only you control the decryption keys.
               {isMultiFile &&
-                " Multiple files are processed in parallel for faster uploads."}
+                " Multiple files are processed sequentially to avoid wallet popup conflicts."}
             </p>
             {uploadProgress.currentRetry && uploadProgress.currentRetry > 1 && (
               <p className="text-sonar-coral">
