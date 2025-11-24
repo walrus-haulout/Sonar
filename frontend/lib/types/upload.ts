@@ -148,6 +148,11 @@ export interface WalrusUploadResult {
   previewSize?: number;
   previewEncodingType?: string;
   previewDeletable?: boolean;
+  // On-chain registration metadata (for WAL-based registration)
+  rootHash?: HexString; // Merkle root hash for main blob
+  size?: number; // Unencoded size in bytes for main blob
+  previewRootHash?: HexString; // Merkle root hash for preview blob
+  encodingType?: number; // 0 = RaptorQ, 1 = RS2
   // Prototype metadata for legacy support
   prototypeMetadata?: {
     walletCount: number;

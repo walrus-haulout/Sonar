@@ -23,6 +23,11 @@ import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
 import { buildSubmitBlobsTransaction } from "@/lib/walrus/buildRegisterBlobTransaction";
+import {
+  buildSubmitAndRegisterBlobsTransaction,
+  estimateTotalCost,
+} from "@/lib/walrus/buildSubmitAndRegisterBlobsTransaction";
+import { getWalBalance } from "@/lib/sui/wal-coin-utils";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -265,14 +270,53 @@ export function PublishStep({
           ? Math.max(1, Math.floor(walrusUpload.files[0].duration))
           : 3600;
 
-        // Build single-file transaction using helper
-        // This sets gas budget to 150M MIST (0.15 SUI) and handles validation
-        tx = buildSubmitBlobsTransaction({
-          mainBlobId: walrusUpload.blobId,
-          previewBlobId: walrusUpload.previewBlobId || "",
-          sealPolicyId: walrusUpload.seal_policy_id,
-          durationSeconds: actualDuration,
-        });
+        // Check if we have on-chain registration metadata (rootHash + size)
+        const hasOnChainMetadata =
+          walrusUpload.rootHash &&
+          walrusUpload.size &&
+          walrusUpload.previewRootHash &&
+          walrusUpload.previewSize;
+
+        if (hasOnChainMetadata) {
+          // NEW: Full on-chain registration with WAL payment
+          console.log(
+            "[PublishStep] Using on-chain blob registration with WAL",
+          );
+
+          tx = await buildSubmitAndRegisterBlobsTransaction({
+            client: suiClient,
+            walletAddress: account.address,
+            mainBlobId: walrusUpload.blobId,
+            mainBlobRootHash: walrusUpload.rootHash!,
+            mainBlobSize: walrusUpload.size!,
+            previewBlobId: walrusUpload.previewBlobId || "",
+            previewBlobRootHash: walrusUpload.previewRootHash!,
+            previewBlobSize: walrusUpload.previewSize!,
+            sealPolicyId: walrusUpload.seal_policy_id,
+            durationSeconds: actualDuration,
+          });
+        } else {
+          // LEGACY: SUI-only submission (no WAL, no on-chain registration)
+          console.log(
+            "[PublishStep] Using legacy submission (no on-chain registration)",
+          );
+          console.warn(
+            "[PublishStep] Missing Walrus metadata for on-chain registration:",
+            {
+              hasRootHash: !!walrusUpload.rootHash,
+              hasSize: !!walrusUpload.size,
+              hasPreviewRootHash: !!walrusUpload.previewRootHash,
+              hasPreviewSize: !!walrusUpload.previewSize,
+            },
+          );
+
+          tx = buildSubmitBlobsTransaction({
+            mainBlobId: walrusUpload.blobId,
+            previewBlobId: walrusUpload.previewBlobId || "",
+            sealPolicyId: walrusUpload.seal_policy_id,
+            durationSeconds: actualDuration,
+          });
+        }
       }
 
       setPublishState("broadcasting");
