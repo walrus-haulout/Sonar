@@ -26,8 +26,8 @@ export function toastError(message: string, description?: string): void {
 /**
  * Show a loading toast
  */
-export function toastLoading(message: string): void {
-  toast.loading(message);
+export function toastLoading(message: string, description?: string): string | number {
+  return toast.loading(message, { description });
 }
 
 /**

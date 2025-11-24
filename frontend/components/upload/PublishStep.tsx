@@ -637,6 +637,7 @@ export function PublishStep({
                     description: metadata.description,
                     languages: metadata.languages,
                     tags: metadata.tags,
+                    consent: metadata.consent,
                     per_file_metadata: metadata.perFileMetadata,
                     audio_quality: metadata.audioQuality || null,
                     speakers: metadata.speakers || null,

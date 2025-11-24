@@ -44,16 +44,13 @@ async function retryWithBackoff<T>(
       if (attempt > 0) {
         // Show retry toast
         const contextMsg = context ? ` (${context})` : "";
-        toastId = toastLoading(
-          `Retrying...`,
-          `Attempt ${attempt + 1}/${maxRetries}${contextMsg}`,
-        );
+        toastId = toastLoading("Retrying...", `Attempt ${attempt + 1}/${maxRetries}${contextMsg}`);
       }
 
       const result = await fn();
 
       // Dismiss retry toast on success
-      if (toastId) dismissToast(toastId);
+      if (toastId !== undefined) dismissToast(toastId);
 
       return result;
     } catch (error) {
@@ -69,7 +66,7 @@ async function retryWithBackoff<T>(
         await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         // Dismiss retry toast on final failure
-        if (toastId) dismissToast(toastId);
+        if (toastId !== undefined) dismissToast(toastId);
       }
     }
   }
@@ -87,29 +84,27 @@ export async function submitMetadataWithAuth(
       file_index: number;
       seal_policy_id: string;
       blob_id: string;
-      preview_blob_id: string;
+      preview_blob_id: string | null;
       duration_seconds: number;
       mime_type: string;
-      preview_mime_type?: string;
+      preview_mime_type: string | null;
     }>;
     verification: {
       verification_id: string;
       quality_score: number;
       safety_passed: boolean;
+      verified_at?: string;
       transcript?: string;
       detected_languages?: string[];
       analysis?: any;
       transcription_details?: any;
       quality_breakdown?: any;
-    };
-    metadata: DatasetMetadata;
+    } | null;
+    metadata: any;
   },
   getAuthHeader: () => string | null,
 ): Promise<void> {
-  const toastId = toastLoading(
-    "Saving metadata...",
-    "This may take a few seconds",
-  );
+  const toastId = toastLoading("Saving metadata...", "This may take a few seconds");
 
   try {
     await retryWithBackoff(
@@ -147,13 +142,13 @@ export async function submitMetadataWithAuth(
       "metadata-submission",
     );
 
-    dismissToast(toastId);
+    if (toastId !== undefined) dismissToast(toastId);
     toastSuccess(
       "Metadata saved!",
       "Your dataset is now searchable on the marketplace",
     );
   } catch (error: any) {
-    dismissToast(toastId);
+    if (toastId !== undefined) dismissToast(toastId);
     console.error("[MetadataSubmission] Failed after retries:", error);
     toastError(
       "Failed to save metadata",
@@ -165,25 +160,42 @@ export async function submitMetadataWithAuth(
 
 /**
  * Build metadata payload from upload result and verification
+ * Note: This is a helper function - PublishStep handles its own payload construction
  */
 export function buildMetadataPayload(params: {
   datasetId: string;
-  walrusUploads: WalrusUploadResult[];
+  walrusUpload: WalrusUploadResult;
   verification: VerificationResult;
   metadata: DatasetMetadata;
 }) {
-  const { walrusUploads, verification, metadata } = params;
+  const { walrusUpload, verification, metadata } = params;
+
+  // Build files array from single or multi-file upload
+  const files =
+    walrusUpload.files && walrusUpload.files.length > 0
+      ? walrusUpload.files.map((file) => ({
+          file_index: file.file_index || 0,
+          seal_policy_id: file.seal_policy_id,
+          blob_id: file.blobId,
+          preview_blob_id: file.previewBlobId || null,
+          duration_seconds: Math.max(1, Math.floor(file.duration)),
+          mime_type: file.mimeType || walrusUpload.mimeType || "audio/mpeg",
+          preview_mime_type: file.previewMimeType || walrusUpload.previewMimeType || null,
+        }))
+      : [
+          {
+            file_index: 0,
+            seal_policy_id: walrusUpload.seal_policy_id,
+            blob_id: walrusUpload.blobId,
+            preview_blob_id: walrusUpload.previewBlobId || null,
+            duration_seconds: 60, // Fallback default
+            mime_type: walrusUpload.mimeType || "audio/mpeg",
+            preview_mime_type: walrusUpload.previewMimeType || null,
+          },
+        ];
 
   return {
-    files: walrusUploads.map((upload, index) => ({
-      file_index: index,
-      seal_policy_id: upload.seal_policy_id,
-      blob_id: upload.blobId,
-      preview_blob_id: upload.previewBlobId,
-      duration_seconds: upload.durationSeconds,
-      mime_type: upload.mimeType,
-      preview_mime_type: upload.previewMimeType,
-    })),
+    files,
     verification: {
       verification_id: verification.id,
       quality_score: verification.qualityScore,
