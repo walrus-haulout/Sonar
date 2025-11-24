@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Coins, Loader2, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Coins, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
@@ -11,6 +11,8 @@ import type { WalrusUploadResult } from "@/lib/types/upload";
 import { buildSubmitBlobsTransaction } from "@/lib/walrus/buildRegisterBlobTransaction";
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { getWalBalance, formatWal } from "@/lib/sui/wal-coin-utils";
+import { estimateWalCost, mistToWal } from "@/lib/sui/walrus-constants";
 
 interface PaymentStepProps {
   walrusUpload: WalrusUploadResult;
@@ -54,10 +56,49 @@ export function PaymentStep({
   const [paymentState, setPaymentState] = useState<
     "idle" | "signing" | "broadcasting" | "confirming" | "completed"
   >("idle");
+  const [walBalance, setWalBalance] = useState<bigint>(0n);
+  const [walCostEstimate, setWalCostEstimate] = useState<number>(0);
+  const [isCheckingWal, setIsCheckingWal] = useState(false);
 
   const fileCount = walrusUpload.files?.length || 1;
   const totalFeeMist = calculateDatasetPriceMist(fileCount);
   const totalFeeSui = formatMistToSui(totalFeeMist);
+
+  // Check WAL balance and calculate storage cost
+  useEffect(() => {
+    if (!account) return;
+
+    const checkWalAndEstimate = async () => {
+      setIsCheckingWal(true);
+      try {
+        // Get WAL balance
+        const balance = await getWalBalance(suiClient, account.address);
+        setWalBalance(balance);
+
+        // Estimate WAL cost for storage
+        // Note: At this point, upload already happened and user paid WAL
+        // This is just showing what was paid
+        const files = walrusUpload.files || [walrusUpload];
+        let totalCost = 0;
+
+        for (const file of files) {
+          const mainSize = (file as any).size || 0;
+          const previewSize = 0; // Preview sizes are usually small
+          const mainCost = estimateWalCost(mainSize, 26);
+          const previewCost = estimateWalCost(previewSize, 26);
+          totalCost += mainCost.total + previewCost.total;
+        }
+
+        setWalCostEstimate(totalCost);
+      } catch (error) {
+        console.error("[PaymentStep] Failed to check WAL balance:", error);
+      } finally {
+        setIsCheckingWal(false);
+      }
+    };
+
+    checkWalAndEstimate();
+  }, [account, suiClient, walrusUpload]);
 
   const handlePayment = async () => {
     if (!account) {
@@ -272,6 +313,65 @@ export function PaymentStep({
                     </div>
                   );
                 })()}
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* WAL Storage Cost Info */}
+          <GlassCard className="bg-sonar-purple/5 border-2 border-sonar-purple/30">
+            <div className="flex items-start space-x-4">
+              <Coins className="w-6 h-6 text-sonar-purple mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-mono font-semibold text-sonar-purple mb-2">
+                  Walrus Storage Cost (Already Paid)
+                </h4>
+                <p className="text-sm text-sonar-highlight/80 mb-3">
+                  Your files are stored on Walrus decentralized storage for ~26 days.
+                  You paid WAL tokens directly to the network during upload.
+                </p>
+
+                <div className="p-3 rounded-sonar bg-sonar-abyss/30 border border-sonar-purple/20">
+                  {isCheckingWal ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-sonar-purple" />
+                      <span className="ml-2 text-xs text-sonar-highlight/60">
+                        Checking WAL balance...
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-sonar-highlight/70">
+                          Storage Cost (estimated):
+                        </span>
+                        <span className="font-mono font-bold text-sonar-purple">
+                          ~{walCostEstimate.toFixed(4)} WAL
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-sonar-highlight/70">
+                          Your WAL Balance:
+                        </span>
+                        <span className="font-mono text-sonar-highlight">
+                          {formatWal(walBalance)} WAL
+                        </span>
+                      </div>
+                      <div className="h-px bg-sonar-purple/20 my-2" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-sonar-highlight/70">
+                          Storage Duration:
+                        </span>
+                        <span className="font-mono text-sonar-signal">
+                          ~26 days (26 epochs)
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-sonar-highlight/60 italic mt-2">
+                  Note: WAL tokens were paid during upload to register blobs on-chain.
+                  This fee is separate from the Sonar marketplace registration fee below.
+                </p>
               </div>
             </div>
           </GlassCard>

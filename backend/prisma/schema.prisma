@@ -36,6 +36,27 @@ model Dataset {
   blockchain_synced_at    DateTime?  // Last sync from blockchain
   indexed_at              DateTime?  // Last embedding generation
 
+  // Rich metadata from verification & user input
+  transcript              String?      // Full AI transcript
+  transcript_length       Int?         // Character count for previews
+  transcription_details   Json?        // Transcription metadata (confidence, timestamps, etc.)
+  analysis                Json?        // AI analysis (quality insights, content categorization)
+  quality_breakdown       Json?        // Detailed quality metrics
+  
+  // User-provided metadata
+  tags                    String[]     @default([])  // User-defined tags
+  per_file_metadata       Json?        // File-specific metadata for multi-file datasets
+  audio_quality           Json?        // Audio quality metrics
+  speakers                Json?        // Speaker detection results
+  categorization          Json?        // Content categorization
+  
+  // Search optimization
+  embedding               Unsupported("vector(1536)")?  // Semantic search vector
+  
+  // Metadata timestamps
+  metadata_updated_at     DateTime?    // Last time metadata was updated
+  wallet_address          String?      // Owner wallet address (for verification)
+
   // Relations
   blobs                   DatasetBlob[]  // Changed from 1:1 to 1:many
   purchases               Purchase[]
@@ -45,6 +66,9 @@ model Dataset {
   @@index([created_at])
   @@index([blockchain_synced_at])
   @@index([indexed_at])
+  @@index([transcript_length])
+  @@index([metadata_updated_at])
+  @@index([wallet_address])
 }
 
 model DatasetBlob {

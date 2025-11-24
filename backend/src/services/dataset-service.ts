@@ -7,6 +7,7 @@ import { ErrorCode, type AccessGrant } from "@sonar/shared";
 import type { ByteRange } from "../lib/validators";
 import { verifyUserOwnsDataset as defaultVerifyUserOwnsDataset } from "../lib/sui/queries";
 import type { RequestMetadata } from "./types";
+import { suiClient } from "../lib/sui/client";
 
 interface DatasetStreamOptions {
   datasetId: string;
@@ -138,6 +139,55 @@ function selectPrimaryBlob(blobs: BlobType[]): BlobType {
   }
 
   throw new HttpError(404, ErrorCode.BLOB_NOT_FOUND, "Audio file not found.");
+}
+
+/**
+ * Fetch dataset data from blockchain if not in database
+ * Returns basic on-chain fields to create dataset record
+ */
+async function fetchDatasetFromBlockchain(
+  datasetId: string,
+  logger: FastifyBaseLogger
+): Promise<{
+  creator: string;
+  quality_score: number;
+  price: bigint;
+  listed: boolean;
+  duration_seconds: number;
+} | null> {
+  try {
+    const { suiClient } = await import("../lib/sui/client");
+    
+    const obj = await suiClient.getObject({
+      id: datasetId,
+      options: { showContent: true, showType: true },
+    });
+
+    if (!obj.data?.content || obj.data.content.dataType !== "moveObject") {
+      return null;
+    }
+
+    const fields = obj.data.content.fields as any;
+    
+    // Check if this is an AudioSubmission or DatasetSubmission
+    const isAudioSubmission = obj.data.type?.includes("::marketplace::AudioSubmission");
+    const isDatasetSubmission = obj.data.type?.includes("::marketplace::DatasetSubmission");
+    
+    if (!isAudioSubmission && !isDatasetSubmission) {
+      return null;
+    }
+
+    return {
+      creator: fields.uploader || fields.creator,
+      quality_score: parseInt(fields.quality_score || "0"),
+      price: BigInt(fields.dataset_price || fields.price || "0"),
+      listed: fields.listed_for_sale !== false,
+      duration_seconds: parseInt(fields.duration_seconds || fields.total_duration || "0"),
+    };
+  } catch (error) {
+    logger.error({ error, datasetId }, "Failed to fetch dataset from blockchain");
+    return null;
+  }
 }
 
 export async function createDatasetAccessGrant({
@@ -329,9 +379,9 @@ export async function getDatasetAudioStream({
 
 /**
  * Store Seal encryption metadata for a dataset
- * Called after successful blockchain publish to link backup keys to dataset
+ * Called after successful blockchain publish to link backup keys and metadata to dataset
  * Supports multi-file datasets
- * Requires ownership verification
+ * Creates dataset if missing, verifies ownership
  */
 export async function storeSealMetadata({
   datasetId,
@@ -344,18 +394,53 @@ export async function storeSealMetadata({
 }: StoreSealMetadataOptions): Promise<void> {
   const prisma = getPrismaClient(prismaClient);
 
-  // Verify dataset exists
-  const dataset = await prisma.dataset.findUnique({
+  // 1. Fetch or create dataset
+  let dataset = await prisma.dataset.findUnique({
     where: { id: datasetId },
   });
 
   if (!dataset) {
-    logger.warn({ datasetId }, "Cannot store seal metadata: dataset not found");
-    throw new HttpError(404, ErrorCode.DATASET_NOT_FOUND, "Dataset not found.");
+    logger.info({ datasetId }, "Dataset not in DB, fetching from blockchain");
+
+    const onChainData = await fetchDatasetFromBlockchain(datasetId, logger);
+    if (!onChainData) {
+      throw new HttpError(
+        404,
+        ErrorCode.DATASET_NOT_FOUND,
+        "Dataset not found on blockchain",
+      );
+    }
+
+    // Create dataset with metadata
+    dataset = await prisma.dataset.create({
+      data: {
+        id: datasetId,
+        creator: onChainData.creator,
+        wallet_address: userAddress,
+        quality_score: onChainData.quality_score,
+        price: onChainData.price,
+        listed: onChainData.listed,
+        duration_seconds: onChainData.duration_seconds,
+        languages: metadata?.languages || [],
+        formats: ["audio/mpeg"],
+        media_type: "audio",
+        title: metadata?.title || "Untitled Dataset",
+        description: metadata?.description || "",
+        total_purchases: 0,
+        file_count: files.length,
+        total_duration: onChainData.duration_seconds,
+        blockchain_synced_at: new Date(),
+      },
+    });
+
+    logger.info(
+      { datasetId, creator: onChainData.creator },
+      "Created dataset from blockchain data",
+    );
   }
 
-  // Verify ownership
-  if (dataset.wallet_address !== userAddress) {
+  // 2. Verify ownership
+  if (dataset.wallet_address && dataset.wallet_address !== userAddress) {
     logger.warn(
       { datasetId, userAddress, owner: dataset.wallet_address },
       "Cannot store seal metadata: user is not the dataset owner",
@@ -367,53 +452,67 @@ export async function storeSealMetadata({
     );
   }
 
-  // Prevent overwriting existing seal metadata (except by owner)
+  // 3. Check for double-writes (idempotency)
   const existingBlobs = await prisma.datasetBlob.count({
     where: { dataset_id: datasetId },
   });
 
-  if (existingBlobs > 0) {
+  if (existingBlobs > 0 && existingBlobs !== files.length) {
     logger.warn(
-      { datasetId, userAddress, existingBlobs },
-      "Seal metadata already exists for this dataset",
+      { datasetId, existingBlobs, newBlobs: files.length },
+      "Blob metadata mismatch - potential double-write",
     );
     throw new HttpError(
       409,
       ErrorCode.CONFLICT,
-      "Seal metadata already exists for this dataset.",
+      "Blob metadata mismatch. Expected same number of files.",
     );
   }
 
-  // Log verification data (will be stored in DB once schema is updated)
-  if (verification) {
-    logger.info(
-      {
-        datasetId,
-        verificationId: verification.verification_id,
-        qualityScore: verification.quality_score,
-        safetyPassed: verification.safety_passed,
-        hasTranscript: !!verification.transcript,
-        transcriptLength: verification.transcript?.length,
-        detectedLanguages: verification.detected_languages,
-      },
-      "Verification metadata received (pending schema update for storage)",
-    );
-  }
+  // 4. Persist metadata to Dataset table
+  const transcriptText = verification?.transcript || null;
+  const transcriptLength = transcriptText?.length || null;
 
-  // Log dataset metadata
-  if (metadata) {
-    logger.info(
-      {
-        datasetId,
-        title: metadata.title,
-        languages: metadata.languages,
-        tags: metadata.tags,
-      },
-      "Dataset metadata received",
-    );
-  }
+  await prisma.dataset.update({
+    where: { id: datasetId },
+    data: {
+      // User metadata
+      title: metadata?.title || dataset.title,
+      description: metadata?.description || dataset.description,
+      languages: metadata?.languages || dataset.languages,
+      tags: metadata?.tags || [],
 
-  // Store Seal metadata for each file
+      // Verification data
+      transcript: transcriptText,
+      transcript_length: transcriptLength,
+      transcription_details: verification?.transcription_details || null,
+      analysis: verification?.analysis || null,
+      quality_breakdown: verification?.quality_breakdown || null,
+
+      // Additional metadata
+      per_file_metadata: metadata?.per_file_metadata || null,
+      audio_quality: metadata?.audio_quality || null,
+      speakers: metadata?.speakers || null,
+      categorization: metadata?.categorization || null,
+
+      metadata_updated_at: new Date(),
+      seal_policy_id: files[0]?.seal_policy_id,
+      wallet_address: userAddress,
+    },
+  });
+
+  logger.info(
+    {
+      datasetId,
+      hasTranscript: !!transcriptText,
+      transcriptLength,
+      title: metadata?.title,
+      tags: metadata?.tags?.length || 0,
+    },
+    "Dataset metadata persisted",
+  );
+
+  // 5. Upsert DatasetBlob records
   for (const fileMetadata of files) {
     const mimeType = fileMetadata.mime_type?.trim() || "audio/mpeg";
     const previewMimeType = fileMetadata.preview_mime_type?.trim() || null;
@@ -446,18 +545,8 @@ export async function storeSealMetadata({
     });
   }
 
-  // Update Dataset table with first file's seal_policy_id for backwards compatibility
-  if (files.length > 0) {
-    await prisma.dataset.update({
-      where: { id: datasetId },
-      data: {
-        seal_policy_id: files[0].seal_policy_id,
-      },
-    });
-  }
-
   logger.info(
     { datasetId, fileCount: files.length },
-    "Seal metadata stored successfully for all files",
+    "Seal metadata and blobs stored successfully",
   );
 }

@@ -31,21 +31,46 @@ Relevant events:
 
 Dataset bundles (`DatasetSubmission`) mirror the same fields for multiple files.
 
-## Upload Pipeline (Client → Walrus SDK → Walrus Network)
-1. **Encrypt**: The upload wizard uses Mysten Seal (`packages/seal`, `useWalrusUpload`) to encrypt audio in-browser and capture the `seal_policy_id`.
-2. **WAL Balance Check**: Before upload, `useWalrusUpload` checks user's WAL token balance. If insufficient, upload fails immediately with clear error message directing users to acquire WAL tokens.
-3. **Walrus SDK Upload**: `useWalrusUpload` uses `@mysten/walrus` SDK's `writeBlob()` method which:
-   - Encodes blob to erasure-coded slivers (Reed-Solomon encoding, ~2x size)
-   - Reserves storage space on-chain (user pays WAL tokens for ~26 epochs)
-   - Registers blob object on Sui blockchain
-   - Uploads encoded slivers to storage nodes
-   - Collects confirmation signatures from storage nodes
-   - Certifies blob with aggregated confirmations
-   - Returns `blobId` (base64url) and `blobObject` (on-chain object)
-4. **Preview upload**: Same Walrus SDK flow for preview blob (smaller size, lower cost)
-5. **Marketplace submission**: Call `marketplace::submit_blobs` with 0.25 SUI fee for Sonar protocol registration and `BlobsSubmitted` event emission
 
-**Storage Model**: User-pays decentralized model. Users must have WAL tokens (~0.001 WAL per MB per epoch). Files limited to 1GB. Users own blob objects on-chain and can extend/delete/transfer them.
+## Walrus HTTP API Specification
+
+All uploads use the official Walrus HTTP API format:
+
+- **Endpoint**: `PUT /v1/blobs?epochs={N}`
+- **Method**: `PUT`
+- **Headers**:
+  - `Content-Type: application/octet-stream` (required)
+  - `X-API-Key: {key}` (optional, for Blockberry authentication)
+  - `Authorization: Bearer {token}` (optional, for custom authentication)
+- **Body**: Raw binary data (the file content)
+- **Response Format**: JSON with one of two structures:
+  ```json
+  {
+    "newlyCreated": {
+      "blobObject": {
+        "blobId": "base64url-encoded-blob-id",
+        "certifiedEpoch": 100,
+        "encodingType": "...",
+        "storage": { "id": "..." },
+        "deletable": true
+      }
+    }
+  }
+  ```
+  OR
+  ```json
+  {
+    "alreadyCertified": {
+      "blobId": "base64url-encoded-blob-id",
+      "certifiedEpoch": 100
+    }
+  }
+  ```
+
+**Implementation Notes**:
+- The `epochs` parameter specifies storage duration (default: 26 epochs ≈ 1 year)
+- All upload implementations (frontend edge route, walrus-publisher service, audio-verifier) use this same API format
+- Response parsing handles both `newlyCreated` and `alreadyCertified` formats for compatibility
 
 ## Purchase & Access Flow
 1. **Purchase**: `usePurchase` calls `marketplace::purchase_dataset`. The contract burns/allocates tokens and mints a receipt via `purchase_policy::mint_receipt` for Seal policy checks.
@@ -55,10 +80,8 @@ Dataset bundles (`DatasetSubmission`) mirror the same fields for multiple files.
 
 ## Configuration Summary
 - **Contract IDs**: `NEXT_PUBLIC_PACKAGE_ID`, `NEXT_PUBLIC_MARKETPLACE_ID` (with fallbacks in `contracts/deployments/*.json`).
-- **Walrus SDK**: `@mysten/walrus ^0.8.4` - handles encoding, registration, upload, and certification
-- **Walrus System**: `NEXT_PUBLIC_WALRUS_SYSTEM_OBJECT` - Shared Walrus system object for blob operations
-- **WAL Token**: `NEXT_PUBLIC_WAL_TOKEN_PACKAGE` - WAL token package for storage payments
-- **Walrus endpoints**: `NEXT_PUBLIC_WALRUS_AGGREGATOR_URL` - for blob retrieval only (upload via SDK)
+- **Walrus endpoints**: `NEXT_PUBLIC_WALRUS_PUBLISHER_URL`, `NEXT_PUBLIC_WALRUS_AGGREGATOR_URL`.
+- **Blockberry** (optional): `BLOCKBERRY_API_KEY` (server-side only) to authenticate with Blockberry's Walrus proxy.
 - **Seal key servers**: `NEXT_PUBLIC_SEAL_KEY_SERVERS` (comma-separated object IDs). Threshold defaults to `min(2, len)`.
 - **Feature flag**: `NEXT_PUBLIC_USE_BLOCKCHAIN=false` switches to seed data, bypassing Walrus entirely (development only).
 
@@ -73,11 +96,9 @@ Dataset bundles (`DatasetSubmission`) mirror the same fields for multiple files.
 - **Preview playback fails**: check that the preview blob was uploaded and referenced by the dataset (hover card hits `/api/edge/walrus/preview`).
 
 ## Related Code
-- **Upload hooks**: `frontend/hooks/useWalrusUpload.ts` - Main upload hook using Walrus SDK
-- **Lifecycle hooks**: `frontend/hooks/useWalrusLifecycle.ts` - Extend/delete/transfer blob operations
-- **Walrus client**: `frontend/lib/walrus/client.ts` - Walrus SDK client wrapper
-- **WAL utilities**: `frontend/lib/sui/wal-coin-utils.ts` - WAL token balance and collection
-- **Walrus constants**: `frontend/lib/sui/walrus-constants.ts` - Cost estimation and encoding constants
+- **Edge routes**: `frontend/app/api/edge/walrus/*` (Blockberry HTTP uploads)
+- **Frontend hooks**: `useWalrusParallelUpload` (MVP: Blockberry-only strategy)
 - **Decryption hooks**: `useSealDecryption`
-- **Move modules**: `marketplace.move`, `blob_manager.move`, `purchase_policy.move`
-- **Strategy selection**: `getUploadStrategy()` (returns 'walrus-sdk')
+- **Move modules**: `marketplace.move`, `storage_lease.move`, `purchase_policy.move`
+- **Upload script**: `scripts/upload-to-walrus.sh`
+- **Strategy selection**: `getUploadStrategy()` (always returns 'blockberry' in MVP)

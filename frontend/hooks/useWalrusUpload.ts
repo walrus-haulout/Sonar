@@ -21,7 +21,9 @@ import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
 import type { WalrusUploadResult, HexString } from "@/lib/types/upload";
 import { formatUploadErrorForUser } from "@/lib/types/upload-errors";
-import { verifyBlobExists } from "@/lib/walrus/client";
+import { verifyBlobExists, getWalrusClient } from "@/lib/walrus/client";
+import { getWalBalance, formatWal } from "@/lib/sui/wal-coin-utils";
+import { estimateWalCost, walToMist, mistToWal } from "@/lib/sui/walrus-constants";
 
 /**
  * Wallet Signer Adapter
@@ -231,120 +233,10 @@ export function useWalrusUpload() {
     stage: "encrypting",
   });
 
-  /**
-   * Upload via Edge Function with client-side retry tracking and progress updates
-   * Edge Function handles CORS and proxies to Walrus Publisher with 240s timeout
-   */
-  const fetchUploadWithRetry = useCallback(
-    async (
-      formData: FormData,
-      maxRetries: number = 10,
-    ): Promise<{ response: Response; attempt: number }> => {
-      let lastError: Error | null = null;
-      const fileName =
-        formData.get("file") instanceof File
-          ? (formData.get("file") as File).name
-          : "unknown";
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          // Update progress with retry attempt
-          setProgress((prev) => ({
-            ...prev,
-            currentRetry: attempt,
-            maxRetries,
-          }));
-
-          // Create a new FormData for each attempt (since body can only be read once)
-          const attemptFormData = new FormData();
-          for (const [key, value] of formData.entries()) {
-            attemptFormData.append(key, value);
-          }
-
-          console.log(
-            `[Upload] Edge Function upload attempt ${attempt}/${maxRetries}`,
-            { fileName, attempt, maxRetries },
-          );
-
-          const response = await fetch("/api/edge/walrus/upload", {
-            method: "POST",
-            body: attemptFormData,
-          });
-
-          if (response.ok) {
-            console.log(`[Upload] Success on attempt ${attempt}`, { fileName });
-            return { response, attempt };
-          }
-
-          // Log non-200 response for debugging
-          let errorDetail = response.statusText;
-          try {
-            const errorBody = await response.json();
-            errorDetail = errorBody.error || errorBody.details || errorDetail;
-          } catch {
-            // Fallback to statusText if JSON parsing fails
-          }
-
-          console.warn(
-            `[Upload] Attempt ${attempt}/${maxRetries} failed with HTTP ${response.status}: ${errorDetail}`,
-            { fileName, status: response.status, errorDetail },
-          );
-
-          // Non-200 response, retry if not the last attempt
-          if (attempt < maxRetries) {
-            const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-            console.log(`[Upload] Retrying in ${delayMs}ms...`, {
-              fileName,
-              attempt,
-            });
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-            continue;
-          }
-
-          return { response, attempt };
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          const isTimeout =
-            lastError.message.includes("timeout") ||
-            lastError.message.includes("aborted");
-
-          console.error(
-            `[Upload] Attempt ${attempt}/${maxRetries} failed with error:`,
-            {
-              fileName,
-              error: lastError.message,
-              isTimeout,
-              attempt,
-              maxRetries,
-            },
-          );
-
-          // If last attempt, throw error with context
-          if (attempt === maxRetries) {
-            const contextualError = new Error(
-              `Upload failed after ${maxRetries} attempts: ${lastError.message}${isTimeout ? " (timeout)" : ""}`,
-            );
-            throw contextualError;
-          }
-
-          // Retry with progressive delay
-          const delayMs = attempt * 2000; // Progressive: 2s, 4s, 6s...
-          console.log(`[Upload] Retrying in ${delayMs}ms...`, {
-            fileName,
-            attempt,
-          });
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-      }
-
-      throw lastError || new Error("Upload failed after all retry attempts");
-    },
-    [],
-  );
 
   /**
    * Upload encrypted blob using Walrus SDK with proper on-chain registration
-   * This creates a Sui blockchain transaction that registers the blob
+   * User pays WAL tokens for storage (decentralized model)
    */
   const uploadToPublisher = useCallback(
     async (
@@ -373,9 +265,10 @@ export function useWalrusUpload() {
           "Wallet not connected - required for on-chain blob registration",
         );
       }
+
       const fileSizeMB = (encryptedBlob.size / (1024 * 1024)).toFixed(2);
       console.log(
-        `[Upload] Uploading main blob with SDK: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
+        `[Upload] Uploading main blob with Walrus SDK: ${options.fileName ?? "encrypted-audio.bin"} (${fileSizeMB}MB)`,
         {
           sealed_policy_id: seal_policy_id.substring(0, 20) + "...",
           epochs: "26",
@@ -384,56 +277,81 @@ export function useWalrusUpload() {
         },
       );
 
-      console.log("[Upload] Uploading via Blockberry edge proxy...");
+      // Check WAL balance before upload
+      const walBalance = await getWalBalance(suiClient, currentAccount.address);
+      const estimatedCost = estimateWalCost(encryptedBlob.size, 26);
+      const requiredWalMist = walToMist(estimatedCost.total);
+
+      console.log("[Upload] WAL balance check:", {
+        available: formatWal(walBalance),
+        required: estimatedCost.total.toFixed(4),
+        sufficient: walBalance >= requiredWalMist,
+      });
+
+      if (walBalance < requiredWalMist) {
+        throw new Error(
+          `Insufficient WAL tokens for storage. ` +
+          `Required: ${estimatedCost.total.toFixed(4)} WAL, ` +
+          `Available: ${formatWal(walBalance)} WAL. ` +
+          `Please acquire WAL tokens to pay for storage.`
+        );
+      }
+
+      console.log("[Upload] Using Walrus SDK direct upload (user-pays model)...");
 
       setProgress((prev) => ({
         ...prev,
         stage: "uploading",
       }));
 
-      // Upload via edge function proxy (uses Blockberry with API key)
-      const formData = new FormData();
-      formData.append(
-        "file",
-        encryptedBlob,
-        options.fileName ?? "encrypted-audio.bin",
+      // Create WalletSigner for Walrus SDK
+      const walletSigner = new WalletSigner(
+        currentAccount.address,
+        signAndExecute,
+        suiClient,
       );
-      formData.append("seal_policy_id", seal_policy_id);
-      formData.append("epochs", "26");
-      if (metadata) {
-        formData.append("metadata", JSON.stringify(metadata));
-      }
 
-      // Use existing retry helper with 10 retries
-      const { response, attempt } = await fetchUploadWithRetry(formData, 10);
-      const uploadResult = await response.json();
+      // Get Walrus client
+      const walrusClient = getWalrusClient();
 
-      const blobId = uploadResult.blobId;
-      const blobObjectId = uploadResult.blobObjectId;
-      const encodingType = uploadResult.encodingType;
-      const deletable = uploadResult.deletable;
-      const storageId = uploadResult.storageId;
+      // Convert blob to Uint8Array for SDK
+      const blobData = new Uint8Array(await encryptedBlob.arrayBuffer());
+
+      // Upload with Walrus SDK (handles encoding, registration, upload, certification)
+      console.log("[Upload] Calling Walrus SDK writeBlob()...");
+      const { blobId, blobObject } = await walrusClient.writeBlob({
+        blob: blobData,
+        deletable: false, // Set to true to enable deletion/refunds
+        epochs: 26, // ~26 days storage
+        signer: walletSigner,
+        owner: currentAccount.address,
+      });
+
+      // Extract metadata from blob object
+      const blobObjectId = blobObject.id.id;
+      const storageId = blobObject.storage?.id;
+      const encodingType = blobObject.encoding_type;
+      const deletable = blobObject.deletable;
 
       // Validate blob ID format
       if (!isValidBlobId(blobId)) {
-        console.error("[Upload] Invalid blob ID received from edge proxy:", {
+        console.error("[Upload] Invalid blob ID from Walrus SDK:", {
           blobId,
           blobIdType: typeof blobId,
           blobIdLength: blobId?.length,
-          fullResult: uploadResult,
         });
         throw new Error(
-          `Invalid blob ID received from edge proxy: "${blobId}". ` +
-            `Expected base64url encoded string. Upload may have failed.`,
+          `Invalid blob ID from Walrus SDK: "${blobId}". Upload may have failed.`,
         );
       }
 
-      console.log("[Upload] Main blob uploaded via Blockberry:", {
+      console.log("[Upload] Main blob uploaded with Walrus SDK:", {
         blobId,
         blobObjectId,
         storageId,
         size: encryptedBlob.size,
-        attempt,
+        encodingType,
+        deletable,
       });
 
       // Verify blob exists on storage network
@@ -497,27 +415,41 @@ export function useWalrusUpload() {
         );
 
         try {
-          // Upload preview via edge function
-          const previewFormData = new FormData();
-          previewFormData.append("file", previewBlob, previewFileName);
-          previewFormData.append("seal_policy_id", seal_policy_id);
-          previewFormData.append("epochs", "26");
+          // Check WAL balance for preview blob
+          const previewWalBalance = await getWalBalance(suiClient, currentAccount.address);
+          const previewEstimatedCost = estimateWalCost(previewBlob.size, 26);
+          const previewRequiredWalMist = walToMist(previewEstimatedCost.total);
 
-          const previewResponse = await fetchUploadWithRetry(
-            previewFormData,
-            10,
-          );
-          const previewResult = await previewResponse.response.json();
+          if (previewWalBalance < previewRequiredWalMist) {
+            throw new Error(
+              `Insufficient WAL tokens for preview blob. ` +
+              `Required: ${previewEstimatedCost.total.toFixed(4)} WAL, ` +
+              `Available: ${formatWal(previewWalBalance)} WAL.`
+            );
+          }
+
+          // Convert preview blob to Uint8Array
+          const previewBlobData = new Uint8Array(await previewBlob.arrayBuffer());
+
+          // Upload preview with Walrus SDK
+          console.log("[Upload] Uploading preview blob with Walrus SDK...");
+          const previewResult = await walrusClient.writeBlob({
+            blob: previewBlobData,
+            deletable: false,
+            epochs: 26,
+            signer: walletSigner,
+            owner: currentAccount.address,
+          });
 
           finalPreviewBlobId = previewResult.blobId;
-          previewBlobObjectId = previewResult.blobObjectId;
-          previewStorageId = previewResult.storageId;
-          previewEncodingType = previewResult.encodingType;
-          previewDeletable = previewResult.deletable;
+          previewBlobObjectId = previewResult.blobObject.id.id;
+          previewStorageId = previewResult.blobObject.storage?.id;
+          previewEncodingType = previewResult.blobObject.encoding_type;
+          previewDeletable = previewResult.blobObject.deletable;
           previewSize = previewBlob.size;
 
           console.log(
-            "[Upload] Preview blob uploaded and registered on-chain:",
+            "[Upload] Preview blob uploaded with Walrus SDK:",
             {
               blobId: finalPreviewBlobId,
               blobObjectId: previewBlobObjectId,
@@ -565,7 +497,7 @@ export function useWalrusUpload() {
         }
       }
 
-      console.log("[Upload] SDK upload complete with on-chain registration:");
+      console.log("[Upload] Walrus SDK upload complete:");
       console.log(
         "  Main blob:",
         blobId,
@@ -598,7 +530,7 @@ export function useWalrusUpload() {
         previewMimeType: effectivePreviewMimeType,
       };
     },
-    [fetchUploadWithRetry],
+    [suiClient, currentAccount, signAndExecute],
   );
 
   /**
@@ -761,7 +693,7 @@ export function useWalrusUpload() {
         blobId: publisherResult.blobId,
         previewBlobId: publisherResult.previewBlobId,
         seal_policy_id,
-        strategy: "blockberry",
+        strategy: "walrus-sdk",
         mimeType: publisherResult.mimeType,
         previewMimeType: publisherResult.previewMimeType,
         // No txDigest - blockchain submission happens in PublishStep
@@ -851,6 +783,6 @@ export function useWalrusUpload() {
     progress,
 
     // Utilities
-    getUploadStrategy: () => "blockberry" as const,
+    getUploadStrategy: () => "walrus-sdk" as const,
   };
 }
