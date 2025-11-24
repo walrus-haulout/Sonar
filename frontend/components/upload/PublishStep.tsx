@@ -19,6 +19,8 @@ import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
 import { retryTransactionQuery } from "@/lib/transaction-utils";
+import { useBackendAuth } from "@/hooks/useBackendAuth";
+import { submitMetadataWithAuth } from "@/lib/metadata-submission";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -93,10 +95,12 @@ export function PublishStep({
   const account = useCurrentAccount();
   const suiClient = useSuiClient();
   const { mutate: signAndExecute, isPending } = useSignAndExecuteTransaction();
+  const { authenticate, getAuthHeader, isAuthenticated, isAuthenticating } =
+    useBackendAuth();
   const [publishState, setPublishState] = useState<
     "idle" | "signing" | "broadcasting" | "confirming"
   >("idle");
-  const publishDisabled = isPending || publishState !== "idle";
+  const publishDisabled = isPending || publishState !== "idle" || isAuthenticating;
 
   // Debug: Log verification data structure
   console.log("[PublishStep] Verification data received:", {
@@ -142,6 +146,18 @@ export function PublishStep({
     }
 
     try {
+      // Authenticate with backend before publishing
+      console.log("[PublishStep] Authenticating with backend...");
+      try {
+        await authenticate();
+      } catch (authError: any) {
+        console.error("[PublishStep] Authentication failed:", authError);
+        onError(
+          `Authentication failed: ${authError.message || "Could not authenticate with backend"}`,
+        );
+        return;
+      }
+
       setPublishState("signing");
 
       // Validate blockchain configuration early
@@ -627,15 +643,15 @@ export function PublishStep({
                     categorization: metadata.categorization,
                   };
 
-                  await fetch(`/api/datasets/${datasetId}/seal-metadata`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
+                  await submitMetadataWithAuth(
+                    datasetId,
+                    {
                       files,
-                      verification: verificationMetadata,
+                      verification: verificationMetadata as any,
                       metadata: datasetMetadata,
-                    }),
-                  });
+                    },
+                    getAuthHeader,
+                  );
                 } catch (error) {
                   const errorMsg =
                     error instanceof Error
