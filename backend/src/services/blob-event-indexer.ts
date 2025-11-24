@@ -268,10 +268,10 @@ export class BlobEventIndexer {
 
 /**
  * CLI usage:
- * node dist/services/blob-event-indexer.js sync [--limit 100]
- * node dist/services/blob-event-indexer.js backfill [--limit 100]
+ * npx tsx src/services/blob-event-indexer.ts sync [--limit 100]
+ * npx tsx src/services/blob-event-indexer.ts backfill [--limit 100]
  */
-if (require.main === module) {
+async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
   const limitArg = args.find((arg) => arg.startsWith("--limit"));
@@ -279,16 +279,23 @@ if (require.main === module) {
 
   const indexer = new BlobEventIndexer();
 
-  (async () => {
-    if (command === "sync" || command === "backfill") {
-      await indexer.syncAll({ limit });
-    } else {
-      console.log(
-        "Usage: node blob-event-indexer.js <sync|backfill> [--limit=N]",
-      );
-      console.log(`Event type: ${indexer.getEventType()}`);
-      process.exit(1);
-    }
-    process.exit(0);
-  })();
+  if (command === "sync" || command === "backfill") {
+    await indexer.syncAll({ limit });
+  } else {
+    console.log(
+      "Usage: npx tsx src/services/blob-event-indexer.ts <sync|backfill> [--limit=N]",
+    );
+    console.log(`Event type: ${indexer.getEventType()}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// Run if executed directly
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  main().catch((error) => {
+    console.error("Error:", error);
+    process.exit(1);
+  });
 }

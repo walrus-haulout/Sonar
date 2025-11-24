@@ -6,7 +6,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
 import { reencryptBlob, validateReencryptionOptions } from "@sonar/seal";
 import { useSeal } from "./useSeal";
-import { useWalrusParallelUpload } from "./useWalrusParallelUpload";
+import { useWalrusUpload } from "./useWalrusUpload";
 import type { ReencryptionOptions, ReencryptionStage } from "@sonar/seal";
 
 /**
@@ -40,7 +40,7 @@ export function useReencryption() {
   const suiClient = useSuiClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const { sealClient, sessionKey } = useSeal();
-  const { uploadBlob } = useWalrusParallelUpload();
+  const { uploadBlob } = useWalrusUpload();
   const [isReencrypting, setIsReencrypting] = useState(false);
 
   /**
