@@ -24,6 +24,7 @@ import { formatUploadErrorForUser } from "@/lib/types/upload-errors";
 import { verifyBlobExists, getWalrusClient } from "@/lib/walrus/client";
 import { getWalBalance, formatWal } from "@/lib/sui/wal-coin-utils";
 import { estimateWalCost, walToMist, mistToWal } from "@/lib/sui/walrus-constants";
+import { retryTransactionQuery } from "@/lib/transaction-utils";
 
 /**
  * Wallet Signer Adapter
@@ -73,10 +74,13 @@ class WalletSigner extends Signer {
     // We need to fetch using the experimental API to get the right format
     if (result.digest && options.client) {
       try {
-        // Use the experimental getTransaction API
-        const txResponse = await options.client.core.getTransaction({
-          digest: result.digest,
-        });
+        // Use the experimental getTransaction API with retry logic
+        // to handle mainnet indexing lag
+        const txResponse = await retryTransactionQuery(() =>
+          options.client.core.getTransaction({
+            digest: result.digest,
+          }),
+        );
 
         console.log("[WalletSigner] Transaction details fetched:", {
           digest: txResponse.transaction.digest,
