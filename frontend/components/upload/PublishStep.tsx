@@ -22,6 +22,7 @@ import {
 import { SonarButton } from "@/components/ui/SonarButton";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { CHAIN_CONFIG } from "@/lib/sui/client";
+import { buildSubmitBlobsTransaction } from "@/lib/walrus/buildRegisterBlobTransaction";
 
 /**
  * Convert Uint8Array to base64 string (browser-safe)
@@ -197,14 +198,10 @@ export function PublishStep({
         return;
       }
 
-      // Build transaction
-      const tx = new Transaction();
-      tx.setGasBudget(50_000_000); // 0.05 SUI
-
-      const marketplaceSharedRef = tx.object(CHAIN_CONFIG.marketplaceId);
-
       // Check if multi-file dataset (2+ files)
       const isMultiFile = walrusUpload.files && walrusUpload.files.length > 1;
+
+      let tx: Transaction;
 
       if (isMultiFile) {
         // Multi-file dataset: Call submit_audio_dataset
@@ -214,6 +211,11 @@ export function PublishStep({
           setPublishState("idle");
           return;
         }
+
+        // Build transaction for multi-file dataset
+        tx = new Transaction();
+        tx.setGasBudget(50_000_000); // 0.05 SUI
+        const marketplaceSharedRef = tx.object(CHAIN_CONFIG.marketplaceId);
 
         const blobIds = files.map((f) => f.blobId);
         const previewBlobIds = files.map((f) => f.previewBlobId || "");
@@ -258,19 +260,18 @@ export function PublishStep({
           return;
         }
 
-        // Build single-transaction blob submission with static 0.5 SUI fee
-        const SUBMISSION_FEE_MIST = 500_000_000n; // 0.5 SUI
-        const feeCoin = tx.splitCoins(tx.gas, [SUBMISSION_FEE_MIST])[0];
+        // Use actual duration from upload metadata (fallback to 3600)
+        const actualDuration = walrusUpload.files?.[0]?.duration
+          ? Math.max(1, Math.floor(walrusUpload.files[0].duration))
+          : 3600;
 
-        tx.moveCall({
-          target: `${CHAIN_CONFIG.packageId}::blob_manager::submit_blobs`,
-          arguments: [
-            tx.pure.string(walrusUpload.blobId),
-            tx.pure.string(walrusUpload.previewBlobId || ""),
-            tx.pure.string(walrusUpload.seal_policy_id),
-            tx.pure.u64(3600), // duration_seconds
-            feeCoin,
-          ],
+        // Build single-file transaction using helper
+        // This sets gas budget to 150M MIST (0.15 SUI) and handles validation
+        tx = buildSubmitBlobsTransaction({
+          mainBlobId: walrusUpload.blobId,
+          previewBlobId: walrusUpload.previewBlobId || "",
+          sealPolicyId: walrusUpload.seal_policy_id,
+          durationSeconds: actualDuration,
         });
       }
 
