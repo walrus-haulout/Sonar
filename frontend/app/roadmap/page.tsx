@@ -54,7 +54,7 @@ export default function RoadmapPage() {
                   Walrus storage integration for decentralized file hosting
                 </FeatureItem>
                 <FeatureItem icon={<Shield />} completed>
-                  SEAL encryption for dataset privacy and access control
+                  Seal encryption by Mysten Labs for dataset privacy and access control
                 </FeatureItem>
                 <FeatureItem icon={<Brain />} completed>
                   Audio verification with pre-encryption quality checks

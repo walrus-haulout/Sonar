@@ -8,7 +8,7 @@
 
 ## Overview
 
-SONAR is a decentralized marketplace for high-quality audio data across the full spectrum—speech, music, environmental sounds, vocals, sound effects, and field recordings—designed to incentivize creators while ensuring data privacy and quality. Built on the Sui blockchain with Walrus storage and Mysten Seal encryption, SONAR introduces an innovative **absolute-threshold dynamic burn model** that ensures sustainable token economics throughout the protocol's lifecycle.
+SONAR is a decentralized marketplace for high-quality audio data across the full spectrum—speech, music, environmental sounds, vocals, sound effects, and field recordings—designed to incentivize creators while ensuring data privacy and quality. Built on the Sui blockchain with Walrus storage and Seal encryption by Mysten Labs, SONAR introduces an innovative **absolute-threshold dynamic burn model** that ensures sustainable token economics throughout the protocol's lifecycle.
 
 **Hackathon:** Walrus Haulout 2025
 **Track:** Data Economy/Marketplaces
@@ -38,7 +38,7 @@ SONAR addresses these challenges through:
 
 ### 2. Privacy by Design
 
-- Client-side encryption with Mysten Seal before upload
+- Client-side encryption with Seal encryption by Mysten Labs before upload
 - Decentralized storage on Walrus
 - Only authorized purchasers receive decryption shares
 - Zero blob ID exposure in public events
@@ -66,7 +66,7 @@ This simple, transparent split ensures both creators and the protocol can thrive
 ### For Creators
 
 1. Record or capture audio (speech, music, environmental sounds, etc.)
-2. Upload via SONAR interface (client-side Seal encryption)
+2. Upload via SONAR interface (client-side Seal encryption by Mysten Labs)
 3. Pay small burn fee (0.001% of circulating supply)
 4. Receive LLM quality score
 5. Earn tokens based on quality (vested over 90 days)
@@ -78,7 +78,7 @@ This simple, transparent split ensures both creators and the protocol can thrive
 2. Purchase datasets with SONAR tokens
 3. Receive authenticated decryption access
 4. Download encrypted data from Walrus
-5. Decrypt with Seal shares
+5. Decrypt with Seal encryption by Mysten Labs shares
 
 ### For the Ecosystem
 
@@ -126,7 +126,7 @@ This ensures:
 
 ### Privacy-First Architecture
 
-- Audio encrypted client-side with Seal before leaving user's device
+- Audio encrypted client-side with Seal encryption by Mysten Labs before leaving user's device
 - Blob IDs never exposed in public blockchain events
 - Decryption shares only provided to verified purchasers
 - End-to-end privacy guarantees
@@ -196,7 +196,7 @@ SONAR cannot access your data:
 ### Storage & Privacy
 
 - **Walrus:** Decentralized blob storage network
-- **Mysten Seal:** Threshold encryption for access control
+- **Seal encryption by Mysten Labs:** Threshold encryption for access control
 - **Client-Side Encryption:** Data never exposed unencrypted
 
 ### Validation
@@ -466,7 +466,7 @@ Built for **Walrus Haulout 2025 Hackathon**
 
 Special thanks to:
 
-- Mysten Labs for Sui, Walrus, and Seal
+- Mysten Labs for Sui, Walrus, and Seal encryption
 - The Sui developer community
 - Hackathon organizers and mentors
 

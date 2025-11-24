@@ -201,7 +201,7 @@ export function PurchaseCard({ dataset, stats }: PurchaseCardProps) {
           </li>
           <li className="flex items-start">
             <span className="text-sonar-signal mr-2">✓</span>
-            <span>Decrypted via Mysten Seal (privacy-first)</span>
+            <span>Decrypted via Seal encryption by Mysten Labs (privacy-first)</span>
           </li>
           <li className="flex items-start">
             <span className="text-sonar-signal mr-2">✓</span>

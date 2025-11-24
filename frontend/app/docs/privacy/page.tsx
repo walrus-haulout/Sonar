@@ -9,7 +9,7 @@ export default function PrivacyPolicyPage() {
       <DocSection>
         <DocHeading level={1}>Privacy Policy</DocHeading>
         <DocParagraph>
-          At SONAR, we vow to keep your data safe. Your audio is encrypted using SEAL threshold cryptography and stored in decentralized Walrus storage. We are committed to transparency about how we use your data and protecting your privacy at every step.
+          At SONAR, we vow to keep your data safe. Your audio is encrypted using Seal encryption by Mysten Labs (threshold cryptography) and stored in decentralized Walrus storage. We are committed to transparency about how we use your data and protecting your privacy at every step.
         </DocParagraph>
         <DocParagraph className="text-sm text-sonar-highlight-bright/60 italic">
           Last updated: January 2025
@@ -23,7 +23,7 @@ export default function PrivacyPolicyPage() {
           <DocCard variant="info">
             <h3 className="font-mono text-sonar-signal mb-2">Encrypted at Rest</h3>
             <p className="text-sm text-sonar-highlight-bright/80">
-              All audio data is encrypted using SEAL (threshold cryptography) before leaving your device. Your data remains encrypted in Walrus decentralized storage, ensuring no single entity can access it without authorization.
+              All audio data is encrypted using Seal encryption by Mysten Labs (threshold cryptography) before leaving your device. Your data remains encrypted in Walrus decentralized storage, ensuring no single entity can access it without authorization.
             </p>
           </DocCard>
 
@@ -199,7 +199,7 @@ export default function PrivacyPolicyPage() {
         <DocList>
           <DocListItem><strong>Sui Blockchain:</strong> Stores ownership records, transactions, and smart contracts (public by design)</DocListItem>
           <DocListItem><strong>Walrus Storage:</strong> Decentralized storage for encrypted audio files</DocListItem>
-          <DocListItem><strong>SEAL Key Servers:</strong> Distributed threshold decryption network (operated by SONAR and partners)</DocListItem>
+          <DocListItem><strong>Seal Key Servers:</strong> Distributed threshold decryption network using Seal encryption by Mysten Labs (operated by SONAR and partners)</DocListItem>
           <DocListItem><strong>AI Processing Services:</strong> Third-party AI APIs for transcription, quality analysis, and safety checks (data sent encrypted when possible)</DocListItem>
         </DocList>
       </DocSection>

@@ -1,10 +1,11 @@
 /**
  * useWalrusParallelUpload
  *
- * Handles Walrus uploads with user-paid registration:
- * 1. Uploads file to Walrus Publisher (HTTP) to get Blob ID and storage metadata.
- * 2. Prompts user to sign a `register_blob` transaction on-chain.
- * 3. Returns the result once the transaction is confirmed.
+ * Handles Walrus uploads via Blockberry edge proxy:
+ * 1. Uploads encrypted file to /api/edge/walrus/upload (proxies to Blockberry publisher)
+ * 2. Edge function handles blob registration with Blockberry API key authentication
+ * 3. Returns blob ID and on-chain object ID after successful upload
+ * 4. Verifies blob availability on Walrus storage network with 10 retries
  */
 
 import type { EncryptionMetadata } from "@sonar/seal";
@@ -20,11 +21,7 @@ import { normalizeAudioMimeType, getExtensionForMime } from "@/lib/audio/mime";
 import { collectCoinsForAmount } from "@/lib/sui/coin-utils";
 import type { WalrusUploadResult, HexString } from "@/lib/types/upload";
 import { formatUploadErrorForUser } from "@/lib/types/upload-errors";
-import {
-  getWalrusClient,
-  verifyBlobExists,
-  retryBlobUpload,
-} from "@/lib/walrus/client";
+import { verifyBlobExists } from "@/lib/walrus/client";
 
 /**
  * Wallet Signer Adapter
@@ -387,122 +384,77 @@ export function useWalrusParallelUpload() {
         },
       );
 
-      // Convert Blob to Uint8Array for SDK
-      const arrayBuffer = await encryptedBlob.arrayBuffer();
-      const blobData = new Uint8Array(arrayBuffer);
-
-      // Get Walrus client with SDK
-      const walrusClient = getWalrusClient();
-
-      console.log("[Upload] Writing blob with on-chain registration...");
+      console.log("[Upload] Uploading via Blockberry edge proxy...");
 
       setProgress((prev) => ({
         ...prev,
-        stage: "registering",
+        stage: "uploading",
       }));
 
-      // Create wallet signer adapter
-      if (!currentAccount?.address) {
-        throw new Error("No wallet connected");
+      // Upload via edge function proxy (uses Blockberry with API key)
+      const formData = new FormData();
+      formData.append(
+        "file",
+        encryptedBlob,
+        options.fileName ?? "encrypted-audio.bin",
+      );
+      formData.append("seal_policy_id", seal_policy_id);
+      formData.append("epochs", "26");
+      if (metadata) {
+        formData.append("metadata", JSON.stringify(metadata));
       }
 
-      const walletSigner = new WalletSigner(
-        currentAccount.address,
-        signAndExecute,
-        suiClient,
-      );
+      // Use existing retry helper with 10 retries
+      const { response, attempt } = await fetchUploadWithRetry(formData, 10);
+      const uploadResult = await response.json();
 
-      // Use SDK writeBlob which properly registers on-chain
-      const result = await walrusClient.walrus.writeBlob({
-        blob: blobData,
-        epochs: 26,
-        deletable: true,
-        signer: walletSigner,
-      });
-
-      const blobId = result.blobId;
-      const blobObjectId = result.blobObject.id.id;
-      const encodingType = result.blobObject.encoding_type;
-      const deletable = result.blobObject.deletable;
-      const storageId = result.blobObject.storage.id.id;
+      const blobId = uploadResult.blobId;
+      const blobObjectId = uploadResult.blobObjectId;
+      const encodingType = uploadResult.encodingType;
+      const deletable = uploadResult.deletable;
+      const storageId = uploadResult.storageId;
 
       // Validate blob ID format
       if (!isValidBlobId(blobId)) {
-        console.error("[Upload] Invalid blob ID received from Walrus SDK:", {
+        console.error("[Upload] Invalid blob ID received from edge proxy:", {
           blobId,
           blobIdType: typeof blobId,
           blobIdLength: blobId?.length,
-          fullResult: result,
+          fullResult: uploadResult,
         });
         throw new Error(
-          `Invalid blob ID received from Walrus SDK: "${blobId}". ` +
+          `Invalid blob ID received from edge proxy: "${blobId}". ` +
             `Expected base64url encoded string. Upload may have failed.`,
         );
       }
 
-      console.log("[Upload] Main blob uploaded and registered on-chain:", {
+      console.log("[Upload] Main blob uploaded via Blockberry:", {
         blobId,
         blobObjectId,
         size: encryptedBlob.size,
+        attempt,
       });
 
       // Verify blob exists on storage network
       console.log("[Upload] Verifying blob availability on storage network...");
-      let verification = await verifyBlobExists(blobId, 5, 3000);
+      let verification = await verifyBlobExists(blobId, 10, 3000);
 
       if (!verification.exists) {
-        console.warn(
-          "[Upload] Initial verification failed, attempting direct upload to storage nodes",
-        );
-        console.log(
-          "[Upload] Blob object already registered on-chain:",
-          blobObjectId,
-        );
-
-        // Retry uploading blob data directly to storage nodes
-        // This keeps the existing on-chain blob object
-        const retryResult = await retryBlobUpload(encryptedBlob, 26, 3);
-
-        if (retryResult.success) {
-          console.log(
-            "[Upload] Blob data uploaded successfully on retry:",
-            retryResult.blobId,
-          );
-
-          // Verify again after retry
-          verification = await verifyBlobExists(blobId, 3, 2000);
-          if (!verification.exists) {
-            console.error("[Upload] Blob still not available after retry");
-            const errorMessage = formatUploadErrorForUser({
-              type: "walrus_error",
-              code: "WALRUS_BLOB_NOT_AVAILABLE",
-              message:
-                "Blob uploaded but not yet available. Try again in a few minutes.",
-              retryable: true,
-            });
-            throw new Error(errorMessage);
-          }
-          console.log(
-            "[Upload] Blob verified after retry:",
-            verification.aggregator,
-          );
-        } else {
-          console.error("[Upload] Retry upload failed:", retryResult.error);
-          const errorMessage = formatUploadErrorForUser({
-            type: "walrus_error",
-            code: "WALRUS_BLOB_NOT_AVAILABLE",
-            message:
-              retryResult.error || "Failed to upload blob to storage network",
-            retryable: true,
-          });
-          throw new Error(errorMessage);
-        }
-      } else {
-        console.log(
-          "[Upload] Blob verified on storage network:",
-          verification.aggregator,
-        );
+        console.error("[Upload] Blob verification failed after upload");
+        const errorMessage = formatUploadErrorForUser({
+          type: "walrus_error",
+          code: "WALRUS_BLOB_NOT_AVAILABLE",
+          message:
+            "Blob uploaded but not available on storage network. This may be a temporary issue.",
+          retryable: true,
+        });
+        throw new Error(errorMessage);
       }
+
+      console.log(
+        "[Upload] Blob verified on storage network:",
+        verification.aggregator,
+      );
 
       // Upload preview blob if provided
       let finalPreviewBlobId: string | undefined;
@@ -528,28 +480,27 @@ export function useWalrusParallelUpload() {
 
         const previewSizeMB = (previewBlob.size / (1024 * 1024)).toFixed(2);
         console.log(
-          `[Upload] Uploading preview blob with SDK: ${previewFileName} (${previewSizeMB}MB)`,
+          `[Upload] Uploading preview blob via edge proxy: ${previewFileName} (${previewSizeMB}MB)`,
         );
 
         try {
-          // Convert preview Blob to Uint8Array
-          const previewArrayBuffer = await previewBlob.arrayBuffer();
-          const previewBlobData = new Uint8Array(previewArrayBuffer);
+          // Upload preview via edge function
+          const previewFormData = new FormData();
+          previewFormData.append("file", previewBlob, previewFileName);
+          previewFormData.append("seal_policy_id", seal_policy_id);
+          previewFormData.append("epochs", "26");
 
-          // Upload preview with SDK using wallet signer
-          const previewResult = await walrusClient.walrus.writeBlob({
-            blob: previewBlobData,
-            epochs: 26,
-            deletable: true,
-            signer: walletSigner,
-          });
+          const previewResponse = await fetchUploadWithRetry(
+            previewFormData,
+            10,
+          );
+          const previewResult = await previewResponse.response.json();
 
           finalPreviewBlobId = previewResult.blobId;
-          previewBlobObjectId = previewResult.blobObject.id.id;
-          previewStorageId = previewResult.blobObject.storage.id.id;
-          previewEncodingType =
-            previewResult.blobObject.encoding_type?.toString();
-          previewDeletable = previewResult.blobObject.deletable;
+          previewBlobObjectId = previewResult.blobObjectId;
+          previewStorageId = previewResult.storageId;
+          previewEncodingType = previewResult.encodingType;
+          previewDeletable = previewResult.deletable;
           previewSize = previewBlob.size;
 
           console.log(
@@ -563,23 +514,25 @@ export function useWalrusParallelUpload() {
           );
 
           // Verify preview blob exists on storage network
-          console.log("[Upload] Verifying preview blob availability...");
-          const previewVerification = await verifyBlobExists(
-            finalPreviewBlobId,
-            5,
-            3000,
-          );
-          if (!previewVerification.exists) {
-            console.warn(
-              "[Upload] Preview blob verification failed:",
-              previewVerification.error,
+          if (finalPreviewBlobId) {
+            console.log("[Upload] Verifying preview blob availability...");
+            const previewVerification = await verifyBlobExists(
+              finalPreviewBlobId,
+              10,
+              3000,
             );
-            // Don't fail the upload, just log warning
-          } else {
-            console.log(
-              "[Upload] Preview blob verified:",
-              previewVerification.aggregator,
-            );
+            if (!previewVerification.exists) {
+              console.warn(
+                "[Upload] Preview blob verification failed:",
+                previewVerification.error,
+              );
+              // Don't fail the upload, just log warning
+            } else {
+              console.log(
+                "[Upload] Preview blob verified:",
+                previewVerification.aggregator,
+              );
+            }
           }
         } catch (previewError) {
           // Log error but don't fail the entire upload

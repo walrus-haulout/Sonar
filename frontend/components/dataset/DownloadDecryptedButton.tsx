@@ -304,7 +304,7 @@ export function DownloadDecryptedButton({ dataset, className = '' }: DownloadDec
         </div>
         <div className="pt-2 border-t border-sonar-signal/10">
           <p className="text-sonar-highlight-bright/70">
-            <span className="font-mono text-sonar-signal">🔒 Privacy:</span> Audio decrypted in your browser using Mysten Seal. No server access to decrypted data.
+            <span className="font-mono text-sonar-signal">🔒 Privacy:</span> Audio decrypted in your browser using Seal encryption by Mysten Labs. No server access to decrypted data.
           </p>
         </div>
       </div>

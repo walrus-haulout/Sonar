@@ -10,7 +10,7 @@ export default function HomePage() {
       <SonicWaveformHero
         title="SONAR"
         subtitle="Decentralized Audio Data Marketplace"
-        description="High-quality audio datasets across the full spectrum: speech, music, environmental sounds, vocals, sound effects, and more. Built on Sui blockchain with Walrus storage and Mysten Seal encryption."
+        description="High-quality audio datasets across the full spectrum: speech, music, environmental sounds, vocals, sound effects, and more. Built on Sui blockchain with Walrus storage and Seal encryption by Mysten Labs."
         ctaText="Explore Marketplace"
         ctaHref="/marketplace"
         logoSrc="/images/walrus-icon.png"
@@ -42,7 +42,7 @@ export default function HomePage() {
               Privacy by Design
             </h3>
             <p className="text-sm text-sonar-highlight-bright/70">
-              Client-side encryption with Mysten Seal. Decentralized storage on
+              Client-side encryption with Seal encryption by Mysten Labs. Decentralized storage on
               Walrus. Only authorized purchasers receive decryption shares
             </p>
           </GlassCard>
@@ -77,7 +77,7 @@ export default function HomePage() {
         {/* Footer */}
         <div className="mt-20 text-center text-sonar-highlight-bright/50 text-sm space-y-2">
           <p>Built for Walrus Haulout 2025 Hackathon</p>
-          <p className="font-mono">Powered by Sui • Walrus • Mysten Seal</p>
+          <p className="font-mono">Powered by Sui • Walrus • Seal encryption by Mysten Labs</p>
         </div>
       </div>
     </main>

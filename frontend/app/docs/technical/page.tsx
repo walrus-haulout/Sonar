@@ -18,9 +18,9 @@ export default function TechnicalPage() {
         
         <div className="space-y-4 mt-6">
           <DocCard variant="info">
-            <h4 className="font-mono text-sonar-signal mb-2">SEAL Encryption</h4>
+            <h4 className="font-mono text-sonar-signal mb-2">Seal Encryption</h4>
             <p className="text-sm text-sonar-highlight-bright/80">
-              SEAL (Simple Encryption At Launch) is Mysten Labs' decentralized encryption system. It ensures your audio is encrypted client-side with threshold cryptography.
+              Seal encryption by Mysten Labs is a decentralized encryption system. It ensures your audio is encrypted client-side with threshold cryptography.
             </p>
           </DocCard>
 
@@ -54,7 +54,7 @@ export default function TechnicalPage() {
           <div className="border-l-2 border-sonar-signal/40 pl-4">
             <h4 className="font-mono text-sonar-highlight mb-2">Confidentiality</h4>
             <p className="text-sonar-highlight-bright/80 text-sm">
-              Encryption key never transmitted in plaintext. SEAL servers cannot decrypt alone. Audio-verifier requires SessionKey authorization. Walrus stores only encrypted blobs.
+              Encryption key never transmitted in plaintext. Seal servers cannot decrypt alone. Audio-verifier requires SessionKey authorization. Walrus stores only encrypted blobs.
             </p>
           </div>
 
@@ -68,7 +68,7 @@ export default function TechnicalPage() {
           <div className="border-l-2 border-sonar-signal/40 pl-4">
             <h4 className="font-mono text-sonar-highlight mb-2">Availability</h4>
             <p className="text-sonar-highlight-bright/80 text-sm">
-              Multiple SEAL servers prevent single point of failure. Walrus replicates data across multiple nodes. Blockchain provides permanent record.
+              Multiple Seal servers prevent single point of failure. Walrus replicates data across multiple nodes. Blockchain provides permanent record.
             </p>
           </div>
 
@@ -101,7 +101,7 @@ export default function TechnicalPage() {
               </tr>
               <tr>
                 <td className="px-4 py-2 text-sonar-highlight-bright/80">Encryption</td>
-                <td className="px-4 py-2 text-sonar-highlight-bright/80">SEAL, AES-256, Shamir</td>
+                <td className="px-4 py-2 text-sonar-highlight-bright/80">Seal by Mysten Labs, AES-256, Shamir</td>
                 <td className="px-4 py-2 text-sonar-highlight-bright/80">Client-side encryption</td>
               </tr>
               <tr>

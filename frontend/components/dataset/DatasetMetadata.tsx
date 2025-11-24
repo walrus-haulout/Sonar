@@ -110,7 +110,7 @@ export function DatasetMetadata({ dataset }: DatasetMetadataProps) {
               <span className="text-xl">🔐</span>
               <div className="flex-1">
                 <div className="text-sm font-mono text-sonar-highlight mb-1">
-                  Mysten Seal Encryption
+                  Seal encryption by Mysten Labs
                 </div>
                 <div className="text-xs text-sonar-highlight-bright/60">
                   End-to-end encryption with access gated by blockchain purchase verification

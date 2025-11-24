@@ -651,7 +651,7 @@ export function FileUploadStep({
               Privacy & Security
             </p>
             <p>
-              Your audio will be encrypted client-side using Mysten Seal before
+              Your audio will be encrypted client-side using Seal encryption by Mysten Labs before
               upload. Only you and authorized buyers will have access to the
               full dataset.
             </p>

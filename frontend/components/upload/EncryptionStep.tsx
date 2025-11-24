@@ -57,7 +57,7 @@ type EncryptionStage =
 
 /**
  * EncryptionStep Component
- * Handles client-side Seal encryption and Walrus upload
+ * Handles client-side Seal encryption by Mysten Labs and Walrus upload
  */
 export function EncryptionStep({
   audioFile,
@@ -495,7 +495,7 @@ export function EncryptionStep({
   }> = [
     {
       key: "encrypting",
-      label: "Encrypting with Mysten Seal",
+      label: "Encrypting with Seal encryption by Mysten Labs",
       icon: <Lock className="w-5 h-5" />,
     },
     {
@@ -706,7 +706,7 @@ export function EncryptionStep({
               Secure Processing
             </p>
             <p>
-              Your audio is being encrypted client-side using Mysten Seal. The
+              Your audio is being encrypted client-side using Seal encryption by Mysten Labs. The
               encrypted data is then uploaded to Walrus decentralized storage.
               Only you control the decryption keys.
               {isMultiFile &&

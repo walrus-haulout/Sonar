@@ -448,7 +448,7 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
             <>
               <span className="font-mono text-sonar-signal">✓ Browser Decryption:</span> Playing fully
               decrypted audio. Encrypted data fetched from Walrus and decrypted in your browser using
-              Mysten Seal with zero-knowledge key shares.
+              Seal encryption by Mysten Labs with zero-knowledge key shares.
             </>
           ) : mode === 'stream' ? (
             <>
@@ -459,7 +459,7 @@ export function AudioPlayer({ dataset }: AudioPlayerProps) {
             <>
               <span className="font-mono text-sonar-highlight">ⓘ Preview Mode:</span> Full audio
               access requires dataset purchase. Encrypted audio is stored on Walrus and can be decrypted
-              in your browser with Mysten Seal upon purchase.
+              in your browser with Seal encryption by Mysten Labs upon purchase.
             </>
           )}
         </p>
