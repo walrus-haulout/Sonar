@@ -59,30 +59,39 @@ class WalletSigner extends Signer {
       transaction: options.transaction,
     });
 
-    // Fetch full transaction response from the chain
-    // The Walrus SDK expects a full TransactionResponse object
-    if (result.digest) {
+    console.log("[WalletSigner] Transaction executed:", {
+      digest: result.digest,
+      hasEffects: !!result.effects,
+    });
+
+    // The Walrus SDK uses the experimental client API which expects
+    // a TransactionResponse with effects.changedObjects
+    // We need to fetch using the experimental API to get the right format
+    if (result.digest && options.client) {
       try {
-        const txResponse = await this.suiClient.waitForTransaction({
+        // Use the experimental getTransaction API
+        const txResponse = await options.client.core.getTransaction({
           digest: result.digest,
-          options: {
-            showEffects: true,
-            showObjectChanges: true,
-            showEvents: true,
-          },
         });
-        return txResponse;
+
+        console.log("[WalletSigner] Transaction details fetched:", {
+          digest: txResponse.transaction.digest,
+          hasEffects: !!txResponse.transaction.effects,
+          hasChangedObjects: !!txResponse.transaction.effects?.changedObjects,
+        });
+
+        // Return the full transaction response from experimental API
+        return txResponse.transaction;
       } catch (error) {
         console.error(
           "[WalletSigner] Failed to fetch transaction details:",
           error,
         );
-        // Return the basic result if fetching fails
-        return result;
+        throw error;
       }
     }
 
-    return result;
+    throw new Error("No digest returned from wallet");
   }
 
   getPublicKey(): any {
