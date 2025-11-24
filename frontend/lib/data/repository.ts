@@ -62,7 +62,7 @@ export function parseDataset(raw: any): Dataset {
   const verified = raw.status !== undefined ? raw.status === 1 : Boolean(raw.verified);
 
   return {
-    id: raw.id || raw.address,
+    id: (typeof raw.id === 'string' ? raw.id : raw.id?.id) || raw.address,
     creator,
     quality_score: Number(raw.quality_score || 0),
     price,
@@ -72,7 +72,7 @@ export function parseDataset(raw: any): Dataset {
     formats: raw.formats || ['mp3'],
     media_type: raw.media_type || 'audio',
     created_at: createdAt,
-    title: raw.title || `Audio Dataset #${String(raw.id || '').slice(0, 8)}`,
+    title: raw.title || `Audio Dataset #${String((typeof raw.id === 'string' ? raw.id : raw.id?.id) || '').slice(0, 8)}`,
     description: raw.description || 'On-chain audio dataset with SEAL encryption',
     total_purchases: totalPurchases,
     sample_count: raw.sample_count ? Number(raw.sample_count) : 1,
