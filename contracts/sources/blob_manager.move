@@ -8,8 +8,8 @@ module sonar::blob_manager {
     use walrus::blob::Blob;
     use wal::wal::WAL;
 
-    /// Minimum submission fee per file (0.5 SUI)
-    const MIN_SUBMISSION_FEE_SUI: u64 = 500_000_000;
+    /// Minimum submission fee per file (0.25 SUI)
+    const MIN_SUBMISSION_FEE_SUI: u64 = 250_000_000;
     
     /// Maximum submission fee per file (10 SUI) - for exceptional quality
     const MAX_SUBMISSION_FEE_SUI: u64 = 10_000_000_000;
@@ -40,7 +40,7 @@ module sonar::blob_manager {
     /// This function:
     /// 1. Reserves storage on Walrus (pays WAL for storage)
     /// 2. Registers the main and preview blobs on-chain
-    /// 3. Collects the Sonar submission fee (0.5-10 SUI)
+    /// 3. Collects the Sonar submission fee (0.25-10 SUI)
     /// 4. Emits event for off-chain tracking
     /// 
     /// Note: Certification (signatures from storage nodes) happens separately

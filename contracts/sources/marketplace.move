@@ -51,9 +51,9 @@ module sonar::marketplace {
 
     // ========== Submission Fee Configuration ==========
 
-    /// Variable pricing: 0.5-10 SUI per file based on quality
-    /// Minimum fee per file: 0.5 SUI = 500_000_000 MIST
-    const MIN_SUBMISSION_FEE_PER_FILE: u64 = 500_000_000;
+    /// Variable pricing: 0.25-10 SUI per file based on quality
+    /// Minimum fee per file: 0.25 SUI = 250_000_000 MIST
+    const MIN_SUBMISSION_FEE_PER_FILE: u64 = 250_000_000;
     
     /// Maximum fee per file: 10 SUI = 10_000_000_000 MIST
     const MAX_SUBMISSION_FEE_PER_FILE: u64 = 10_000_000_000;
@@ -522,7 +522,7 @@ module sonar::marketplace {
         let registration_id = object::uid_to_inner(&registration.id);
         let fee_paid = coin::value(&submission_fee);
         
-        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        // Validate fee is within acceptable range (0.25-10 SUI per file)
         assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
         assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
@@ -652,7 +652,7 @@ module sonar::marketplace {
     }
 
     /// Submit audio with Walrus metadata
-    /// Collects variable submission fee (0.5-10 SUI per file) based on quality
+    /// Collects variable submission fee (0.25-10 SUI per file) based on quality
     /// Creates AudioSubmission object owned by uploader
     public entry fun submit_audio(
         marketplace: &mut QualityMarketplace,
@@ -673,7 +673,7 @@ module sonar::marketplace {
         let uploader = tx_context::sender(ctx);
         let fee_paid = coin::value(&submission_fee);
         
-        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        // Validate fee is within acceptable range (0.25-10 SUI per file)
         assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
         assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
@@ -737,7 +737,7 @@ module sonar::marketplace {
     }
 
     /// Submit multiple audio files as a dataset
-    /// Collects variable submission fee (0.5-10 SUI per file) with 10% bundle discount
+    /// Collects variable submission fee (0.25-10 SUI per file) with 10% bundle discount
     /// Creates a DatasetSubmission containing multiple audio files
     public entry fun submit_audio_dataset(
         marketplace: &mut QualityMarketplace,
@@ -768,7 +768,7 @@ module sonar::marketplace {
         let fee_paid = coin::value(&submission_fee);
         
         // Validate total fee is reasonable for file count
-        // Min: file_count * 0.5 SUI * 0.9 (with 10% discount)
+        // Min: file_count * 0.25 SUI * 0.9 (with 10% discount)
         // Max: file_count * 10 SUI * 0.9 (with 10% discount)
         let file_count_u64 = (file_count as u64);
         let min_expected = (file_count_u64 * MIN_SUBMISSION_FEE_PER_FILE * 9) / 10;
@@ -1460,7 +1460,7 @@ module sonar::marketplace {
 
         let fee_paid = coin::value(&submission_fee);
         
-        // Validate fee is within acceptable range (0.5-10 SUI per file)
+        // Validate fee is within acceptable range (0.25-10 SUI per file)
         assert!(fee_paid >= MIN_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
         assert!(fee_paid <= MAX_SUBMISSION_FEE_PER_FILE, E_INVALID_BURN_FEE);
 
