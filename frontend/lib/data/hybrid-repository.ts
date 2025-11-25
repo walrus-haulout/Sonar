@@ -79,9 +79,20 @@ export class HybridRepository implements DataRepository {
       const data = await response.json();
       const backendData = data.dataset;
 
-      // Merge: blockchain data is source of truth, backend adds enrichment
+      // Merge: blockchain is base, backend enriches with metadata and AI analysis
       const enriched: Dataset = {
         ...dataset,
+        // Override blockchain defaults with backend data when available
+        title: backendData?.title || dataset.title,
+        description: backendData?.description || dataset.description,
+        // Use AI quality score if blockchain has default 0
+        quality_score: dataset.quality_score === 0 && backendData?.analysis?.qualityScore
+          ? Math.round(backendData.analysis.qualityScore * 10)
+          : dataset.quality_score,
+        // Use suggested price if blockchain has 0
+        price: dataset.price === BigInt(0) && backendData?.analysis?.suggestedPrice
+          ? BigInt(Math.floor(backendData.analysis.suggestedPrice * 1_000_000))
+          : dataset.price,
         // Backend enrichment (transcript, analysis, tags)
         transcript: backendData?.transcript || undefined,
         transcript_length: backendData?.transcript_length || undefined,
