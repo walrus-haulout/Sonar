@@ -10,6 +10,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import crypto from 'crypto';
 import { logger } from './lib/logger';
 import { prisma } from './lib/db';
+import { startDatasetIndexer } from './services/dataset-indexer-cron';
 
 declare global {
 namespace NodeJS {
@@ -128,6 +129,7 @@ async function start(): Promise<void> {
   const { registerLeaderboardRoutes } = await import('./routes/leaderboard');
   const { registerSearchRoutes } = await import('./routes/search');
   const { registerAnalyticsRoutes } = await import('./routes/analytics');
+  const { registerDatasetRoutes } = await import('./routes/datasets');
 
   await registerAuthRoutes(fastify);
   await registerDataRoutes(fastify);
@@ -135,8 +137,13 @@ async function start(): Promise<void> {
   await registerLeaderboardRoutes(fastify);
   await registerSearchRoutes(fastify);
   await registerAnalyticsRoutes(fastify);
+  await registerDatasetRoutes(fastify);
 
   fastify.log.info('Routes registered');
+
+  // Start background jobs
+  startDatasetIndexer();
+  fastify.log.info('Dataset indexer cron started');
 
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {
