@@ -24,6 +24,7 @@
     "@mysten/sui.js": "^0.54.1",
     "@prisma/client": "^5.8.0",
     "@sonar/shared": "workspace:*",
+    "cron": "^4.3.4",
     "dotenv": "^16.3.1",
     "fastify": "^4.25.2",
     "jsonwebtoken": "^9.0.0",
