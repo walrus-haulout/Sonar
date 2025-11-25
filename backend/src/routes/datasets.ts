@@ -7,9 +7,10 @@
  * Endpoints:
  * - GET /api/datasets - List all datasets (with filters)
  * - GET /api/datasets/:id - Get single dataset
- * - GET /api/datasets/:id/similar - Find similar datasets
  * - GET /api/datasets/search - Semantic search
  * - GET /api/datasets/stats - Repository statistics
+ *
+ * Note: /api/datasets/:id/similar is handled by search.ts
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -160,34 +161,6 @@ export async function registerDatasetRoutes(fastify: FastifyInstance): Promise<v
       return reply.code(500).send({
         error: 'FETCH_FAILED',
         message: 'Failed to fetch full dataset',
-      });
-    }
-  });
-
-  /**
-   * GET /api/datasets/:id/similar
-   * Find similar datasets using pgvector
-   */
-  fastify.get<{
-    Params: { id: string };
-    Querystring: { limit?: string };
-  }>('/api/datasets/:id/similar', async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const { limit } = request.query;
-
-      const similar = await repository.findSimilar(id, limit ? parseInt(limit) : 10);
-
-      return reply.send({
-        dataset_id: id,
-        similar,
-        count: similar.length,
-      });
-    } catch (error) {
-      request.log.error({ error }, 'Failed to find similar datasets');
-      return reply.code(500).send({
-        error: 'SEARCH_FAILED',
-        message: 'Failed to find similar datasets',
       });
     }
   });
